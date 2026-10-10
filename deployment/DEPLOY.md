@@ -125,3 +125,16 @@ systemctl status zaloflow --no-pager
 ```
 
 Node.js cần >=18 theo thư viện; dùng gói được nhà cung cấp hệ điều hành hỗ trợ hoặc Node LTS phù hợp. Sau cập nhật, vào /accounts tạo hồ sơ, xác nhận rủi ro kết nối không chính thức rồi tạo QR, quét và xác nhận bằng điện thoại. Chỉ thành công khi UI báo được Zalo xác nhận. Không quét QR mà người khác gửi, không gửi ảnh QR hoạt động hoặc cookie cho hỗ trợ.
+
+## Cập nhật gửi từng tin
+
+Trên VPS đã cài QR, chạy riêng từng lệnh:
+
+```sh
+cd /opt/zaloflow
+git pull --ff-only origin main
+systemctl restart zaloflow
+systemctl status zaloflow --no-pager
+```
+
+Không cần xóa instance hoặc quét lại nếu phiên còn hiệu lực. Bảng message_sends tự được thêm. Mở Hành động của chiến dịch, chọn tài khoản/khách hàng thử đã đồng ý, tìm người nhận và kiểm tra tên Zalo trước khi xác nhận gửi một tin. Kiểm tra tin đến trong Zalo của người nhận. Không xem kiểm thử mô phỏng hoặc mã tin là chứng cứ người nhận đã đọc. Nếu kết quả chưa xác định, kiểm tra hội thoại trước khi gửi lại thủ công.

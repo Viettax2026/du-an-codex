@@ -1,4 +1,4 @@
-import { createCipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { writeFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 
@@ -16,6 +16,13 @@ export function saveCredentials(directory, key, credentials) {
     version: 1, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'),
     ciphertext: encrypted.toString('base64'),
   });
+}
+
+export function decryptCredentials(record, key) {
+  if (record.version !== 1) throw new Error('Unsupported session');
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(record.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(record.tag, 'base64'));
+  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(record.ciphertext, 'base64')), decipher.final()]).toString());
 }
 
 export function publicEvent(type, data, previous = {}) {

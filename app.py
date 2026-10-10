@@ -76,6 +76,13 @@ def create_app(test_config=None):
           id INTEGER PRIMARY KEY, campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
           contact_id INTEGER NOT NULL REFERENCES contacts(id), message TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'simulated', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+        CREATE TABLE IF NOT EXISTS message_sends (
+          id INTEGER PRIMARY KEY, campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+          contact_id INTEGER NOT NULL REFERENCES contacts(id), account_id INTEGER NOT NULL REFERENCES zalo_accounts(id),
+          recipient_id TEXT NOT NULL, recipient_name TEXT NOT NULL, message TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'prepared', message_id TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(campaign_id, contact_id));
         ''')
 
     @app.before_request
@@ -285,7 +292,97 @@ def create_app(test_config=None):
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         logs = db().execute('SELECT d.*, c.name FROM deliveries d JOIN contacts c ON c.id=d.contact_id WHERE campaign_id=? ORDER BY d.id DESC', (campaign_id,)).fetchall()
         preview = campaign['message'].replace('{{name}}', recipients[0]['name'] if recipients else 'Nguyễn An')
-        return render_template('detail.html', campaign=campaign, recipients=recipients, logs=logs, preview=preview, page='campaigns')
+        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
+        connected = [account for account in accounts if connector.status(g.user['id'], account['id']).get('state') == 'connected']
+        sends = db().execute('''SELECT s.*, p.name AS contact_name, a.name AS account_name FROM message_sends s
+            JOIN contacts p ON p.id=s.contact_id JOIN zalo_accounts a ON a.id=s.account_id
+            WHERE s.campaign_id=? ORDER BY s.id DESC''', (campaign_id,)).fetchall()
+        return render_template('detail.html', campaign=campaign, recipients=recipients, logs=logs, preview=preview,
+                               connected_accounts=connected, sends=sends, page='campaigns')
+
+    @app.post('/campaigns/<int:campaign_id>/prepare-send')
+    @login_required
+    def prepare_send(campaign_id):
+        campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
+        if campaign is None:
+            return 'Không tìm thấy chiến dịch.', 404
+        person = db().execute('''SELECT * FROM contacts WHERE id=? AND user_id=? AND consent=1
+            AND (?='' OR tag=?)''', (request.form.get('contact_id'), g.user['id'], campaign['tag'], campaign['tag'])).fetchone()
+        account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
+                               (request.form.get('account_id'), g.user['id'])).fetchone()
+        if not person or not account:
+            return 'Tài khoản hoặc khách hàng không hợp lệ.', 400
+        if not app.config['ZALO_QR_ENABLED']:
+            return 'Chưa bật kết nối Zalo.', 503
+        existing = db().execute('SELECT id FROM message_sends WHERE campaign_id=? AND contact_id=?', (campaign_id, person['id'])).fetchone()
+        if existing:
+            flash('Khách hàng đã có bản xem trước hoặc lần gửi trong chiến dịch này. Xem nhật ký bên dưới.', 'error')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        try:
+            result = connector.message_action(g.user['id'], account['id'], 'resolve', phone=person['phone'])
+        except Exception:
+            result = {'state': 'failed'}
+        if result.get('state') != 'resolved' or not str(result.get('uid', '')).isdigit():
+            flash('Không tìm được người nhận Zalo. Kiểm tra số điện thoại, quyền tìm kiếm của người nhận hoặc đăng nhập QR lại.', 'error')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        # Recheck consent after the network request, before retaining a send preview.
+        allowed = db().execute('SELECT consent FROM contacts WHERE id=? AND user_id=?', (person['id'], g.user['id'])).fetchone()
+        if not allowed or not allowed['consent']:
+            return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
+        try:
+            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message)
+                VALUES (?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
+                str(result.get('name', ''))[:100], campaign['message'].replace('{{name}}', person['name'])))
+            db().commit()
+            flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
+        except sqlite3.IntegrityError:
+            db().rollback()
+            flash('Bản xem trước đã được tạo. Không tạo trùng.', 'error')
+        return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+
+    @app.post('/campaigns/<int:campaign_id>/send/<int:send_id>')
+    @login_required
+    def send_message(campaign_id, send_id):
+        record = db().execute('''SELECT s.*, p.consent, p.tag, c.tag AS campaign_tag FROM message_sends s
+            JOIN campaigns c ON c.id=s.campaign_id JOIN contacts p ON p.id=s.contact_id
+            JOIN zalo_accounts a ON a.id=s.account_id WHERE s.id=? AND c.id=? AND c.user_id=?
+            AND p.user_id=c.user_id AND a.user_id=c.user_id''', (send_id, campaign_id, g.user['id'])).fetchone()
+        if record is None:
+            return 'Không tìm thấy lần gửi.', 404
+        if request.form.get('confirm_send') != 'yes' or not record['consent']:
+            return 'Cần xác nhận gửi và sự đồng ý của khách hàng.', 400
+        if record['campaign_tag'] and record['tag'] != record['campaign_tag']:
+            return 'Khách hàng không còn thuộc nhóm chiến dịch.', 400
+        if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'], record['account_id']).get('state') != 'connected':
+            return 'Cần đăng nhập QR lại trước khi gửi.', 400
+        # Persist the claim before dispatch. Double clicks and restarts cannot resend it.
+        claimed = db().execute("UPDATE message_sends SET state='sending' WHERE id=? AND state='prepared'", (send_id,))
+        db().commit()
+        if not claimed.rowcount:
+            flash('Lần gửi này đã được xử lý. Không gửi lại để tránh trùng tin.', 'error')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        try:
+            result = connector.message_action(g.user['id'], record['account_id'], 'send',
+                                              uid=record['recipient_id'], message=record['message'])
+        except Exception:
+            result = {'state': 'unknown'}
+        state = result.get('state') if result.get('state') in ('sent', 'failed', 'unknown') else 'unknown'
+        db().execute('UPDATE message_sends SET state=?, message_id=? WHERE id=?',
+                     (state, str(result.get('message_id', ''))[:100] if state == 'sent' else '', send_id))
+        db().commit()
+        flash({'sent': 'Zalo đã tiếp nhận tin nhắn. Chưa xác nhận người nhận đã đọc.',
+               'failed': 'Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối VPS.',
+               'unknown': 'Chưa xác định tin đã gửi hay chưa. Kiểm tra hội thoại trên Zalo; ứng dụng không tự gửi lại.'}[state],
+              'success' if state == 'sent' else 'error')
+        return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+
+    @app.post('/campaigns/<int:campaign_id>/cancel-send/<int:send_id>')
+    @login_required
+    def cancel_send(campaign_id, send_id):
+        db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state='prepared'
+            AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
+        db().commit()
+        return redirect(url_for('campaign_detail', campaign_id=campaign_id))
 
     @app.get('/settings')
     @login_required

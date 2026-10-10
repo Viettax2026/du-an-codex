@@ -95,3 +95,21 @@ class QRConnector:
             base = self.account_path(user_id, account_id)
             if base.exists():
                 shutil.rmtree(base)
+
+    def message_action(self, user_id, account_id, action, **data):
+        if not self.available() or self.status(user_id, account_id).get('state') != 'connected':
+            return {'state': 'failed'}
+        try:
+            base = self.account_path(user_id, account_id)
+            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text())['run_id']))
+            payload = {'action': action, 'session': str(base / run_id / 'session.enc.json'),
+                       'key': str(self.root / 'auth.key'), **data}
+            result = subprocess.run([shutil.which('node'), str(self.worker.parent / 'message.mjs')],
+                input=json.dumps(payload), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                timeout=45, env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'NODE_ENV': 'production'})
+            output = json.loads(result.stdout)
+            return {key: output[key] for key in ('state', 'uid', 'name', 'message_id') if key in output}
+        except subprocess.TimeoutExpired:
+            return {'state': 'unknown' if action == 'send' else 'failed'}
+        except (OSError, ValueError, KeyError, TypeError):
+            return {'state': 'unknown' if action == 'send' else 'failed'}

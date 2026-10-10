@@ -4,7 +4,7 @@ import { createDecipheriv, randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, statSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { publicEvent, saveCredentials } from './state.mjs';
+import { publicEvent, saveCredentials, decryptCredentials } from './state.mjs';
 
 test('QR event publishes image and deadline but never upstream code or token', () => {
   const result = publicEvent(0, { image: 'data:image/png;base64,aGVsbG8=', code: 'private-code', token: 'private-token' });
@@ -36,6 +36,7 @@ test('credentials are encrypted with AES-GCM and written with private permission
     assert.ok(!contents.includes('sensitive-cookie-value'));
     assert.equal(statSync(file).mode & 0o777, 0o600);
     const saved = JSON.parse(contents);
+    assert.deepEqual(decryptCredentials(saved, key), credentials);
     const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(saved.iv, 'base64'));
     decipher.setAuthTag(Buffer.from(saved.tag, 'base64'));
     const decoded = Buffer.concat([decipher.update(Buffer.from(saved.ciphertext, 'base64')), decipher.final()]);

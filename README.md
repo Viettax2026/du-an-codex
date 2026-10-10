@@ -66,7 +66,7 @@ npm ci --prefix connector --ignore-scripts --no-audit --no-fund
 
 Cookie/IMEI/user agent được mã hóa AES-256-GCM trong instance/zalo; khóa auth.key giữ quyền 0600. Không trả cookie/token qua HTTP hoặc ghi lỗi thượng nguồn vào log. Sao lưu/thao tác instance phải bảo vệ cả khóa và ciphertext; không đưa lên GitHub. Xóa phiên khỏi ứng dụng chỉ xóa cục bộ, không thu hồi đăng nhập tại Zalo; thu hồi thiết bị từ Zalo trên điện thoại khi cần.
 
-`Đã xác nhận đăng nhập` là kết quả ở thời điểm quét thành công, không phải kiểm tra phiên còn hiệu lực liên tục. Chưa có sử dụng/làm mới phiên để gửi tin.
+`Đã xác nhận đăng nhập` là kết quả ở thời điểm quét thành công, không phải kiểm tra phiên còn hiệu lực liên tục. Phiên được khôi phục khi tìm người nhận và gửi từng tin; nếu hết hiệu lực, đăng nhập QR lại.
 
 Kiểm thử:
 
@@ -76,3 +76,13 @@ npm --prefix connector test
 ```
 
 Kiểm thử nội bộ không thay cho đăng nhập Zalo thực. Môi trường Codex chặn Zalo, nên phải xác minh QR thật và quét thành công từ VPS triển khai. Nếu kết nối lỗi, ứng dụng hiển thị lỗi, không báo đăng nhập thành công.
+
+## Gửi từng tin từ chiến dịch
+
+Mở Chiến dịch → Hành động → Gửi tin qua tài khoản Zalo. Chọn tài khoản đã đăng nhập QR và khách hàng đồng ý nhận tin trong nhóm chiến dịch. Tìm người nhận theo số điện thoại, kiểm tra tên Zalo và nội dung cá nhân hóa, tích xác nhận rồi bấm Gửi tin thật. Tra cứu phụ thuộc cài đặt riêng tư; ứng dụng không tự kết bạn hoặc vượt hạn chế Zalo.
+
+Nhật ký gửi thật riêng với deliveries mô phỏng, lưu trong message_sends. Thành công nghĩa là Zalo trả mã tin, không chứng minh đã đọc. Mỗi khách hàng có tối đa một lần gửi trong một chiến dịch; ràng buộc SQLite và cập nhật trạng thái trước khi gọi mạng chống gửi trùng. Bản xem trước chưa gửi có thể hủy để chọn lại tài khoản/người nhận. Gửi lỗi hoặc chưa xác định không tự thử lại. Nếu tiến trình bị dừng lúc gửi, trạng thái sending được giữ và cần kiểm tra hội thoại Zalo; không xóa lịch sử để gửi lại.
+
+Bộ kết nối khôi phục phiên AES-GCM trong tiến trình Node, không trả cookie ra HTTP. Tìm người nhận/gửi có giới hạn chờ 40 giây, Python dừng tiến trình sau 45 giây. Không có chạy hàng loạt, lập lịch, listener hoặc quét dữ liệu. Các kiểm thử dùng dữ liệu giả lập API; môi trường Codex chặn Zalo nên phải xác minh gửi thật và tin đến trên VPS với người nhận thử đã đồng ý.
+
+Cập nhật VPS đã có bộ kết nối: git pull --ff-only origin main rồi systemctl restart zaloflow. Cơ sở dữ liệu tự thêm bảng, không xóa dữ liệu hoặc phiên QR đã có.
