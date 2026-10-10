@@ -1,0 +1,30 @@
+{% set editing = campaign is defined and campaign %}
+<form class="campaign-wizard" method="post" action="{{ url_for('edit_campaign', campaign_id=campaign.id) if editing else url_for('campaigns') }}">
+<input type="hidden" name="csrf" value="{{ session.csrf }}">
+<aside class="wizard-steps" aria-label="Các phần cài đặt">
+  <a href="#wizard-general"><span>1</span><b>Cài đặt chung</b><small>Tài khoản · Tên chiến dịch</small></a>
+  <a href="#wizard-phones"><span>2</span><b>Danh sách SĐT</b><small>Người nhận · Nhóm khách hàng</small></a>
+  <a href="#wizard-message"><span>3</span><b>Nội dung tin nhắn</b><small>Cá nhân hóa · Xem trước</small></a>
+</aside>
+<div class="wizard-sections">
+<section class="wizard-card" id="wizard-general"><h3><span>1</span> Cài đặt chung</h3><div class="wizard-card-body">
+  <label>Hành động<select name="action"><option value="phone_message">Zalo – Tìm bằng số điện thoại và gửi tin nhắn</option></select></label>
+  <label>Tài khoản gửi<select name="account_id"><option value="">Chọn sau ở màn hình gửi</option>{% for a in accounts %}<option value="{{ a.id }}" {% if editing and campaign.account_id==a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
+  <label>Tên chiến dịch<input name="name" value="{{ request.form.get('name', campaign.name if editing else '') }}" required maxlength="120" placeholder="Ví dụ: Chăm sóc khách hàng tháng 10"></label>
+  <p class="muted">Tìm người nhận và gửi từng tin. Mỗi lần gửi cần kiểm tra tên Zalo và xác nhận nội dung.</p>
+</div></section>
+<section class="wizard-card" id="wizard-phones"><h3><span>2</span> Danh sách SĐT</h3><div class="wizard-card-body">
+  <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>
+  <label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
+  <p class="muted">Tối đa 500 số, số trùng chỉ lưu một lần. Danh sách này chỉ dùng cho chiến dịch hiện tại.</p>
+  <label>Hoặc dùng nhóm khách hàng hiện có<select name="tag"><option value="">Tất cả nhóm</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label>
+  <p class="muted">Khi nhập danh sách SĐT, chiến dịch chỉ dùng các số đó. Để trống danh sách để dùng nhóm đã chọn, gồm khách hàng đồng ý nhận tin.</p>
+</div></section>
+<section class="wizard-card" id="wizard-message"><h3><span>3</span> Nội dung tin nhắn</h3><div class="wizard-card-body">
+  <label>Nội dung<textarea name="message" rows="6" required maxlength="2000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', campaign.message if editing else '') }}</textarea></label>
+  <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu.</p>
+  <div class="wizard-preview"><b>Xem trước với tên mẫu “Lan”</b><p class="message-text" data-message-preview></p></div>
+</div></section>
+</div>
+<footer class="wizard-footer"><span>Lưu chiến dịch chưa gửi tin đến Zalo.</span>{% if editing %}<a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a>{% else %}<button type="button" class="ghost" id="cancel-dialog">Hủy</button>{% endif %}<button class="purple-button" type="submit">Lưu chiến dịch</button></footer>
+</form>

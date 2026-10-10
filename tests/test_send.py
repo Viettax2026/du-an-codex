@@ -26,6 +26,8 @@ def test_preview_confirmation_and_duplicate_delivery(app):
     response = prepare(client)
     assert 'Lan Zalo' in response.text and 'Xin chào Lan' in response.text
     assert 'Gửi tin thật' in response.text
+    blocked = post(client, '/campaigns/1/edit', {'name': 'Changed', 'message': 'Changed'})
+    assert 'Không sửa để giữ nguyên nội dung nhật ký' in blocked.text
     assert connector.message_action.call_args.args[-1] == 'resolve'
     assert client.post('/campaigns/1/send/1', data={'csrf': token(client)}).status_code == 400
     connector.message_action.reset_mock()

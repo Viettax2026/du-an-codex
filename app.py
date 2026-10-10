@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -83,7 +84,56 @@ def create_app(test_config=None):
           state TEXT NOT NULL DEFAULT 'prepared', message_id TEXT NOT NULL DEFAULT '',
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(campaign_id, contact_id));
+        CREATE TABLE IF NOT EXISTS campaign_contacts (
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
+          contact_id INTEGER NOT NULL REFERENCES contacts(id), PRIMARY KEY(campaign_id,contact_id));
         ''')
+        if 'account_id' not in {row['name'] for row in db().execute('PRAGMA table_info(campaigns)')}:
+            db().execute('ALTER TABLE campaigns ADD COLUMN account_id INTEGER REFERENCES zalo_accounts(id)')
+            db().commit()
+
+    def audience(campaign):
+        return db().execute('''SELECT p.* FROM contacts p WHERE p.user_id=? AND p.consent=1 AND
+            (p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?) OR
+             (NOT EXISTS (SELECT 1 FROM campaign_contacts WHERE campaign_id=?) AND (?='' OR p.tag=?)))
+             ORDER BY p.id''', (g.user['id'], campaign['id'], campaign['id'], campaign['tag'], campaign['tag'])).fetchall()
+
+    def campaign_fields():
+        if request.form.get('action', 'phone_message') != 'phone_message':
+            raise ValueError('Chỉ hỗ trợ tìm theo số điện thoại và nhắn tin.')
+        name, message, tag = field('name', 120), field('message', 2000), field('tag', 80)
+        if not name or not message:
+            raise ValueError('Vui lòng nhập tên chiến dịch và nội dung.')
+        account_id = request.form.get('account_id') or None
+        if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=?', (account_id, g.user['id'])).fetchone():
+            raise ValueError('Tài khoản Zalo không hợp lệ.')
+        phones = []
+        raw = request.form.get('phones', '').strip()
+        if len(raw) > 15000:
+            raise ValueError('Danh sách số điện thoại quá dài.')
+        for value in re.split(r'[\n,;]+', raw):
+            phone = re.sub(r'[\s()+-]', '', value)
+            if not phone:
+                continue
+            if phone.startswith('84'):
+                phone = '0' + phone[2:]
+            if not re.fullmatch(r'0[0-9]{9}', phone):
+                raise ValueError('Số điện thoại Việt Nam cần 10 chữ số, bắt đầu bằng 0 (hoặc dùng +84).')
+            if phone not in phones:
+                phones.append(phone)
+        if len(phones) > 500:
+            raise ValueError('Mỗi chiến dịch tối đa 500 số điện thoại.')
+        if phones and request.form.get('phones_consent') != 'yes':
+            raise ValueError('Cần xác nhận các số điện thoại đã đồng ý nhận nội dung này.')
+        return name, message, tag, account_id, phones
+
+    def save_campaign_phones(campaign_id, phones):
+        db().execute('DELETE FROM campaign_contacts WHERE campaign_id=?', (campaign_id,))
+        for phone in phones:
+            db().execute('''INSERT INTO contacts(user_id,name,phone,consent) VALUES (?,?,?,1)
+                ON CONFLICT(user_id,phone) DO UPDATE SET consent=1''', (g.user['id'], 'Khách hàng ' + phone, phone))
+            contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
+            db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) VALUES (?,?)', (campaign_id, contact['id']))
 
     @app.before_request
     def security():
@@ -233,14 +283,14 @@ def create_app(test_config=None):
     def campaigns():
         if request.method == 'POST':
             try:
-                name, message, tag = field('name', 120), field('message', 2000), field('tag', 80)
-                if not name or not message:
-                    raise ValueError('Vui lòng nhập tên chiến dịch và nội dung.')
-                cur = db().execute('INSERT INTO campaigns(user_id,name,message,tag) VALUES (?,?,?,?)', (g.user['id'], name, message, tag))
+                name, message, tag, account_id, phones = campaign_fields()
+                cur = db().execute('INSERT INTO campaigns(user_id,name,message,tag,account_id) VALUES (?,?,?,?,?)', (g.user['id'], name, message, tag, account_id))
+                save_campaign_phones(cur.lastrowid, phones)
                 db().commit()
                 flash('Đã tạo chiến dịch. Kiểm tra nội dung trước khi gửi thử.', 'success')
                 return redirect(url_for('campaign_detail', campaign_id=cur.lastrowid))
             except ValueError as error:
+                db().rollback()
                 flash(str(error), 'error')
                 return redirect(url_for('campaigns'))
         query = request.args.get('q', '').strip()[:120]
@@ -252,7 +302,8 @@ def create_app(test_config=None):
         rows = db().execute('''SELECT c.*,
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
             (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
-              AND (c.tag='' OR p.tag=c.tag)) AS audience
+              AND (p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id) OR
+                   (NOT EXISTS (SELECT 1 FROM campaign_contacts WHERE campaign_id=c.id) AND (c.tag='' OR p.tag=c.tag)))) AS audience
             FROM campaigns c WHERE user_id=? AND name LIKE ?
               AND (?='' OR status=?) AND (?='' OR tag=?)
               AND (?='' OR created_at >= datetime('now', ?)) ORDER BY id DESC''',
@@ -268,7 +319,35 @@ def create_app(test_config=None):
                 ORDER BY d.id DESC LIMIT 100''', (selected['id'],)).fetchall()
         return render_template('campaigns.html', campaigns=rows, tags=tags,
                                query=query, status=status, days=days, tag=tag,
-                               selected=selected, logs=logs, page='campaigns')
+                               selected=selected, logs=logs, page='campaigns',
+                               accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall())
+
+    @app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def edit_campaign(campaign_id):
+        if request.method == 'POST':
+            db().execute('BEGIN IMMEDIATE')
+        campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
+        if campaign is None:
+            return 'Không tìm thấy chiến dịch.', 404
+        if campaign['status'] != 'draft' or db().execute('SELECT 1 FROM message_sends WHERE campaign_id=?', (campaign_id,)).fetchone():
+            flash('Chiến dịch đã mô phỏng hoặc có lần gửi/xem trước. Không sửa để giữ nguyên nội dung nhật ký.', 'error')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        if request.method == 'POST':
+            try:
+                name, message, tag, account_id, phones = campaign_fields()
+                db().execute('UPDATE campaigns SET name=?,message=?,tag=?,account_id=? WHERE id=?', (name, message, tag, account_id, campaign_id))
+                save_campaign_phones(campaign_id, phones)
+                db().commit()
+                flash('Đã lưu chiến dịch. Chưa gửi tin.', 'success')
+                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+            except ValueError as error:
+                db().rollback()
+                flash(str(error), 'error')
+        phones = db().execute('SELECT p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? ORDER BY p.id', (campaign_id,)).fetchall()
+        return render_template('campaign_edit.html', campaign=campaign, phones='\n'.join(p['phone'] for p in phones),
+            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall(),
+            tags=db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>', methods=['GET', 'POST'])
     @login_required
@@ -276,7 +355,7 @@ def create_app(test_config=None):
         campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
         if campaign is None:
             return 'Không tìm thấy chiến dịch.', 404
-        recipients = db().execute("SELECT * FROM contacts WHERE user_id=? AND consent=1 AND (?='' OR tag=?) ORDER BY id", (g.user['id'], campaign['tag'], campaign['tag'])).fetchall()
+        recipients = audience(campaign)
         if request.method == 'POST':
             # The conditional update atomically claims a draft to prevent double submissions.
             cur = db().execute("UPDATE campaigns SET status='simulated' WHERE id=? AND user_id=? AND status='draft'", (campaign_id, g.user['id']))
@@ -306,8 +385,7 @@ def create_app(test_config=None):
         campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
         if campaign is None:
             return 'Không tìm thấy chiến dịch.', 404
-        person = db().execute('''SELECT * FROM contacts WHERE id=? AND user_id=? AND consent=1
-            AND (?='' OR tag=?)''', (request.form.get('contact_id'), g.user['id'], campaign['tag'], campaign['tag'])).fetchone()
+        person = next((p for p in audience(campaign) if str(p['id']) == request.form.get('contact_id')), None)
         account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
                                (request.form.get('account_id'), g.user['id'])).fetchone()
         if not person or not account:
@@ -351,7 +429,8 @@ def create_app(test_config=None):
             return 'Không tìm thấy lần gửi.', 404
         if request.form.get('confirm_send') != 'yes' or not record['consent']:
             return 'Cần xác nhận gửi và sự đồng ý của khách hàng.', 400
-        if record['campaign_tag'] and record['tag'] != record['campaign_tag']:
+        campaign = db().execute('SELECT * FROM campaigns WHERE id=?', (campaign_id,)).fetchone()
+        if record['contact_id'] not in {p['id'] for p in audience(campaign)}:
             return 'Khách hàng không còn thuộc nhóm chiến dịch.', 400
         if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'], record['account_id']).get('state') != 'connected':
             return 'Cần đăng nhập QR lại trước khi gửi.', 400

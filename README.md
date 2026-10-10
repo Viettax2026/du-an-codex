@@ -86,3 +86,11 @@ Nhật ký gửi thật riêng với deliveries mô phỏng, lưu trong message_
 Bộ kết nối khôi phục phiên AES-GCM trong tiến trình Node, không trả cookie ra HTTP. Tìm người nhận/gửi có giới hạn chờ 40 giây, Python dừng tiến trình sau 45 giây. Không có chạy hàng loạt, lập lịch, listener hoặc quét dữ liệu. Các kiểm thử dùng dữ liệu giả lập API; môi trường Codex chặn Zalo nên phải xác minh gửi thật và tin đến trên VPS với người nhận thử đã đồng ý.
 
 Cập nhật VPS đã có bộ kết nối: git pull --ff-only origin main rồi systemctl restart zaloflow. Cơ sở dữ liệu tự thêm bảng, không xóa dữ liệu hoặc phiên QR đã có.
+
+## Tạo và sửa chiến dịch theo số điện thoại
+
+Form có ba phần: cài đặt chung (hành động, tài khoản, tên), danh sách SĐT và nội dung có xem trước {{name}}. Có thể nhập tối đa 500 số Việt Nam, mỗi dòng một số; +84 được chuẩn hóa về 0, loại số trùng. Phải xác nhận đồng ý nhận tin trước khi lưu danh sách. Khách hàng hiện có được giữ nguyên tên/nhóm; người mới lưu tên tạm theo số điện thoại.
+
+Danh sách riêng lưu trong campaign_contacts và chỉ áp dụng cho chiến dịch đó; khi để trống thì dùng nhóm khách hàng như trước. Tài khoản gửi đã chọn được lưu và chọn sẵn ở màn hình gửi thật. Lưu/sửa không gọi Zalo hoặc tự gửi. Chỉ sửa được bản nháp chưa mô phỏng và chưa có bản xem trước/lần gửi thật để bảo toàn nhật ký. Cơ sở dữ liệu cũ tự thêm cột account_id và bảng liên kết, không xóa dữ liệu.
+
+Chưa có lựa chọn kết bạn, media hoặc lịch gửi. Các phần đó trong ảnh tham chiếu chưa được triển khai.
