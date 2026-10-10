@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: zaloflow-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-prod.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 'app:create_app()'
+    healthCheckPath: /login
+    envVars:
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.12.14"

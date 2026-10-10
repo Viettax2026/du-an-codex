@@ -1,0 +1,21 @@
+[Unit]
+Description=ZaloFlow customer care application
+After=network.target
+
+[Service]
+User=zaloflow
+Group=zaloflow
+WorkingDirectory=/opt/zaloflow
+Environment=COOKIE_SECURE=1
+ExecStart=/opt/zaloflow/.venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 1 --threads 4 --access-logfile - --error-logfile - app:create_app()
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/zaloflow/instance
+
+[Install]
+WantedBy=multi-user.target
