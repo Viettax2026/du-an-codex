@@ -8,8 +8,9 @@ from zoneinfo import ZoneInfo
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
+from zalo_connector import QRConnector
 
 
 def create_app(test_config=None):
@@ -28,9 +29,12 @@ def create_app(test_config=None):
                       MAX_CONTENT_LENGTH=2 * 1024 * 1024,
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                       SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE') == '1',
+                      ZALO_QR_ENABLED=os.environ.get('ZALO_QR_ENABLED') == '1',
                       PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
     if test_config:
         app.config.update(test_config)
+    connector = QRConnector(app.instance_path, app.root_path)
+    app.extensions['zalo_connector'] = connector
 
     @app.template_filter('localtime')
     def localtime(value):
@@ -296,10 +300,11 @@ def create_app(test_config=None):
                 name, group = field('name', 100), field('account_group', 80)
                 if not name:
                     raise ValueError('Vui lòng nhập tên tài khoản.')
-                db().execute('INSERT INTO zalo_accounts(user_id,name,account_group) VALUES (?,?,?)',
+                cur = db().execute('INSERT INTO zalo_accounts(user_id,name,account_group) VALUES (?,?,?)',
                              (g.user['id'], name, group))
                 db().commit()
-                flash('Đã lưu hồ sơ tài khoản. Hồ sơ chưa được kết nối với Zalo.', 'success')
+                flash('Đã lưu hồ sơ tài khoản. Quét QR và xác nhận trên điện thoại để đăng nhập Zalo.', 'success')
+                return redirect(url_for('accounts', connect=cur.lastrowid))
             except ValueError as error:
                 flash(str(error), 'error')
             except sqlite3.IntegrityError:
@@ -312,7 +317,38 @@ def create_app(test_config=None):
             (g.user['id'], '%' + query + '%', group, group)).fetchall()
         groups = db().execute("SELECT DISTINCT account_group FROM zalo_accounts WHERE user_id=? AND account_group!='' ORDER BY account_group", (g.user['id'],)).fetchall()
         return render_template('accounts.html', accounts=rows, groups=groups,
-                               query=query, group=group, page='accounts')
+                               query=query, group=group, page='accounts',
+                               qr_enabled=app.config['ZALO_QR_ENABLED'],
+                               auto_connect=request.args.get('connect', type=int),
+                               connection_states={row['id']: connector.status(g.user['id'], row['id']) for row in rows})
+
+    def own_account(account_id):
+        return db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
+                            (account_id, g.user['id'])).fetchone()
+
+    @app.route('/accounts/<int:account_id>/qr', methods=['GET', 'POST'])
+    @login_required
+    def account_qr(account_id):
+        if own_account(account_id) is None:
+            return jsonify(error='Không tìm thấy tài khoản.'), 404
+        if request.method == 'GET':
+            return jsonify(connector.status(g.user['id'], account_id))
+        if not app.config['ZALO_QR_ENABLED']:
+            return jsonify(error='Đăng nhập QR chưa được bật trên máy chủ.'), 503
+        if request.form.get('accept_unofficial') != 'yes':
+            return jsonify(error='Cần xác nhận sử dụng kết nối Zalo cá nhân không chính thức.'), 400
+        try:
+            return jsonify(connector.start(g.user['id'], account_id)), 202
+        except (RuntimeError, OSError):
+            return jsonify(error='Không thể khởi tạo QR. Kiểm tra Node.js, npm ci và quyền thư mục instance trên VPS.'), 503
+
+    @app.post('/accounts/<int:account_id>/disconnect')
+    @login_required
+    def account_disconnect(account_id):
+        if own_account(account_id) is None:
+            return jsonify(error='Không tìm thấy tài khoản.'), 404
+        connector.disconnect(g.user['id'], account_id)
+        return jsonify(state='disconnected')
 
     return app
 

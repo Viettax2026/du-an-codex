@@ -1,0 +1,9 @@
+{
+  "name": "zaloflow-qr-connector",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" },
+  "dependencies": { "zca-js": "2.2.0" }
+}

@@ -1,7 +1,7 @@
 # Triển khai bản dùng thử trên VPS Ubuntu 24.04
 
 Tên miền: cskh.viettaxco.com. IP: 103.77.172.174.
-Đây là bản dùng thử: có quản lý hồ sơ, khách hàng và mô phỏng chiến dịch; chưa có QR Zalo hay gửi tự động. Không dùng dữ liệu khách hàng thực trước khi hoàn thiện vận hành, sao lưu và khôi phục tài khoản.
+Đây là bản dùng thử: có quản lý hồ sơ, khách hàng và mô phỏng chiến dịch; có bộ kết nối QR không chính thức cần xác minh trên VPS; chưa gửi tự động. Không dùng dữ liệu khách hàng thực trước khi hoàn thiện vận hành, sao lưu và khôi phục tài khoản.
 
 ## 1. Tải và chuyển mã từ máy Windows
 
@@ -107,3 +107,21 @@ Truy cập https://cskh.viettaxco.com/register để tạo tài khoản của b�
 ## 6. Sau triển khai
 
 Dữ liệu SQLite ở /opt/zaloflow/instance/zalo.sqlite3; khóa phiên ở /opt/zaloflow/instance/session.key. Sao lưu bằng SQLite backup hoặc dừng dịch vụ trước khi sao chép thư mục instance; bảo vệ bản sao lưu và kiểm tra khôi phục. Không đưa instance lên GitHub. Trước khi dùng thật cần quy định đăng ký, khôi phục tài khoản, giám sát, cập nhật hệ điều hành và kiểm thử bảo mật phù hợp. Tích hợp Zalo thật là hạng mục chưa triển khai.
+
+## Cập nhật bộ kết nối QR trên bản VPS đã triển khai
+
+Sao lưu instance và bảo vệ bản sao trước khi cập nhật. Nếu đã sửa mã trên VPS, xem git status trước và không reset/ghi đè các thay đổi. Với checkout sạch:
+
+```sh
+cd /opt/zaloflow
+git pull --ff-only origin main
+apt install -y nodejs npm
+node --version
+npm ci --prefix connector --ignore-scripts --no-audit --no-fund
+install -m 644 deployment/zaloflow.service /etc/systemd/system/zaloflow.service
+systemctl daemon-reload
+systemctl restart zaloflow
+systemctl status zaloflow --no-pager
+```
+
+Node.js cần >=18 theo thư viện; dùng gói được nhà cung cấp hệ điều hành hỗ trợ hoặc Node LTS phù hợp. Sau cập nhật, vào /accounts tạo hồ sơ, xác nhận rủi ro kết nối không chính thức rồi tạo QR, quét và xác nhận bằng điện thoại. Chỉ thành công khi UI báo được Zalo xác nhận. Không quét QR mà người khác gửi, không gửi ảnh QR hoạt động hoặc cookie cho hỗ trợ.
