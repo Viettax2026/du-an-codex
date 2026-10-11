@@ -1,6 +1,6 @@
 
 function samplePersonalization(text) {
-  const values = {INPUT_FULLNAME:'Lan', FULL_NAME:'Lan Zalo', ORIGINAL_NAME:'Lan', PHONE:'0901234567', EMAIL:'lan@example.com'};
+  const values = {INPUT_FULLNAME:'Lan', FULL_NAME:'Lan', ORIGINAL_NAME:'Lan', PHONE:'0901234567', EMAIL:'lan@example.com'};
   for (let i=1;i<=5;i++) values['INFO'+i]='Thông tin mẫu '+i;
   const parts = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date());
   const date = Object.fromEntries(parts.map(p=>[p.type,p.value]));
