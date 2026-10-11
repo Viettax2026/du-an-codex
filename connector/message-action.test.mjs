@@ -41,3 +41,13 @@ test('tampered encrypted credentials cannot be restored', () => {
   assert.throws(() => decryptCredentials({version: 2}, Buffer.alloc(32)));
   assert.throws(() => decryptCredentials({version: 1, iv: Buffer.alloc(12).toString('base64'), tag: Buffer.alloc(16).toString('base64'), ciphertext: 'AA=='}, Buffer.alloc(32)));
 });
+
+test('alias uses the nickname API and requires upstream acknowledgement', async () => {
+  const calls = [];
+  const api = {changeFriendAlias: async (...args) => {calls.push(args); return '';}};
+  assert.deepEqual(await executeMessageAction(api,{action:'alias',uid:'123',message:'Lan - 0901234567'}),{state:'renamed'});
+  assert.deepEqual(calls,[['Lan - 0901234567','123']]);
+  api.changeFriendAlias = async () => ({unexpected:true});
+  assert.deepEqual(await executeMessageAction(api,{action:'alias',uid:'123',message:'Lan'}),{state:'unknown'});
+  await assert.rejects(executeMessageAction(api,{action:'alias',uid:'123',message:'x'.repeat(101)}));
+});

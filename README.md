@@ -113,3 +113,13 @@ Giới tính dùng trường Zalo trả về: 0 nam, 1 nữ, không rõ dùng l�
 Xem trước trong form dùng dữ liệu mẫu được ghi rõ. Xem trước thực dùng dữ liệu khách hàng và kết quả tìm Zalo. Thiếu thông tin hoặc cú pháp không hợp lệ sẽ chặn tạo bản gửi thật, không gửi nguyên token. Thay thế một lần, không diễn giải token nằm trong dữ liệu khách hàng. Kiểm tra độ dài sau cá nhân hóa: lời mời 150 ký tự, tin nhắn 2000 ký tự.
 
 CSV UTF-8 xuất từ Excel hỗ trợ cột email, info1…info5 ngoài name/phone/tag/zalo_id/consent. Số trùng vẫn được bỏ qua khi import; chỉnh dữ liệu khách hàng đã có bằng liên kết Thông tin cá nhân hóa trong danh sách. Quyền sở hữu và CSRF áp dụng cho sửa. Nội dung các bản xem trước đã có không tự thay đổi sau khi sửa thông tin khách hàng.
+
+### Đổi tên gợi nhớ Zalo
+Trong tùy chọn chiến dịch, bật **Kiêm đổi tên gợi nhớ trên Zalo** và nhập mẫu
+`#{FULL_NAME} - #{PHONE}`. Mẫu hỗ trợ cùng các trường cá nhân hóa của tin nhắn.
+Sau khi tìm người nhận, tên được chèn dữ liệu và cố định trong bản xem trước;
+xác nhận **Đổi tên gợi nhớ** để gọi API Zalo. Đây là tên riêng trong tài khoản gửi,
+không phải tên hồ sơ người nhận. API có thể từ chối người chưa là bạn bè.
+Kết quả được ghi riêng với tin nhắn và lời mời; kết quả không rõ sẽ không tự thử lại.
+Các chiến dịch cũ mặc định tắt tính năng này. Cần tạo chiến dịch mới hoặc sửa bản nháp
+chưa có bản xem trước để bật. Chưa tự chạy hành động theo lịch.

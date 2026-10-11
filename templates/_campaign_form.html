@@ -22,6 +22,11 @@
   <label>Nội dung lời mời kết bạn (tối đa 150 ký tự)<textarea name="friend_message" rows="4" maxlength="150" placeholder="Xin chào {{ '{{name}}' }}, tôi muốn kết nối với bạn.">{{ request.form.get('friend_message', campaign.friend_message if editing else '') }}</textarea></label>
   <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để cá nhân hóa. Lời mời và tin nhắn có xác nhận riêng, không tự gửi khi lưu chiến dịch.</p>
   <div class="wizard-preview"><b>Xem trước lời mời với tên mẫu “Lan”</b><p class="message-text" data-friend-preview></p><small data-friend-count></small></div>
+  <label class="send-confirm"><input type="checkbox" name="rename_enabled" value="yes" {% if editing and campaign.rename_enabled %}checked{% endif %}> Kiêm đổi tên gợi nhớ trên Zalo</label>
+  {% set personal_target='rename_template' %}{% include '_personalize_picker.html' %}
+  <label>Mẫu đổi tên<input name="rename_template" maxlength="100" value="{{ request.form.get('rename_template', campaign.rename_template if editing else '#{FULL_NAME} - #{PHONE}') }}"></label>
+  <p class="muted">Chỉ đổi tên gợi nhớ trong tài khoản gửi. Zalo có thể từ chối nếu người nhận chưa là bạn bè.</p>
+  <div class="wizard-preview"><b>Tên gợi nhớ mẫu</b><p data-alias-preview></p></div>
 </div></section>
 <section class="wizard-card" id="wizard-phones"><h3><span>3</span> Danh sách SĐT</h3><div class="wizard-card-body">
   <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>

@@ -95,8 +95,8 @@ def create_app(test_config=None):
 
         for table, columns in {
             'contacts': {column: "TEXT NOT NULL DEFAULT ''" for column in ('email','info1','info2','info3','info4','info5')},
-            'campaigns': {'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
-            'message_sends': {'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
+            'campaigns': {'rename_enabled': 'INTEGER NOT NULL DEFAULT 0', 'rename_template': "TEXT NOT NULL DEFAULT ''", 'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
+            'message_sends': {'alias': "TEXT NOT NULL DEFAULT ''", 'alias_state': "TEXT NOT NULL DEFAULT 'not_requested'", 'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
         }.items():
             present = {row['name'] for row in db().execute(f'PRAGMA table_info({table})')}
             for column, declaration in columns.items():
@@ -119,6 +119,14 @@ def create_app(test_config=None):
 
     def save_action_settings(campaign_id):
         message_enabled, friend_enabled, invitation = action_settings()
+        rename_enabled = int(request.form.get('rename_enabled') == 'yes')
+        rename_template = field('rename_template', 100)
+        if rename_enabled:
+            if not rename_template:
+                raise ValueError('Nhập mẫu tên gợi nhớ.')
+            personalize(rename_template, {}, strict=False)
+        db().execute('UPDATE campaigns SET rename_enabled=?,rename_template=? WHERE id=?',
+                     (rename_enabled, rename_template, campaign_id))
         db().execute('UPDATE campaigns SET send_message=?,send_friend=?,friend_message=? WHERE id=?',
                      (message_enabled, friend_enabled, invitation, campaign_id))
 
@@ -478,6 +486,9 @@ def create_app(test_config=None):
             return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
         try:
             try:
+                alias = personalize(campaign['rename_template'], person, result).strip() if campaign['rename_enabled'] else ''
+                if campaign['rename_enabled'] and (not alias or len(alias) > 100):
+                    raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
                 invitation = personalize(campaign['friend_message'], person, result) if campaign['send_friend'] else ''
                 rendered_message = personalize(campaign['message'], person, result) if campaign['send_message'] else ''
             except ValueError as error:
@@ -489,11 +500,12 @@ def create_app(test_config=None):
             if campaign['send_friend'] and len(invitation) > 150:
                 flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state)
-                VALUES (?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
+            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
                 str(result.get('name', ''))[:100], rendered_message,
                 'prepared' if campaign['send_message'] else 'not_requested', invitation,
-                'prepared' if campaign['send_friend'] else 'not_requested'))
+                'prepared' if campaign['send_friend'] else 'not_requested', alias,
+                'prepared' if campaign['rename_enabled'] else 'not_requested'))
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
         except sqlite3.IntegrityError:
@@ -571,11 +583,37 @@ def create_app(test_config=None):
               'success' if state == 'friend_requested' else 'error')
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))
 
+    @app.post('/campaigns/<int:campaign_id>/alias/<int:send_id>')
+    @login_required
+    def change_alias(campaign_id, send_id):
+        record = db().execute("""SELECT s.*,p.consent FROM message_sends s
+            JOIN campaigns c ON c.id=s.campaign_id JOIN contacts p ON p.id=s.contact_id
+            JOIN zalo_accounts a ON a.id=s.account_id WHERE s.id=? AND c.id=? AND c.user_id=?
+            AND p.user_id=c.user_id AND a.user_id=c.user_id""", (send_id,campaign_id,g.user['id'])).fetchone()
+        if record is None:
+            return 'Không tìm thấy người nhận.',404
+        campaign = db().execute('SELECT * FROM campaigns WHERE id=?',(campaign_id,)).fetchone()
+        if request.form.get('confirm_alias') != 'yes' or not record['consent'] or record['contact_id'] not in {p['id'] for p in audience(campaign)}:
+            return 'Cần xác nhận đổi tên và người nhận hợp lệ.',400
+        if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'],record['account_id']).get('state') != 'connected':
+            return 'Cần đăng nhập QR lại.',400
+        claimed = db().execute("UPDATE message_sends SET alias_state='sending' WHERE id=? AND alias_state='prepared'",(send_id,))
+        db().commit()
+        if claimed.rowcount:
+            try:
+                result = connector.message_action(g.user['id'],record['account_id'],'alias',uid=record['recipient_id'],message=record['alias'])
+            except Exception:
+                result = {'state':'unknown'}
+            state = result.get('state') if result.get('state') in ('renamed','failed','unknown') else 'unknown'
+            db().execute('UPDATE message_sends SET alias_state=? WHERE id=?',(state,send_id))
+            db().commit()
+        return redirect(url_for('campaign_detail',campaign_id=campaign_id))
+
     @app.post('/campaigns/<int:campaign_id>/cancel-send/<int:send_id>')
     @login_required
     def cancel_send(campaign_id, send_id):
         db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
-            AND friend_state IN ('prepared','not_requested')
+            AND friend_state IN ('prepared','not_requested') AND alias_state IN ('prepared','not_requested')
             AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
         db().commit()
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))

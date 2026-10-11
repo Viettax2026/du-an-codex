@@ -19,7 +19,14 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
   const messageEnabled = form.querySelector('[name=send_message]');
   const friendEnabled = form.querySelector('[name=send_friend]');
   const invitation = form.querySelector('[name=friend_message]');
+  const rename = form.querySelector('[name=rename_enabled]');
+  const alias = form.querySelector('[name=rename_template]');
+  rename.addEventListener('change', update);
+  alias.addEventListener('input', update);
   function update() {
+    alias.required = rename.checked;
+    alias.disabled = !rename.checked;
+    form.querySelector('[data-alias-preview]').textContent = samplePersonalization(alias.value);
     preview.textContent = samplePersonalization(content.value) || 'Nhập nội dung để xem trước.';
     consent.required = Boolean(phones.value.trim());
     content.required = messageEnabled.checked;

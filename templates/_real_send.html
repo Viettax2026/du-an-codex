@@ -30,6 +30,18 @@
     {% elif s.friend_state=='failed' %}<p class="notice error">Không gửi được lời mời kết bạn.</p>
     {% else %}<p class="notice">Lời mời đang xử lý hoặc chưa xác định kết quả. Kiểm tra Zalo; không tự gửi lại.</p>{% endif %}
     {% endif %}
+    {% if s.alias_state!='not_requested' %}
+    <h4>Tên gợi nhớ trên Zalo</h4><p>{{ s.alias }}</p>
+    {% if s.alias_state=='prepared' %}
+    <form method="post" action="{{ url_for('change_alias',campaign_id=campaign.id,send_id=s.id) }}">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <label class="send-confirm"><input type="checkbox" name="confirm_alias" value="yes" required> Tôi xác nhận đổi tên gợi nhớ của người nhận này.</label>
+      <button class="primary">Đổi tên gợi nhớ</button>
+    </form>
+    {% elif s.alias_state=='renamed' %}<p class="notice success">Zalo đã tiếp nhận đổi tên gợi nhớ.</p>
+    {% elif s.alias_state=='failed' %}<p class="notice error">Không đổi được tên gợi nhớ. Kiểm tra quan hệ bạn bè và phiên đăng nhập.</p>
+    {% else %}<p class="notice">Đổi tên đang xử lý hoặc chưa xác định kết quả. Kiểm tra Zalo; không tự thực hiện lại.</p>{% endif %}
+    {% endif %}
     {% if s.state=='prepared' %}
       <form method="post" action="{{ url_for('send_message', campaign_id=campaign.id, send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
@@ -39,7 +51,7 @@
     {% elif s.state=='sent' %}<p class="notice success">Zalo đã tiếp nhận · Mã tin: {{ s.message_id }} · Chưa xác nhận đã đọc</p>
     {% elif s.state=='failed' %}<p class="notice error">Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối.</p>
     {% elif s.state!='not_requested' %}<p class="notice">{{ 'Đang xử lý hoặc chưa xác định kết quả' if s.state=='sending' else 'Chưa xác định tin đã gửi hay chưa' }}. Kiểm tra hội thoại Zalo trước khi gửi lại bằng ứng dụng Zalo.</p>{% endif %}
-    {% if s.state in ('prepared','not_requested') and s.friend_state in ('prepared','not_requested') %}<form method="post" action="{{ url_for('cancel_send', campaign_id=campaign.id, send_id=s.id) }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="ghost">Hủy bản xem trước</button></form>{% endif %}
+    {% if s.state in ('prepared','not_requested') and s.friend_state in ('prepared','not_requested') and s.alias_state in ('prepared','not_requested') %}<form method="post" action="{{ url_for('cancel_send', campaign_id=campaign.id, send_id=s.id) }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="ghost">Hủy bản xem trước</button></form>{% endif %}
   </article>
   {% else %}<p class="muted">Chưa có lần gửi thật. Chọn khách hàng để tìm người nhận và xem trước.</p>{% endfor %}
 </section>
