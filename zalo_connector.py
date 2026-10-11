@@ -110,6 +110,6 @@ class QRConnector:
             output = json.loads(result.stdout)
             return {key: output[key] for key in ('state', 'uid', 'name', 'message_id') if key in output}
         except subprocess.TimeoutExpired:
-            return {'state': 'unknown' if action == 'send' else 'failed'}
+            return {'state': 'unknown' if action in ('send', 'friend') else 'failed'}
         except (OSError, ValueError, KeyError, TypeError):
-            return {'state': 'unknown' if action == 'send' else 'failed'}
+            return {'state': 'unknown' if action in ('send', 'friend') else 'failed'}

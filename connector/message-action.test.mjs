@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { executeMessageAction } from './message-action.mjs';
 import { decryptCredentials } from './state.mjs';
 
+test('friend invitation succeeds only after upstream response; does not send a message', async () => {
+  let count = 0;
+  const api = {sendFriendRequest: async (message, uid) => {
+    count++; assert.equal(uid, '123'); assert.equal(message, 'Xin chào'); return '';
+  }, sendMessage: async () => {throw new Error('Must not send');}};
+  assert.deepEqual(await executeMessageAction(api, {action:'friend',uid:'123',message:'Xin chào'}), {state:'friend_requested'});
+  assert.equal(count, 1);
+  await assert.rejects(executeMessageAction(api, {action:'friend',uid:'123',message:'x'.repeat(151)}));
+  assert.equal(count, 1);
+  assert.deepEqual(await executeMessageAction({sendFriendRequest: async () => undefined}, {action:'friend',uid:'123',message:'Hello'}), {state:'unknown'});
+});
+
 test('phone lookup returns only recipient identity and normalizes Vietnamese numbers', async () => {
   const result = await executeMessageAction({findUser: async phone => {
     assert.equal(phone, '84901234567');

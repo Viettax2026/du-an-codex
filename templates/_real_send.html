@@ -18,16 +18,28 @@
     <h3>{{ s.contact_name }} · Zalo: {{ s.recipient_name or 'Không có tên hiển thị' }}</h3>
     <p class="muted">Tài khoản gửi: {{ s.account_name }} · Zalo ID: {{ s.recipient_id }} · {{ s.created_at|localtime }}</p>
     <p class="message-text">{{ s.message }}</p>
+    {% if s.friend_state!='not_requested' %}
+    <h4>Lời mời kết bạn</h4><p class="message-text">{{ s.friend_message }}</p>
+    {% if s.friend_state=='prepared' %}
+      <form method="post" action="{{ url_for('send_friend_request',campaign_id=campaign.id,send_id=s.id) }}">
+        <input type="hidden" name="csrf" value="{{ session.csrf }}">
+        <label class="send-confirm"><input type="checkbox" name="confirm_friend" value="yes" required> Tôi xác nhận gửi lời mời này đến đúng người nhận Zalo.</label>
+        <button class="primary">Gửi lời mời kết bạn</button>
+      </form>
+    {% elif s.friend_state=='friend_requested' %}<p class="notice success">Zalo đã tiếp nhận lời mời · Chưa xác nhận đã chấp nhận kết bạn</p>
+    {% elif s.friend_state=='failed' %}<p class="notice error">Không gửi được lời mời kết bạn.</p>
+    {% else %}<p class="notice">Lời mời đang xử lý hoặc chưa xác định kết quả. Kiểm tra Zalo; không tự gửi lại.</p>{% endif %}
+    {% endif %}
     {% if s.state=='prepared' %}
       <form method="post" action="{{ url_for('send_message', campaign_id=campaign.id, send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_send" value="yes" required> Tôi đã kiểm tra đúng người nhận và đồng ý gửi nội dung này qua Zalo.</label>
         <button class="primary">Gửi tin thật</button>
       </form>
-      <form method="post" action="{{ url_for('cancel_send', campaign_id=campaign.id, send_id=s.id) }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="ghost">Hủy bản xem trước</button></form>
     {% elif s.state=='sent' %}<p class="notice success">Zalo đã tiếp nhận · Mã tin: {{ s.message_id }} · Chưa xác nhận đã đọc</p>
     {% elif s.state=='failed' %}<p class="notice error">Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối.</p>
-    {% else %}<p class="notice">{{ 'Đang xử lý hoặc chưa xác định kết quả' if s.state=='sending' else 'Chưa xác định tin đã gửi hay chưa' }}. Kiểm tra hội thoại Zalo trước khi gửi lại bằng ứng dụng Zalo.</p>{% endif %}
+    {% elif s.state!='not_requested' %}<p class="notice">{{ 'Đang xử lý hoặc chưa xác định kết quả' if s.state=='sending' else 'Chưa xác định tin đã gửi hay chưa' }}. Kiểm tra hội thoại Zalo trước khi gửi lại bằng ứng dụng Zalo.</p>{% endif %}
+    {% if s.state in ('prepared','not_requested') and s.friend_state in ('prepared','not_requested') %}<form method="post" action="{{ url_for('cancel_send', campaign_id=campaign.id, send_id=s.id) }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="ghost">Hủy bản xem trước</button></form>{% endif %}
   </article>
   {% else %}<p class="muted">Chưa có lần gửi thật. Chọn khách hàng để tìm người nhận và xem trước.</p>{% endfor %}
 </section>

@@ -92,6 +92,34 @@ def create_app(test_config=None):
             db().execute('ALTER TABLE campaigns ADD COLUMN account_id INTEGER REFERENCES zalo_accounts(id)')
             db().commit()
 
+        for table, columns in {
+            'campaigns': {'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
+            'message_sends': {'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
+        }.items():
+            present = {row['name'] for row in db().execute(f'PRAGMA table_info({table})')}
+            for column, declaration in columns.items():
+                if column not in present:
+                    db().execute(f'ALTER TABLE {table} ADD COLUMN {column} {declaration}')
+        db().commit()
+
+    def action_settings():
+        if request.form.get('options_present') == 'yes':
+            message_enabled = int(request.form.get('send_message') == 'yes')
+            friend_enabled = int(request.form.get('send_friend') == 'yes')
+        else:
+            message_enabled, friend_enabled = 1, 0
+        invitation = field('friend_message', 150)
+        if not message_enabled and not friend_enabled:
+            raise ValueError('Chọn ít nhất một hành động: nhắn tin hoặc kết bạn.')
+        if friend_enabled and not invitation:
+            raise ValueError('Nhập nội dung lời mời kết bạn (tối đa 150 ký tự).')
+        return message_enabled, friend_enabled, invitation
+
+    def save_action_settings(campaign_id):
+        message_enabled, friend_enabled, invitation = action_settings()
+        db().execute('UPDATE campaigns SET send_message=?,send_friend=?,friend_message=? WHERE id=?',
+                     (message_enabled, friend_enabled, invitation, campaign_id))
+
     def audience(campaign):
         return db().execute('''SELECT p.* FROM contacts p WHERE p.user_id=? AND p.consent=1 AND
             (p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?) OR
@@ -99,10 +127,11 @@ def create_app(test_config=None):
              ORDER BY p.id''', (g.user['id'], campaign['id'], campaign['id'], campaign['tag'], campaign['tag'])).fetchall()
 
     def campaign_fields():
-        if request.form.get('action', 'phone_message') != 'phone_message':
+        if request.form.get('action', 'phone_message') not in ('phone_message', 'phone_actions'):
             raise ValueError('Chỉ hỗ trợ tìm theo số điện thoại và nhắn tin.')
         name, message, tag = field('name', 120), field('message', 2000), field('tag', 80)
-        if not name or not message:
+        message_enabled, _, _ = action_settings()
+        if not name or (message_enabled and not message):
             raise ValueError('Vui lòng nhập tên chiến dịch và nội dung.')
         account_id = request.form.get('account_id') or None
         if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=?', (account_id, g.user['id'])).fetchone():
@@ -128,6 +157,7 @@ def create_app(test_config=None):
         return name, message, tag, account_id, phones
 
     def save_campaign_phones(campaign_id, phones):
+        save_action_settings(campaign_id)
         db().execute('DELETE FROM campaign_contacts WHERE campaign_id=?', (campaign_id,))
         for phone in phones:
             db().execute('''INSERT INTO contacts(user_id,name,phone,consent) VALUES (?,?,?,1)
@@ -358,6 +388,9 @@ def create_app(test_config=None):
         recipients = audience(campaign)
         if request.method == 'POST':
             # The conditional update atomically claims a draft to prevent double submissions.
+            if not campaign['send_message']:
+                flash('Chiến dịch này chỉ chọn kết bạn, không có nội dung nhắn tin để mô phỏng.', 'error')
+                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             cur = db().execute("UPDATE campaigns SET status='simulated' WHERE id=? AND user_id=? AND status='draft'", (campaign_id, g.user['id']))
             if not recipients or not cur.rowcount:
                 db().rollback()
@@ -408,9 +441,15 @@ def create_app(test_config=None):
         if not allowed or not allowed['consent']:
             return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
         try:
-            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message)
-                VALUES (?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
-                str(result.get('name', ''))[:100], campaign['message'].replace('{{name}}', person['name'])))
+            invitation = campaign['friend_message'].replace('{{name}}', person['name'])
+            if campaign['send_friend'] and len(invitation) > 150:
+                flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
+                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state)
+                VALUES (?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
+                str(result.get('name', ''))[:100], campaign['message'].replace('{{name}}', person['name']),
+                'prepared' if campaign['send_message'] else 'not_requested', invitation,
+                'prepared' if campaign['send_friend'] else 'not_requested'))
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
         except sqlite3.IntegrityError:
@@ -455,10 +494,44 @@ def create_app(test_config=None):
               'success' if state == 'sent' else 'error')
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))
 
+    @app.post('/campaigns/<int:campaign_id>/friend/<int:send_id>')
+    @login_required
+    def send_friend_request(campaign_id, send_id):
+        record = db().execute('''SELECT s.*, p.consent FROM message_sends s
+            JOIN campaigns c ON c.id=s.campaign_id JOIN contacts p ON p.id=s.contact_id
+            JOIN zalo_accounts a ON a.id=s.account_id WHERE s.id=? AND c.id=? AND c.user_id=?
+            AND p.user_id=c.user_id AND a.user_id=c.user_id''', (send_id, campaign_id, g.user['id'])).fetchone()
+        if record is None:
+            return 'Không tìm thấy người nhận.', 404
+        campaign = db().execute('SELECT * FROM campaigns WHERE id=?', (campaign_id,)).fetchone()
+        if request.form.get('confirm_friend') != 'yes' or not record['consent'] or record['contact_id'] not in {p['id'] for p in audience(campaign)}:
+            return 'Cần xác nhận lời mời và người nhận hợp lệ.', 400
+        if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'], record['account_id']).get('state') != 'connected':
+            return 'Cần đăng nhập QR lại.', 400
+        claimed = db().execute("UPDATE message_sends SET friend_state='sending' WHERE id=? AND friend_state='prepared'", (send_id,))
+        db().commit()
+        if not claimed.rowcount:
+            flash('Lời mời này đã được xử lý hoặc chưa được chọn. Không gửi lại.', 'error')
+            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        try:
+            result = connector.message_action(g.user['id'], record['account_id'], 'friend',
+                uid=record['recipient_id'], message=record['friend_message'])
+        except Exception:
+            result = {'state': 'unknown'}
+        state = result.get('state') if result.get('state') in ('friend_requested', 'failed', 'unknown') else 'unknown'
+        db().execute('UPDATE message_sends SET friend_state=? WHERE id=?', (state, send_id))
+        db().commit()
+        flash({'friend_requested': 'Zalo đã tiếp nhận lời mời. Chưa xác nhận người nhận chấp nhận kết bạn.',
+               'failed': 'Không gửi được lời mời. Kiểm tra phiên đăng nhập.',
+               'unknown': 'Chưa xác định lời mời đã gửi hay chưa. Kiểm tra Zalo; không tự gửi lại.'}[state],
+              'success' if state == 'friend_requested' else 'error')
+        return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+
     @app.post('/campaigns/<int:campaign_id>/cancel-send/<int:send_id>')
     @login_required
     def cancel_send(campaign_id, send_id):
-        db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state='prepared'
+        db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
+            AND friend_state IN ('prepared','not_requested')
             AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
         db().commit()
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))

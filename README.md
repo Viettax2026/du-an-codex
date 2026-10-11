@@ -39,7 +39,7 @@ Dữ liệu được phân tách theo tài khoản. Các biểu mẫu có bảo 
 
 Đã có đăng nhập, dữ liệu bền vững, nhập CSV, tìm khách hàng, phân nhóm, cập nhật đồng ý nhận tin, tạo chiến dịch, xem trước và nhật ký mô phỏng. Giao diện chiến dịch và hộp thoại thêm tài khoản đã được chỉnh theo ảnh Akabiz do người dùng cung cấp. Bộ lọc tìm kiếm/thời gian/trạng thái/nhóm và nhật ký từng chiến dịch sử dụng dữ liệu lưu trong ứng dụng. Trang `/accounts` lưu hồ sơ tên và nhóm; chưa đăng nhập Zalo.
 
-**Chưa có gửi thật, OAuth OA, webhook, lịch gửi, hàng đợi, ZNS, thanh toán hay kết bạn tự động.** Để triển khai gửi thật cần xác nhận OA, loại tin và quyền API; xây dựng OAuth và token refresh, mã hóa token, xác minh webhook, chính sách người nhận và hàng đợi có retry/idempotency theo tài liệu Zalo hiện hành. Không dùng số điện thoại thay cho OA user ID.
+**Kênh Zalo cá nhân có gửi từng tin và lời mời kết bạn sau xác nhận.** Kênh OA/OAuth, webhook, lịch gửi, hàng đợi và ZNS chưa triển khai; số điện thoại không thay cho OA user ID.
 
 Máy chủ Flask hiện tại phục vụ phát triển. Trước khi mở công khai cần máy chủ WSGI, HTTPS, `COOKIE_SECURE=1`, hạn chế tốc độ đăng nhập/đăng ký, kiểm soát đăng ký, quản lý khôi phục tài khoản, sao lưu và vận hành. Không đưa khóa hoặc token vào Git.
 
@@ -93,4 +93,13 @@ Form có ba phần: cài đặt chung (hành động, tài khoản, tên), danh 
 
 Danh sách riêng lưu trong campaign_contacts và chỉ áp dụng cho chiến dịch đó; khi để trống thì dùng nhóm khách hàng như trước. Tài khoản gửi đã chọn được lưu và chọn sẵn ở màn hình gửi thật. Lưu/sửa không gọi Zalo hoặc tự gửi. Chỉ sửa được bản nháp chưa mô phỏng và chưa có bản xem trước/lần gửi thật để bảo toàn nhật ký. Cơ sở dữ liệu cũ tự thêm cột account_id và bảng liên kết, không xóa dữ liệu.
 
-Chưa có lựa chọn kết bạn, media hoặc lịch gửi. Các phần đó trong ảnh tham chiếu chưa được triển khai.
+Đã có lựa chọn nhắn tin và kết bạn riêng; media hoặc lịch gửi chưa triển khai. Các phần đó trong ảnh tham chiếu chưa được triển khai.
+
+
+## Soạn lời mời kết bạn và tin nhắn
+
+Hành động “Nhắn tin, kết bạn đến SĐT” có hai ô lựa chọn độc lập. Có thể chỉ nhắn tin, chỉ kết bạn hoặc cả hai. Lời mời tối đa 150 ký tự, hỗ trợ {{name}} và xem trước. Giới hạn kiểm tra cả sau khi chèn tên thật.
+
+Tìm người nhận và tạo bản xem trước vẫn không gửi hành động nào. Người dùng xác nhận riêng “Gửi lời mời kết bạn” và “Gửi tin thật”; không tự gửi tin sau lời mời hoặc chờ chấp nhận tự động. Lời mời được lưu với friend_state riêng; tiếp nhận lời mời không có nghĩa đã chấp nhận. Double click, kết quả chưa xác định và khởi động lại không tự gửi lại lời mời. Bản xem trước có bất kỳ hành động đã xử lý không thể xóa để gửi lại.
+
+zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Các mục đổi tên, gắn tag Zalo, media, lịch chạy và giới hạn hành động trong ảnh tham chiếu chưa triển khai.
