@@ -1,0 +1,11 @@
+<div class="personalize-tools">
+  <button type="button" class="ghost" data-picker-open="{{ personal_target }}" aria-expanded="false">{} Cá nhân hóa</button>
+  <div class="personalize-picker" data-picker="{{ personal_target }}" hidden>
+    <div class="picker-heading"><b>Chèn thông tin</b><button type="button" class="ghost" data-picker-close>Đóng</button></div>
+    <div class="picker-columns">
+      <section><h4>Khách hàng Zalo</h4><p>Tên hiển thị Zalo</p><button type="button" data-token="#{FULL_NAME}">#{FULL_NAME}</button><p>Tên gốc Zalo</p><button type="button" data-token="#{ORIGINAL_NAME}">#{ORIGINAL_NAME}</button><p>Xưng hô theo giới tính</p><button type="button" data-token="#{SEX{anh-chị-anh/chị}}">#{SEX{anh-chị-anh/chị}}</button></section>
+      <section><h4>Thông tin CSV/Excel</h4>{% for key in ['INPUT_FULLNAME','PHONE','EMAIL','INFO1','INFO2','INFO3','INFO4','INFO5'] %}<button type="button" data-token="{{ '#{' ~ key ~ '}' }}">{{ '#{' ~ key ~ '}' }}</button>{% endfor %}<p class="muted">Nhập các cột name, phone, email, info1…info5 bằng CSV xuất từ Excel.</p></section>
+      <section><h4>Ngày hôm nay</h4><label>Định dạng<select data-date-format><option>DD/MM/YYYY</option><option>DD-MM-YYYY</option><option>YYYY-MM-DD</option></select></label><button type="button" data-date-token>Chèn ngày</button><p class="muted">Ngày tại lúc tạo bản xem trước người nhận, theo giờ Việt Nam.</p></section>
+    </div>
+  </div>
+</div>

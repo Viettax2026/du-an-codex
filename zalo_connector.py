@@ -108,7 +108,7 @@ class QRConnector:
                 input=json.dumps(payload), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 timeout=45, env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'NODE_ENV': 'production'})
             output = json.loads(result.stdout)
-            return {key: output[key] for key in ('state', 'uid', 'name', 'message_id') if key in output}
+            return {key: output[key] for key in ('state', 'uid', 'name', 'original_name', 'gender', 'message_id') if key in output}
         except subprocess.TimeoutExpired:
             return {'state': 'unknown' if action in ('send', 'friend') else 'failed'}
         except (OSError, ValueError, KeyError, TypeError):

@@ -20,7 +20,7 @@ test('phone lookup returns only recipient identity and normalizes Vietnamese num
     assert.equal(phone, '84901234567');
     return {uid: '123456', display_name: 'Lan', token: 'private'};
   }}, {action: 'resolve', phone: '090 123 4567'});
-  assert.deepEqual(result, {state: 'resolved', uid: '123456', name: 'Lan'});
+  assert.deepEqual(result, {state: 'resolved', uid: '123456', name: 'Lan', original_name: '', gender: null});
   await assert.rejects(executeMessageAction({}, {action: 'resolve', phone: 'bad'}));
 });
 test('send is successful only with upstream message ID and never retries an uncertain dispatch', async () => {

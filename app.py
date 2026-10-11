@@ -12,6 +12,7 @@ from pathlib import Path
 from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
+from personalization import personalize
 
 
 def create_app(test_config=None):
@@ -93,6 +94,7 @@ def create_app(test_config=None):
             db().commit()
 
         for table, columns in {
+            'contacts': {column: "TEXT NOT NULL DEFAULT ''" for column in ('email','info1','info2','info3','info4','info5')},
             'campaigns': {'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
             'message_sends': {'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
         }.items():
@@ -131,6 +133,9 @@ def create_app(test_config=None):
             raise ValueError('Chỉ hỗ trợ tìm theo số điện thoại và nhắn tin.')
         name, message, tag = field('name', 120), field('message', 2000), field('tag', 80)
         message_enabled, _, _ = action_settings()
+        personalize(message, {}, strict=False)
+        if request.form.get('send_friend') == 'yes':
+            personalize(request.form.get('friend_message', ''), {}, strict=False)
         if not name or (message_enabled and not message):
             raise ValueError('Vui lòng nhập tên chiến dịch và nội dung.')
         account_id = request.form.get('account_id') or None
@@ -257,8 +262,9 @@ def create_app(test_config=None):
                 name, phone = field('name', 100), field('phone', 30)
                 if not name or not phone:
                     raise ValueError('Vui lòng nhập tên và số điện thoại.')
-                db().execute('INSERT INTO contacts(user_id,name,phone,zalo_id,tag,consent) VALUES (?,?,?,?,?,?)',
-                             (g.user['id'], name, phone, field('zalo_id', 100), field('tag', 80) or 'Khách hàng', int(request.form.get('consent') == 'on')))
+                db().execute('INSERT INTO contacts(user_id,name,phone,zalo_id,tag,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                             (g.user['id'], name, phone, field('zalo_id', 100), field('tag', 80) or 'Khách hàng', int(request.form.get('consent') == 'on'),
+                              field('email',254), *(field(f'info{i}',500) for i in range(1,6))))
                 db().commit()
                 flash('Đã thêm khách hàng.', 'success')
             except ValueError as error:
@@ -289,8 +295,11 @@ def create_app(test_config=None):
                 name, phone, tag, zalo_id = [(row.get(key) or '').strip() for key in ('name', 'phone', 'tag', 'zalo_id')]
                 if not name or not phone or len(name) > 100 or len(phone) > 30 or len(tag) > 80 or len(zalo_id) > 100:
                     raise ValueError(f'Dữ liệu không hợp lệ tại dòng {index + 2}.')
-                cur = db().execute('INSERT OR IGNORE INTO contacts(user_id,name,phone,tag,zalo_id,consent) VALUES (?,?,?,?,?,?)',
-                                   (g.user['id'], name, phone, tag or 'Khách hàng', zalo_id, int((row.get('consent') or '').lower() in ('1', 'true', 'yes'))))
+                extra = [(row.get(key) or '').strip() for key in ('email','info1','info2','info3','info4','info5')]
+                if len(extra[0]) > 254 or any(len(value) > 500 for value in extra[1:]):
+                    raise ValueError(f'Thông tin bổ sung quá dài tại dòng {index + 2}.')
+                cur = db().execute('INSERT OR IGNORE INTO contacts(user_id,name,phone,tag,zalo_id,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                                   (g.user['id'], name, phone, tag or 'Khách hàng', zalo_id, int((row.get('consent') or '').lower() in ('1', 'true', 'yes')), *extra))
                 count += cur.rowcount
                 skipped += 1 - cur.rowcount
             db().commit()
@@ -299,6 +308,26 @@ def create_app(test_config=None):
             db().rollback()
             flash(f'Không thể nhập CSV: {error}', 'error')
         return redirect(url_for('contacts'))
+
+    @app.route('/contacts/<int:contact_id>/edit', methods=['GET','POST'])
+    @login_required
+    def edit_contact(contact_id):
+        person = db().execute('SELECT * FROM contacts WHERE id=? AND user_id=?', (contact_id,g.user['id'])).fetchone()
+        if person is None:
+            return 'Không tìm thấy khách hàng.', 404
+        if request.method == 'POST':
+            try:
+                name = field('name',100)
+                if not name:
+                    raise ValueError('Nhập tên khách hàng.')
+                db().execute('UPDATE contacts SET name=?,email=?,info1=?,info2=?,info3=?,info4=?,info5=? WHERE id=? AND user_id=?',
+                    (name,field('email',254),*(field(f'info{i}',500) for i in range(1,6)),contact_id,g.user['id']))
+                db().commit()
+                flash('Đã lưu thông tin khách hàng. Các bản xem trước cũ giữ nguyên nội dung.', 'success')
+                return redirect(url_for('contacts'))
+            except ValueError as error:
+                flash(str(error),'error')
+        return render_template('contact_edit.html',person=person,page='contacts')
 
     @app.post('/contacts/<int:contact_id>/consent')
     @login_required
@@ -396,14 +425,21 @@ def create_app(test_config=None):
                 db().rollback()
                 flash('Cần có người đồng ý nhận tin và chiến dịch chưa gửi thử.', 'error')
             else:
-                for person in recipients:
-                    message = campaign['message'].replace('{{name}}', person['name'])
-                    db().execute('INSERT INTO deliveries(campaign_id,contact_id,message) VALUES (?,?,?)', (campaign_id, person['id'], message))
-                db().commit()
-                flash(f'Đã mô phỏng {len(recipients)} tin nhắn. Chưa gửi tin đến Zalo.', 'success')
+                try:
+                    for person in recipients:
+                        message = personalize(campaign['message'], person, strict=False)
+                        db().execute('INSERT INTO deliveries(campaign_id,contact_id,message) VALUES (?,?,?)', (campaign_id, person['id'], message))
+                    db().commit()
+                    flash(f'Đã mô phỏng {len(recipients)} tin nhắn. Chưa gửi tin đến Zalo.', 'success')
+                except ValueError as error:
+                    db().rollback()
+                    flash(str(error), 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         logs = db().execute('SELECT d.*, c.name FROM deliveries d JOIN contacts c ON c.id=d.contact_id WHERE campaign_id=? ORDER BY d.id DESC', (campaign_id,)).fetchall()
-        preview = campaign['message'].replace('{{name}}', recipients[0]['name'] if recipients else 'Nguyễn An')
+        try:
+            preview = personalize(campaign['message'], recipients[0] if recipients else {'name':'Nguyễn An'}, strict=False)
+        except ValueError as error:
+            preview = str(error)
         accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
         connected = [account for account in accounts if connector.status(g.user['id'], account['id']).get('state') == 'connected']
         sends = db().execute('''SELECT s.*, p.name AS contact_name, a.name AS account_name FROM message_sends s
@@ -441,13 +477,21 @@ def create_app(test_config=None):
         if not allowed or not allowed['consent']:
             return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
         try:
-            invitation = campaign['friend_message'].replace('{{name}}', person['name'])
+            try:
+                invitation = personalize(campaign['friend_message'], person, result) if campaign['send_friend'] else ''
+                rendered_message = personalize(campaign['message'], person, result) if campaign['send_message'] else ''
+            except ValueError as error:
+                flash(str(error), 'error')
+                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+            if len(rendered_message) > 2000:
+                flash('Tin nhắn sau cá nhân hóa vượt 2000 ký tự.', 'error')
+                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             if campaign['send_friend'] and len(invitation) > 150:
                 flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state)
                 VALUES (?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
-                str(result.get('name', ''))[:100], campaign['message'].replace('{{name}}', person['name']),
+                str(result.get('name', ''))[:100], rendered_message,
                 'prepared' if campaign['send_message'] else 'not_requested', invitation,
                 'prepared' if campaign['send_friend'] else 'not_requested'))
             db().commit()

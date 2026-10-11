@@ -103,3 +103,13 @@ Hành động “Nhắn tin, kết bạn đến SĐT” có hai ô lựa chọn 
 Tìm người nhận và tạo bản xem trước vẫn không gửi hành động nào. Người dùng xác nhận riêng “Gửi lời mời kết bạn” và “Gửi tin thật”; không tự gửi tin sau lời mời hoặc chờ chấp nhận tự động. Lời mời được lưu với friend_state riêng; tiếp nhận lời mời không có nghĩa đã chấp nhận. Double click, kết quả chưa xác định và khởi động lại không tự gửi lại lời mời. Bản xem trước có bất kỳ hành động đã xử lý không thể xóa để gửi lại.
 
 zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Các mục đổi tên, gắn tag Zalo, media, lịch chạy và giới hạn hành động trong ảnh tham chiếu chưa triển khai.
+
+## Cá nhân hóa lời mời và tin nhắn
+
+Nút Cá nhân hóa chèn token tại con trỏ vào từng nội dung, giữ {{name}} tương thích. Token hỗ trợ: #{FULL_NAME} (tên hiển thị Zalo), #{ORIGINAL_NAME} (tên gốc Zalo), #{INPUT_FULLNAME} (tên khách hàng lưu trong ứng dụng), #{PHONE}, #{EMAIL}, #{INFO1}…#{INFO5}, #{SEX{anh-chị-anh/chị}}, #{TODAY(DD/MM/YYYY)}, #{TODAY(DD-MM-YYYY)} và #{TODAY(YYYY-MM-DD)}.
+
+Giới tính dùng trường Zalo trả về: 0 nam, 1 nữ, không rõ dùng lựa chọn thứ ba; không suy đoán theo tên. Tên Zalo chỉ có sau khi tìm người nhận. Ngày lấy lúc tạo bản xem trước người nhận theo Asia/Bangkok (UTC+7); bản đã xác nhận giữ nguyên ngày/nội dung, không tự đổi lúc gửi.
+
+Xem trước trong form dùng dữ liệu mẫu được ghi rõ. Xem trước thực dùng dữ liệu khách hàng và kết quả tìm Zalo. Thiếu thông tin hoặc cú pháp không hợp lệ sẽ chặn tạo bản gửi thật, không gửi nguyên token. Thay thế một lần, không diễn giải token nằm trong dữ liệu khách hàng. Kiểm tra độ dài sau cá nhân hóa: lời mời 150 ký tự, tin nhắn 2000 ký tự.
+
+CSV UTF-8 xuất từ Excel hỗ trợ cột email, info1…info5 ngoài name/phone/tag/zalo_id/consent. Số trùng vẫn được bỏ qua khi import; chỉnh dữ liệu khách hàng đã có bằng liên kết Thông tin cá nhân hóa trong danh sách. Quyền sở hữu và CSRF áp dụng cho sửa. Nội dung các bản xem trước đã có không tự thay đổi sau khi sửa thông tin khách hàng.
