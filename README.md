@@ -129,3 +129,7 @@ chưa có bản xem trước để bật. Chưa tự chạy hành động theo l
 Đăng ký bằng tên tài khoản từ 3–64 ký tự: chữ không dấu, số, dấu chấm, gạch dưới và gạch ngang; không phân biệt chữ hoa/thường. Không yêu cầu email. Cơ sở dữ liệu cũ tự chuyển định danh email sang tài khoản và giữ nguyên mật khẩu, dữ liệu: người dùng cũ vẫn nhập nguyên email cũ vào ô Tài khoản.
 
 Tài khoản cũ `lienhe.viettaxco@gmail.com` được đổi thành `admin` khi khởi động phiên bản mới, giữ nguyên mật khẩu và dữ liệu. Nếu tên `admin` đã tồn tại, ứng dụng báo lỗi và không ghi đè tài khoản. Các tài khoản cũ khác giữ nguyên định danh.
+
+## Đặt lại mật khẩu admin trên VPS
+
+Chạy `sudo -u zaloflow /opt/zaloflow/.venv/bin/flask --app app:create_app reset-admin` trong `/opt/zaloflow`. Nhập mật khẩu mới hai lần khi được hỏi (không hiển thị khi gõ), từ 10–256 ký tự. Lệnh tạo admin nếu chưa có, hoặc đổi mật khẩu trên chính tài khoản admin hiện có, giữ nguyên dữ liệu. Không truyền mật khẩu trong dòng lệnh.

@@ -1,4 +1,5 @@
 import csv
+import click
 import io
 import os
 import re
@@ -691,6 +692,22 @@ def create_app(test_config=None):
             return jsonify(error='Không tìm thấy tài khoản.'), 404
         connector.disconnect(g.user['id'], account_id)
         return jsonify(state='disconnected')
+
+    @app.cli.command('reset-admin')
+    @click.password_option(prompt='Mật khẩu mới cho admin', confirmation_prompt='Nhập lại mật khẩu mới')
+    def reset_admin(password):
+        """Create admin or reset its password while preserving existing data."""
+        if not 10 <= len(password) <= 256:
+            raise click.ClickException('Mật khẩu phải từ 10 đến 256 ký tự.')
+        user = db().execute('SELECT id FROM users WHERE username=?', ('admin',)).fetchone()
+        password_hash = generate_password_hash(password)
+        if user:
+            db().execute('UPDATE users SET password=? WHERE id=?', (password_hash, user['id']))
+        else:
+            db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
+                         ('Admin', 'admin', password_hash))
+        db().commit()
+        click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')
 
     return app
 

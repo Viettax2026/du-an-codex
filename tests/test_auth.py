@@ -85,3 +85,33 @@ def test_admin_migration_does_not_overwrite_an_existing_account(tmp_path):
     with sqlite3.connect(database) as conn:
         assert conn.execute('SELECT username FROM users ORDER BY id').fetchall() == [
             ('lienhe.viettaxco@gmail.com',), ('admin',)]
+
+
+def test_reset_admin_creates_and_resets_same_account(app):
+    runner = app.test_cli_runner()
+    result = runner.invoke(args=['reset-admin'], input='first-password\nfirst-password\n')
+    assert result.exit_code == 0
+    assert 'first-password' not in result.output
+    client = app.test_client()
+    post(client, '/login', {'username': 'admin', 'password': 'first-password'})
+    post(client, '/contacts', {'name': 'Lan', 'phone': '0901234567'})
+    with client.session_transaction() as session:
+        user_id = session['user_id']
+    result = runner.invoke(args=['reset-admin'], input='new-password-123\nnew-password-123\n')
+    assert result.exit_code == 0
+    post(client, '/logout')
+    post(client, '/login', {'username': 'admin', 'password': 'first-password'})
+    with client.session_transaction() as session:
+        assert 'user_id' not in session
+    post(client, '/login', {'username': 'admin', 'password': 'new-password-123'})
+    with client.session_transaction() as session:
+        assert session['user_id'] == user_id
+    assert 'Lan' in client.get('/contacts').text
+
+
+def test_reset_admin_rejects_short_or_mismatched_passwords(app):
+    runner = app.test_cli_runner()
+    for value in ['short\nshort\n', 'long-password\ndifferent-password\n']:
+        assert runner.invoke(args=['reset-admin'], input=value).exit_code != 0
+    with sqlite3.connect(app.config['DATABASE']) as conn:
+        assert conn.execute('SELECT count(*) FROM users').fetchone()[0] == 0
