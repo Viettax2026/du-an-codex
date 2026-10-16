@@ -157,3 +157,7 @@ Nếu có thay đổi mã cục bộ, kiểm tra trước khi pull. Script updat
 Sau cập nhật, đăng nhập và mở Chiến dịch → Hành động. Kiểm tra dừng/tiếp tục, nhân bản, ID, giới hạn, thêm CSV và báo cáo. Thử media nhỏ với người nhận đã đồng ý: tạo bản xem trước, kiểm tra nội dung/tệp, xác nhận rồi kiểm tra hội thoại trong Zalo. PDF/MP4 là tệp đính kèm. Chưa xác minh gửi thật chỉ bằng các bài kiểm thử nội bộ.
 
 Xóa chiến dịch đưa vào lưu trữ và vẫn đọc được báo cáo/lịch sử qua bộ lọc Đã xóa. Không xóa instance/media để dọn dung lượng nếu các bản xem trước hoặc nhật ký còn tham chiếu. Duy trì sao lưu ngoài VPS nếu dùng dữ liệu thực. Nếu nâng cấp thất bại, giữ nguyên bản sao lưu, xem trạng thái/log dịch vụ trước khi quyết định khôi phục cả mã lẫn dữ liệu tương ứng.
+
+### Nếu bản cập nhật đầu tiên báo ứng dụng chưa sẵn sàng sau khi cài Pillow
+
+Script cũ dùng umask 077 cả khi cài thư viện, khiến Pillow chỉ root đọc được trong khi dịch vụ chạy bằng zaloflow. Bản sửa dùng umask 022 riêng cho pip, giữ 077 cho sao lưu và tự cài lại Pillow nếu người dùng dịch vụ không import được. Chạy lại git pull --ff-only origin main rồi bash deployment/update.sh; không cần xóa dữ liệu hoặc tạo lại tài khoản. Script kiểm tra import bằng người dùng zaloflow trước khi dừng dịch vụ. Nếu vẫn lỗi, đọc journalctl -u zaloflow -n 60 --no-pager để xác định nguyên nhân thực tế.

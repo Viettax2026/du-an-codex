@@ -26,7 +26,14 @@ cp -a "$site" "$backup_dir/nginx.conf"
 git rev-parse HEAD > "$backup_dir/source-commit.txt"
 echo "Thư mục sao lưu riêng: $backup_dir"
 echo 'Cài phụ thuộc Python...'
-.venv/bin/python -m pip install -r requirements-prod.txt
+# Libraries must be readable by the service user; backups retain umask 077.
+(umask 022; .venv/bin/python -m pip install -r requirements-prod.txt)
+if ! runuser -u zaloflow -- .venv/bin/python -c 'from PIL import Image' >/dev/null 2>&1; then
+  echo 'Sửa quyền thư viện Pillow bằng cách cài lại cho người dùng dịch vụ đọc được...'
+  (umask 022; .venv/bin/python -m pip install --force-reinstall --no-deps Pillow==11.3.0)
+fi
+# Import with the actual service identity before stopping it or migrating its data.
+runuser -u zaloflow -- .venv/bin/python -c 'from PIL import Image; import campaign_actions'
 
 # Preserve HTTPS/certbot settings and change only this site's upload allowance.
 .venv/bin/python - "$site" <<'PY'
