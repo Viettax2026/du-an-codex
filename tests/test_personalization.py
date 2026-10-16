@@ -29,7 +29,7 @@ def test_csv_extra_fields_and_owner_edit(app):
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT email,info1,consent FROM contacts').fetchone()==('new@example.com','Gold',1)
     other=app.test_client()
-    register(other,'other@example.com')
+    register(other,'other')
     assert other.get('/contacts/1/edit').status_code==404
     assert other.post('/contacts/1/edit',data={'csrf':token(other),'name':'Bad'}).status_code==404
 

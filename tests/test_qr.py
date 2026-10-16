@@ -26,7 +26,7 @@ def test_qr_requires_owner_csrf_and_explicit_consent(app, tmp_path):
     response = owner.post('/accounts/1/qr', data={'csrf': token(owner), 'accept_unofficial': 'yes'})
     assert response.status_code == 202
     assert connector.start.call_count == 1
-    register(other, 'other@example.com')
+    register(other, 'other')
     assert other.get('/accounts/1/qr').status_code == 404
     assert other.post('/accounts/1/qr', data={'csrf': token(other), 'accept_unofficial': 'yes'}).status_code == 404
     assert other.post('/accounts/1/disconnect', data={'csrf': token(other)}).status_code == 404

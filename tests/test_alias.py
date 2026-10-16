@@ -19,7 +19,7 @@ def test_alias_is_rendered_confirmed_and_claimed_once(app):
     connector.message_action.reset_mock()
     assert client.post('/campaigns/1/alias/1',data={'csrf':token(client)}).status_code == 400
     other = app.test_client()
-    register(other,'other@example.com')
+    register(other,'other')
     assert other.post('/campaigns/1/alias/1',data={'csrf':token(other),'confirm_alias':'yes'}).status_code == 404
     connector.message_action.return_value = {'state':'renamed'}
     response = post(client,'/campaigns/1/alias/1',{'confirm_alias':'yes'})

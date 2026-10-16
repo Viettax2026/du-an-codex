@@ -48,7 +48,7 @@ def test_send_ownership_csrf_and_withdrawn_consent(app):
     prepare(owner)
     assert owner.post('/campaigns/1/send/1', data={'confirm_send': 'yes'}).status_code == 400
     other = app.test_client()
-    register(other, 'other@example.com')
+    register(other, 'other')
     assert other.post('/campaigns/1/send/1', data={'csrf': token(other), 'confirm_send': 'yes'}).status_code == 404
     assert other.post('/campaigns/1/prepare-send', data={'csrf': token(other), 'account_id': 1, 'contact_id': 1}).status_code == 404
     post(owner, '/contacts/1/consent')
@@ -97,7 +97,7 @@ def test_interrupted_dispatch_stays_claimed_after_app_restart(app):
     restarted_connector.status = Mock(return_value={'state': 'connected'})
     restarted_connector.message_action = Mock()
     new_client = restarted.test_client()
-    post(new_client, '/login', {'email': 'an@example.com', 'password': 'secure-password'})
+    post(new_client, '/login', {'username': 'an01', 'password': 'secure-password'})
     response = post(new_client, '/campaigns/1/send/1', {'confirm_send': 'yes'})
     assert 'Không gửi lại để tránh trùng tin' in response.text
     assert not restarted_connector.message_action.called

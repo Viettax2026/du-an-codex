@@ -123,3 +123,9 @@ không phải tên hồ sơ người nhận. API có thể từ chối người 
 Kết quả được ghi riêng với tin nhắn và lời mời; kết quả không rõ sẽ không tự thử lại.
 Các chiến dịch cũ mặc định tắt tính năng này. Cần tạo chiến dịch mới hoặc sửa bản nháp
 chưa có bản xem trước để bật. Chưa tự chạy hành động theo lịch.
+
+## Đăng nhập bằng tài khoản
+
+Đăng ký bằng tên tài khoản từ 3–64 ký tự: chữ không dấu, số, dấu chấm, gạch dưới và gạch ngang; không phân biệt chữ hoa/thường. Không yêu cầu email. Cơ sở dữ liệu cũ tự chuyển định danh email sang tài khoản và giữ nguyên mật khẩu, dữ liệu: người dùng cũ vẫn nhập nguyên email cũ vào ô Tài khoản.
+
+Tài khoản cũ `lienhe.viettaxco@gmail.com` được đổi thành `admin` khi khởi động phiên bản mới, giữ nguyên mật khẩu và dữ liệu. Nếu tên `admin` đã tồn tại, ứng dụng báo lỗi và không ghi đè tài khoản. Các tài khoản cũ khác giữ nguyên định danh.

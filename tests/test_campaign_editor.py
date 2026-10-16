@@ -37,7 +37,7 @@ def test_editor_validation_and_ownership(app):
     result = post(owner, '/campaigns/1/edit', {'name': 'Updated', 'message': 'Xin chào',
         'phones': '0901234567', 'phones_consent': 'yes'})
     assert 'Updated' in result.text
-    register(other, 'other@example.com')
+    register(other, 'other')
     assert other.get('/campaigns/1/edit').status_code == 404
     assert other.post('/campaigns/1/edit', data={'csrf': token(other), 'name': 'Bad', 'message': 'Bad'}).status_code == 404
     assert owner.post('/campaigns/1/edit', data={'name': 'Bad', 'message': 'Bad'}).status_code == 400

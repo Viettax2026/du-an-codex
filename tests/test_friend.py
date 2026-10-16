@@ -43,7 +43,7 @@ def test_friend_only_unknown_result_and_permissions(app):
     assert 'Gửi tin thật' not in client.get('/campaigns/1').text
     assert client.post('/campaigns/1/friend/1', data={'confirm_friend': 'yes'}).status_code == 400
     other = app.test_client()
-    register(other, 'other@example.com')
+    register(other, 'other')
     assert other.post('/campaigns/1/friend/1', data={'csrf': token(other), 'confirm_friend': 'yes'}).status_code == 404
     connector.message_action.side_effect = RuntimeError('private error')
     response = post(client, '/campaigns/1/friend/1', {'confirm_friend': 'yes'})

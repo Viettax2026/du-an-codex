@@ -22,8 +22,8 @@ def post(client, path, data=None):
     return client.post(path, data={'csrf': token(client), **(data or {})}, follow_redirects=True)
 
 
-def register(client, email='an@example.com'):
-    return post(client, '/register', {'name': 'An', 'email': email, 'password': 'secure-password'})
+def register(client, username='an01'):
+    return post(client, '/register', {'name': 'An', 'username': username, 'password': 'secure-password'})
 
 
 def test_full_workflow_and_persistence(app):
@@ -44,7 +44,7 @@ def test_full_workflow_and_persistence(app):
     assert conn.execute('SELECT password FROM users').fetchone()[0] != 'secure-password'
     conn.close()
     post(client, '/logout')
-    result = post(client, '/login', {'email': 'an@example.com', 'password': 'secure-password'})
+    result = post(client, '/login', {'username': 'an01', 'password': 'secure-password'})
     assert 'Chăm sóc' in result.text
     assert 'Lan' in client.get('/contacts').text
 
@@ -54,7 +54,7 @@ def test_tenant_isolation_and_csrf(app):
     register(alice)
     post(alice, '/contacts', {'name': 'PRIVATE', 'phone': '0901', 'consent': 'on'})
     post(alice, '/campaigns', {'name': 'PRIVATE_CAMPAIGN', 'message': 'Hello'})
-    register(bob, 'bob@example.com')
+    register(bob, 'bob')
     assert 'PRIVATE' not in bob.get('/contacts').text
     assert 'PRIVATE_CAMPAIGN' not in bob.get('/campaigns').text
     assert bob.get('/campaigns/1').status_code == 404
@@ -111,7 +111,7 @@ def test_campaign_filters_and_selected_logs(app):
     assert 'data-copy="Hello Lan"' in result.text
     assert 'VIP Offer' not in owner.get('/campaigns?status=draft').text
     assert 'Không tìm thấy chiến dịch' in owner.get('/campaigns?q=missing').text
-    register(other, 'other@example.com')
+    register(other, 'other')
     result = other.get('/campaigns?selected=1')
     assert 'Hello Lan' not in result.text
     assert 'VIP Offer' not in result.text
@@ -126,6 +126,6 @@ def test_zalo_profiles_are_persistent_and_private(app):
     assert 'Kế Toán Viettax' not in owner.get('/accounts?group=Other').text
     assert 'Tên tài khoản đã có' in post(owner, '/accounts', {'name': 'Kế Toán Viettax'}).text
     assert 'Vui lòng nhập tên tài khoản' in post(owner, '/accounts', {'name': ''}).text
-    register(other, 'other@example.com')
+    register(other, 'other')
     assert 'Kế Toán Viettax' not in other.get('/accounts').text
     assert 'Chưa có tài khoản' in other.get('/accounts').text

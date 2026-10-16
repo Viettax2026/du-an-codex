@@ -58,7 +58,7 @@ def create_app(test_config=None):
     with app.app_context():
         db().executescript('''
         CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+          id INTEGER PRIMARY KEY, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL,
           password TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS contacts (
           id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
@@ -89,6 +89,17 @@ def create_app(test_config=None):
           campaign_id INTEGER NOT NULL REFERENCES campaigns(id),
           contact_id INTEGER NOT NULL REFERENCES contacts(id), PRIMARY KEY(campaign_id,contact_id));
         ''')
+        user_columns = {row['name'] for row in db().execute('PRAGMA table_info(users)')}
+        if 'username' not in user_columns:
+            db().execute('ALTER TABLE users RENAME COLUMN email TO username')
+            db().commit()
+        legacy_admin = db().execute(
+            'SELECT id FROM users WHERE username=?', ('lienhe.viettaxco@gmail.com',)).fetchone()
+        if legacy_admin:
+            if db().execute('SELECT id FROM users WHERE lower(username)=?', ('admin',)).fetchone():
+                raise RuntimeError('Không thể đổi tài khoản cũ: tên admin đã được sử dụng.')
+            db().execute('UPDATE users SET username=? WHERE id=?', ('admin', legacy_admin['id']))
+            db().commit()
         if 'account_id' not in {row['name'] for row in db().execute('PRAGMA table_info(campaigns)')}:
             db().execute('ALTER TABLE campaigns ADD COLUMN account_id INTEGER REFERENCES zalo_accounts(id)')
             db().commit()
@@ -186,7 +197,7 @@ def create_app(test_config=None):
             return 'Phiên làm việc không hợp lệ. Vui lòng tải lại trang.', 400
         g.user = None
         if session.get('user_id'):
-            g.user = db().execute('SELECT id, name, email FROM users WHERE id=?',
+            g.user = db().execute('SELECT id, name, username FROM users WHERE id=?',
                                   (session['user_id'],)).fetchone()
 
     @app.after_request
@@ -215,33 +226,33 @@ def create_app(test_config=None):
     @app.route('/register', methods=['GET', 'POST'])
     def register():
         if request.method == 'POST':
-            name, email, password = request.form.get('name', '').strip(), request.form.get('email', '').strip().lower(), request.form.get('password', '')
-            if not name or len(name) > 100 or '@' not in email or len(email) > 254 or not 10 <= len(password) <= 256:
-                flash('Nhập tên, email hợp lệ và mật khẩu từ 10 đến 256 ký tự.', 'error')
+            name, username, password = request.form.get('name', '').strip(), request.form.get('username', '').strip().lower(), request.form.get('password', '')
+            if not name or len(name) > 100 or not re.fullmatch(r'[a-z0-9_.-]{3,64}', username) or not 10 <= len(password) <= 256:
+                flash('Nhập họ tên, tài khoản từ 3 đến 64 ký tự (chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang) và mật khẩu từ 10 đến 256 ký tự.', 'error')
             else:
                 try:
-                    cur = db().execute('INSERT INTO users(name,email,password) VALUES (?,?,?)',
-                                       (name, email, generate_password_hash(password)))
+                    cur = db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
+                                       (name, username, generate_password_hash(password)))
                     db().commit()
                     session.clear()
                     session['user_id'] = cur.lastrowid
                     session.permanent = True
                     return redirect(url_for('dashboard'))
                 except sqlite3.IntegrityError:
-                    flash('Email này đã được đăng ký.', 'error')
+                    flash('Tài khoản này đã được đăng ký.', 'error')
         return render_template('auth.html', register=True)
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':
-            user = db().execute('SELECT * FROM users WHERE email=?', (request.form.get('email', '').strip().lower(),)).fetchone()
+            user = db().execute('SELECT * FROM users WHERE username=?', (request.form.get('username', '').strip().lower(),)).fetchone()
             password = request.form.get('password', '')
             if user and len(password) <= 256 and check_password_hash(user['password'], password):
                 session.clear()
                 session['user_id'] = user['id']
                 session.permanent = True
                 return redirect(url_for('dashboard'))
-            flash('Email hoặc mật khẩu chưa đúng.', 'error')
+            flash('Tài khoản hoặc mật khẩu chưa đúng.', 'error')
         return render_template('auth.html', register=False)
 
     @app.post('/logout')
