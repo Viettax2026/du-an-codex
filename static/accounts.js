@@ -18,6 +18,7 @@ function clearImage() { image.hidden = true; image.removeAttribute('src'); }
 function showError(message) { status.textContent = message; clearImage(); expiresAt = null; timer.textContent = ''; }
 function render(data) {
   retry.hidden = true;
+  retry.textContent = 'Tạo mã QR mới';
   disconnect.hidden = data.state === 'disconnected';
   instruction.hidden = !['qr', 'scanned'].includes(data.state);
   clearImage(); expiresAt = null; timer.textContent = '';
@@ -30,6 +31,7 @@ function render(data) {
     consent.hidden = true; status.textContent = 'Đang kết nối Zalo để lấy mã QR…';
   } else if (data.state === 'connected') {
     consent.hidden = true;
+    retry.hidden = false; retry.textContent = 'Đăng nhập lại bằng QR';
     status.textContent = `${data.display_name || 'Tài khoản'}: đăng nhập đã được xác nhận. Chưa bật gửi tự động.`;
     document.querySelector(`[data-account-status="${accountId}"]`).textContent = 'Đã xác nhận đăng nhập';
   } else if (['expired', 'error', 'declined'].includes(data.state)) {

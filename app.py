@@ -14,6 +14,7 @@ from flask import Flask, flash, g, jsonify, redirect, render_template, request, 
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
 from personalization import personalize
+from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 
 
 def create_app(test_config=None):
@@ -29,7 +30,7 @@ def create_app(test_config=None):
             pass
     app.config.update(SECRET_KEY=os.environ.get('APP_SECRET_KEY') or key_path.read_text(),
                       DATABASE=str(Path(app.instance_path) / 'zalo.sqlite3'),
-                      MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+                      MAX_CONTENT_LENGTH=12 * 1024 * 1024,
                       SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                       SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE') == '1',
                       ZALO_QR_ENABLED=os.environ.get('ZALO_QR_ENABLED') == '1',
@@ -115,6 +116,7 @@ def create_app(test_config=None):
                 if column not in present:
                     db().execute(f'ALTER TABLE {table} ADD COLUMN {column} {declaration}')
         db().commit()
+        initialize_campaign_actions(db)
 
     def action_settings():
         if request.form.get('options_present') == 'yes':
@@ -144,9 +146,9 @@ def create_app(test_config=None):
 
     def audience(campaign):
         return db().execute('''SELECT p.* FROM contacts p WHERE p.user_id=? AND p.consent=1 AND
-            (p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?) OR
-             (NOT EXISTS (SELECT 1 FROM campaign_contacts WHERE campaign_id=?) AND (?='' OR p.tag=?)))
-             ORDER BY p.id''', (g.user['id'], campaign['id'], campaign['id'], campaign['tag'], campaign['tag'])).fetchall()
+            ((?='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?)) OR
+             (?='group' AND (?='' OR p.tag=?)))
+             ORDER BY p.id''', (g.user['id'], campaign['audience_mode'], campaign['id'], campaign['audience_mode'], campaign['tag'], campaign['tag'])).fetchall()
 
     def campaign_fields():
         if request.form.get('action', 'phone_message') not in ('phone_message', 'phone_actions'):
@@ -161,28 +163,14 @@ def create_app(test_config=None):
         account_id = request.form.get('account_id') or None
         if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=?', (account_id, g.user['id'])).fetchone():
             raise ValueError('Tài khoản Zalo không hợp lệ.')
-        phones = []
-        raw = request.form.get('phones', '').strip()
-        if len(raw) > 15000:
-            raise ValueError('Danh sách số điện thoại quá dài.')
-        for value in re.split(r'[\n,;]+', raw):
-            phone = re.sub(r'[\s()+-]', '', value)
-            if not phone:
-                continue
-            if phone.startswith('84'):
-                phone = '0' + phone[2:]
-            if not re.fullmatch(r'0[0-9]{9}', phone):
-                raise ValueError('Số điện thoại Việt Nam cần 10 chữ số, bắt đầu bằng 0 (hoặc dùng +84).')
-            if phone not in phones:
-                phones.append(phone)
-        if len(phones) > 500:
-            raise ValueError('Mỗi chiến dịch tối đa 500 số điện thoại.')
+        phones = parse_phones(request.form.get('phones', ''))
         if phones and request.form.get('phones_consent') != 'yes':
             raise ValueError('Cần xác nhận các số điện thoại đã đồng ý nhận nội dung này.')
         return name, message, tag, account_id, phones
 
     def save_campaign_phones(campaign_id, phones):
         save_action_settings(campaign_id)
+        db().execute('UPDATE campaigns SET audience_mode=? WHERE id=?', ('list' if phones else 'group', campaign_id))
         db().execute('DELETE FROM campaign_contacts WHERE campaign_id=?', (campaign_id,))
         for phone in phones:
             db().execute('''INSERT INTO contacts(user_id,name,phone,consent) VALUES (?,?,?,1)
@@ -223,6 +211,8 @@ def create_app(test_config=None):
         if len(value) > limit:
             raise ValueError('Nội dung vượt quá độ dài cho phép.')
         return value
+
+    manager = register_campaign_actions(app, db, login_required, audience, connector, personalize)
 
     @app.route('/register', methods=['GET', 'POST'])
     def register():
@@ -305,7 +295,10 @@ def create_app(test_config=None):
             flash('Chọn tệp CSV trước khi nhập.', 'error')
             return redirect(url_for('contacts'))
         try:
-            reader = csv.DictReader(io.StringIO(upload.read().decode('utf-8-sig')))
+            data = upload.read(2 * 1024 * 1024 + 1)
+            if len(data) > 2 * 1024 * 1024:
+                raise ValueError('CSV không vượt quá 2 MB.')
+            reader = csv.DictReader(io.StringIO(data.decode('utf-8-sig')))
             if not reader.fieldnames or not {'name', 'phone'}.issubset(reader.fieldnames):
                 raise ValueError('CSV cần có hai cột name, phone.')
             count = skipped = 0
@@ -365,6 +358,7 @@ def create_app(test_config=None):
                 name, message, tag, account_id, phones = campaign_fields()
                 cur = db().execute('INSERT INTO campaigns(user_id,name,message,tag,account_id) VALUES (?,?,?,?,?)', (g.user['id'], name, message, tag, account_id))
                 save_campaign_phones(cur.lastrowid, phones)
+                manager.event(cur.lastrowid, 'create', 'Tạo chiến dịch mới. Chưa gửi tin.')
                 db().commit()
                 flash('Đã tạo chiến dịch. Kiểm tra nội dung trước khi gửi thử.', 'success')
                 return redirect(url_for('campaign_detail', campaign_id=cur.lastrowid))
@@ -374,19 +368,20 @@ def create_app(test_config=None):
                 return redirect(url_for('campaigns'))
         query = request.args.get('q', '').strip()[:120]
         status = request.args.get('status', '')
-        status = status if status in ('draft', 'simulated') else ''
+        status = status if status in ('draft', 'simulated', 'paused', 'deleted') else ''
         days = request.args.get('days', '')
         days = days if days in ('7', '30', '90') else ''
         tag = request.args.get('tag', '').strip()[:80]
         rows = db().execute('''SELECT c.*,
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
             (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
-              AND (p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id) OR
-                   (NOT EXISTS (SELECT 1 FROM campaign_contacts WHERE campaign_id=c.id) AND (c.tag='' OR p.tag=c.tag)))) AS audience
+              AND ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
+                   (c.audience_mode='group' AND (c.tag='' OR p.tag=c.tag)))) AS audience
             FROM campaigns c WHERE user_id=? AND name LIKE ?
-              AND (?='' OR status=?) AND (?='' OR tag=?)
+              AND ((?='deleted' AND deleted_at IS NOT NULL) OR (?!='deleted' AND deleted_at IS NULL))
+              AND (?='' OR ?='deleted' OR (?='paused' AND paused=1) OR (status=? AND paused=0)) AND (?='' OR tag=?)
               AND (?='' OR created_at >= datetime('now', ?)) ORDER BY id DESC''',
-            (g.user['id'], '%' + query + '%', status, status, tag, tag,
+            (g.user['id'], '%' + query + '%', status, status, status, status, status, status, tag, tag,
              days, '-' + (days or '0') + ' days')).fetchall()
         tags = db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
@@ -406,9 +401,7 @@ def create_app(test_config=None):
     def edit_campaign(campaign_id):
         if request.method == 'POST':
             db().execute('BEGIN IMMEDIATE')
-        campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
-        if campaign is None:
-            return 'Không tìm thấy chiến dịch.', 404
+        campaign = manager.owned(campaign_id)
         if campaign['status'] != 'draft' or db().execute('SELECT 1 FROM message_sends WHERE campaign_id=?', (campaign_id,)).fetchone():
             flash('Chiến dịch đã mô phỏng hoặc có lần gửi/xem trước. Không sửa để giữ nguyên nội dung nhật ký.', 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
@@ -417,6 +410,7 @@ def create_app(test_config=None):
                 name, message, tag, account_id, phones = campaign_fields()
                 db().execute('UPDATE campaigns SET name=?,message=?,tag=?,account_id=? WHERE id=?', (name, message, tag, account_id, campaign_id))
                 save_campaign_phones(campaign_id, phones)
+                manager.event(campaign_id, 'edit', 'Sửa cài đặt chiến dịch.')
                 db().commit()
                 flash('Đã lưu chiến dịch. Chưa gửi tin.', 'success')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
@@ -431,11 +425,13 @@ def create_app(test_config=None):
     @app.route('/campaigns/<int:campaign_id>', methods=['GET', 'POST'])
     @login_required
     def campaign_detail(campaign_id):
-        campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
-        if campaign is None:
-            return 'Không tìm thấy chiến dịch.', 404
+        campaign = manager.owned(campaign_id)
         recipients = audience(campaign)
         if request.method == 'POST':
+            db().execute('BEGIN IMMEDIATE')
+            campaign = manager.owned(campaign_id)
+            manager.require_active(campaign)
+            recipients = audience(campaign)
             # The conditional update atomically claims a draft to prevent double submissions.
             if not campaign['send_message']:
                 flash('Chiến dịch này chỉ chọn kết bạn, không có nội dung nhắn tin để mô phỏng.', 'error')
@@ -449,6 +445,7 @@ def create_app(test_config=None):
                     for person in recipients:
                         message = personalize(campaign['message'], person, strict=False)
                         db().execute('INSERT INTO deliveries(campaign_id,contact_id,message) VALUES (?,?,?)', (campaign_id, person['id'], message))
+                    manager.event(campaign_id, 'simulate', f'Mô phỏng {len(recipients)} tin nhắn; chưa gửi Zalo.')
                     db().commit()
                     flash(f'Đã mô phỏng {len(recipients)} tin nhắn. Chưa gửi tin đến Zalo.', 'success')
                 except ValueError as error:
@@ -471,9 +468,8 @@ def create_app(test_config=None):
     @app.post('/campaigns/<int:campaign_id>/prepare-send')
     @login_required
     def prepare_send(campaign_id):
-        campaign = db().execute('SELECT * FROM campaigns WHERE id=? AND user_id=?', (campaign_id, g.user['id'])).fetchone()
-        if campaign is None:
-            return 'Không tìm thấy chiến dịch.', 404
+        campaign = manager.owned(campaign_id)
+        manager.require_active(campaign)
         person = next((p for p in audience(campaign) if str(p['id']) == request.form.get('contact_id')), None)
         account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
                                (request.form.get('account_id'), g.user['id'])).fetchone()
@@ -492,6 +488,12 @@ def create_app(test_config=None):
         if result.get('state') != 'resolved' or not str(result.get('uid', '')).isdigit():
             flash('Không tìm được người nhận Zalo. Kiểm tra số điện thoại, quyền tìm kiếm của người nhận hoặc đăng nhập QR lại.', 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+        db().execute('BEGIN IMMEDIATE')
+        campaign = manager.owned(campaign_id)
+        manager.require_active(campaign)
+        person = next((p for p in audience(campaign) if p['id'] == person['id']), None)
+        if person is None:
+            return 'Khách hàng không còn thuộc chiến dịch.', 400
         # Recheck consent after the network request, before retaining a send preview.
         allowed = db().execute('SELECT consent FROM contacts WHERE id=? AND user_id=?', (person['id'], g.user['id'])).fetchone()
         if not allowed or not allowed['consent']:
@@ -512,12 +514,13 @@ def create_app(test_config=None):
             if campaign['send_friend'] and len(invitation) > 150:
                 flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
+            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
                 str(result.get('name', ''))[:100], rendered_message,
                 'prepared' if campaign['send_message'] else 'not_requested', invitation,
                 'prepared' if campaign['send_friend'] else 'not_requested', alias,
-                'prepared' if campaign['rename_enabled'] else 'not_requested'))
+                'prepared' if campaign['rename_enabled'] else 'not_requested', campaign['media_id']))
+            manager.event(campaign_id, 'preview', f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
         except sqlite3.IntegrityError:
@@ -542,19 +545,26 @@ def create_app(test_config=None):
         if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'], record['account_id']).get('state') != 'connected':
             return 'Cần đăng nhập QR lại trước khi gửi.', 400
         # Persist the claim before dispatch. Double clicks and restarts cannot resend it.
-        claimed = db().execute("UPDATE message_sends SET state='sending' WHERE id=? AND state='prepared'", (send_id,))
-        db().commit()
-        if not claimed.rowcount:
+        attachment = None
+        if record['media_id']:
+            try:
+                attachment = manager.attachment(record['media_id'])
+            except ValueError as error:
+                return str(error), 400
+        claimed = manager.claim(campaign_id, send_id, 'send', record)
+        if not claimed:
             flash('Lần gửi này đã được xử lý. Không gửi lại để tránh trùng tin.', 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         try:
             result = connector.message_action(g.user['id'], record['account_id'], 'send',
-                                              uid=record['recipient_id'], message=record['message'])
+                                              uid=record['recipient_id'], message=record['message'],
+                                              **({'attachment': attachment} if attachment else {}))
         except Exception:
             result = {'state': 'unknown'}
         state = result.get('state') if result.get('state') in ('sent', 'failed', 'unknown') else 'unknown'
         db().execute('UPDATE message_sends SET state=?, message_id=? WHERE id=?',
                      (state, str(result.get('message_id', ''))[:100] if state == 'sent' else '', send_id))
+        manager.result(campaign_id, 'send', send_id, state)
         db().commit()
         flash({'sent': 'Zalo đã tiếp nhận tin nhắn. Chưa xác nhận người nhận đã đọc.',
                'failed': 'Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối VPS.',
@@ -576,9 +586,8 @@ def create_app(test_config=None):
             return 'Cần xác nhận lời mời và người nhận hợp lệ.', 400
         if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'], record['account_id']).get('state') != 'connected':
             return 'Cần đăng nhập QR lại.', 400
-        claimed = db().execute("UPDATE message_sends SET friend_state='sending' WHERE id=? AND friend_state='prepared'", (send_id,))
-        db().commit()
-        if not claimed.rowcount:
+        claimed = manager.claim(campaign_id, send_id, 'friend', record)
+        if not claimed:
             flash('Lời mời này đã được xử lý hoặc chưa được chọn. Không gửi lại.', 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         try:
@@ -588,6 +597,7 @@ def create_app(test_config=None):
             result = {'state': 'unknown'}
         state = result.get('state') if result.get('state') in ('friend_requested', 'failed', 'unknown') else 'unknown'
         db().execute('UPDATE message_sends SET friend_state=? WHERE id=?', (state, send_id))
+        manager.result(campaign_id, 'friend', send_id, state)
         db().commit()
         flash({'friend_requested': 'Zalo đã tiếp nhận lời mời. Chưa xác nhận người nhận chấp nhận kết bạn.',
                'failed': 'Không gửi được lời mời. Kiểm tra phiên đăng nhập.',
@@ -609,24 +619,27 @@ def create_app(test_config=None):
             return 'Cần xác nhận đổi tên và người nhận hợp lệ.',400
         if not app.config['ZALO_QR_ENABLED'] or connector.status(g.user['id'],record['account_id']).get('state') != 'connected':
             return 'Cần đăng nhập QR lại.',400
-        claimed = db().execute("UPDATE message_sends SET alias_state='sending' WHERE id=? AND alias_state='prepared'",(send_id,))
-        db().commit()
-        if claimed.rowcount:
+        claimed = manager.claim(campaign_id, send_id, 'alias', record)
+        if claimed:
             try:
                 result = connector.message_action(g.user['id'],record['account_id'],'alias',uid=record['recipient_id'],message=record['alias'])
             except Exception:
                 result = {'state':'unknown'}
             state = result.get('state') if result.get('state') in ('renamed','failed','unknown') else 'unknown'
             db().execute('UPDATE message_sends SET alias_state=? WHERE id=?',(state,send_id))
+            manager.result(campaign_id, 'alias', send_id, state)
             db().commit()
         return redirect(url_for('campaign_detail',campaign_id=campaign_id))
 
     @app.post('/campaigns/<int:campaign_id>/cancel-send/<int:send_id>')
     @login_required
     def cancel_send(campaign_id, send_id):
-        db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
+        manager.owned(campaign_id)
+        removed = db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
             AND friend_state IN ('prepared','not_requested') AND alias_state IN ('prepared','not_requested')
             AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
+        if removed.rowcount:
+            manager.event(campaign_id, 'cancel_preview', f'Hủy bản xem trước #{send_id}, chưa thực hiện hành động nào.')
         db().commit()
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))
 

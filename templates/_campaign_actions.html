@@ -1,0 +1,24 @@
+{% macro action_icon(path) -%}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ path }}"/></svg>{%- endmacro %}
+<button class="row-action campaign-action-trigger" type="button" popovertarget="actions-{{ c.id }}" aria-label="Hành động cho {{ c.name }}">{{ action_icon('M9 5h12M9 12h12M9 19h12M3 4h2v2H3zM3 11h2v2H3zM3 18h2v2H3z') }} Hành động</button>
+<div class="campaign-action-menu" id="actions-{{ c.id }}" popover aria-label="Hành động chiến dịch {{ c.name }}">
+{% if not c.deleted_at %}
+  <a href="{{ url_for('pause_campaign',campaign_id=c.id) }}">{{ action_icon('M6 4h4v16H6zM14 4h4v16h-4z') }}{{ 'Tiếp tục chiến dịch' if c.paused else 'Dừng chiến dịch' }}</a>
+  <hr>
+  <a href="{{ url_for('edit_campaign',campaign_id=c.id) }}">{{ action_icon('m15 4 5 5M3 21l5-1L21 7l-5-5L3 15z') }}Sửa</a>
+  <a href="{{ url_for('duplicate_campaign',campaign_id=c.id) }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5') }}Nhân bản</a>
+  <button type="button" data-copy-campaign="{{ c.id }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5') }}Lấy ID chiến dịch</button>
+  <a href="{{ url_for('campaign_limits',campaign_id=c.id) }}">{{ action_icon('M3 6h5m4 0h9M3 12h11m4 0h3M3 18h3m4 0h11M8 3v6m6 0v6M6 15v6') }}Cập nhật giới hạn gửi</a>
+  <a href="{{ url_for('campaign_content',campaign_id=c.id) }}">{{ action_icon('M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6') }}Cập nhật nội dung + media</a>
+  <a href="{{ url_for('campaign_data',campaign_id=c.id) }}">{{ action_icon('M12 5v14M5 12h14') }}Thêm data</a>
+{% endif %}
+  <a href="{{ url_for('campaign_report',campaign_id=c.id) }}">{{ action_icon('M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6') }}Xem báo cáo chi tiết</a>
+  <hr>
+{% if not c.deleted_at %}
+  <a href="{{ url_for('campaign_reconnect',campaign_id=c.id) }}">{{ action_icon('M14 3h7v18h-7M3 12h13m-5-5 5 5-5 5') }}Đăng nhập lại Zalo</a>
+  <a href="{{ url_for('campaign_account',campaign_id=c.id) }}">{{ action_icon('M12 8h.01M12 11v6M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18') }}Thông tin tài khoản</a>
+{% endif %}
+  <a href="{{ url_for('campaign_history',campaign_id=c.id) }}">{{ action_icon('M3 4v5h5M3 9a9 9 0 1 1 0 6M12 7v6l4 2') }}Lịch sử chạy</a>
+{% if not c.deleted_at %}
+  <hr><a class="danger" href="{{ url_for('delete_campaign',campaign_id=c.id) }}">{{ action_icon('M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7') }}Xóa</a>
+{% endif %}
+</div>

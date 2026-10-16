@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% set titles={'pause':('Tiếp tục chiến dịch' if campaign.paused else 'Dừng chiến dịch'),'duplicate':'Nhân bản chiến dịch','limits':'Cập nhật giới hạn gửi','content':'Cập nhật nội dung + media','data':'Thêm data','delete':'Xóa chiến dịch'} %}
+{% block content %}
+<a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">← {{ campaign.name }}</a>
+<section class="panel form-panel action-form"><span class="eyebrow">CHIẾN DỊCH #{{ campaign.id }}</span><h1>{{ titles[action] }}</h1>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="csrf" value="{{ session.csrf }}">
+{% if action=='pause' %}
+  <input type="hidden" name="paused" value="{{ 0 if campaign.paused else 1 }}">
+  <p>{{ 'Mở lại các thao tác xác nhận thủ công. Không tự gửi lại những lần đã xử lý.' if campaign.paused else 'Dừng tạo bản xem trước, gửi tin, lời mời kết bạn và đổi tên gợi nhớ tiếp theo. Các thao tác đã bắt đầu xử lý có thể vẫn hoàn tất.' }}</p>
+{% elif action=='duplicate' %}
+  <label>Tên bản sao<input name="name" maxlength="120" required value="{{ request.form.get('name', (campaign.name[:105] ~ ' (Bản sao)')) }}"></label>
+  <p>Sao chép cấu hình, tài khoản, danh sách riêng, media và giới hạn. Bản sao là bản nháp mới, chưa có lần gửi hoặc nhật ký. Nếu dùng nhóm, danh sách vẫn theo nhóm đó.</p>
+{% elif action=='limits' %}
+  <p>Giới hạn áp dụng riêng cho chiến dịch trong <b>24 giờ gần nhất</b>. Nhập 0 để không giới hạn. Tính cả lần thất bại, đang xử lý và chưa xác định; bản xem trước và mô phỏng không tính.</p>
+  <div class="notice">Đã dùng: {{ used.send }} lần nhắn tin · {{ used.friend }} lời mời · {{ used.alias }} lần đổi tên.</div>
+  {% for key,label in fields %}<label>{{ label }}<input type="number" name="{{ key }}" min="0" max="86400" step="1" required value="{{ request.form.get(key,campaign[key]) }}"></label>{% endfor %}
+  <p class="muted">Một lần gửi nội dung + media tới một người được tính là một hành động. Giới hạn này không thay thế hạn mức do Zalo áp dụng.</p>
+{% elif action=='content' %}
+  <p>Nội dung mới áp dụng cho bản xem trước tạo sau khi lưu. Bản xem trước đã có và nhật ký giữ nguyên nội dung, lời mời và media.</p>
+  <label>Nội dung tin nhắn<textarea name="message" rows="7" maxlength="2000" {% if campaign.send_message %}required{% endif %}>{{ request.form.get('message',campaign.message) }}</textarea></label>
+  <label>Lời mời kết bạn<textarea name="friend_message" rows="3" maxlength="150" {% if campaign.send_friend %}required{% endif %}>{{ request.form.get('friend_message',campaign.friend_message) }}</textarea></label>
+  <p class="muted">Hỗ trợ các token cá nhân hóa như <code>{{ '{{name}}' }}</code>, <code>#{FULL_NAME}</code>, <code>#{PHONE}</code>.</p>
+  {% set media=campaign_media(campaign.media_id) %}{% if media %}{% include '_media_preview.html' %}<label class="send-confirm"><input type="checkbox" name="remove_media" value="yes"> Gỡ media khỏi nội dung mới</label>{% endif %}
+  {% if campaign.send_message %}<label>Tải media mới (thay thế media hiện tại)<input type="file" name="media" accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4"></label><small>1 tệp JPG, PNG, WEBP, PDF hoặc MP4, tối đa 10 MB. Media chỉ gửi sau khi bạn xác nhận tại bản xem trước.</small>{% else %}<p>Chiến dịch chỉ kết bạn không gửi media. Nhân bản hoặc sửa bản nháp để bật nhắn tin.</p>{% endif %}
+{% elif action=='data' %}
+  <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="6" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones','') }}</textarea></label>
+  <label>Hoặc nhập CSV UTF-8<input type="file" name="file" accept=".csv,text/csv"></label>
+  <p class="muted">CSV có cột phone; tùy chọn name, email, info1…info5. Tối đa 500 số trong toàn chiến dịch. Số trùng bỏ qua; thông tin khách hàng đã có được giữ nguyên.</p>
+  <label class="send-confirm"><input type="checkbox" name="consent" value="yes" required> Tôi xác nhận các khách hàng bổ sung đã đồng ý nhận nội dung này.</label>
+  <p>Khi đang dùng nhóm, danh sách khách hàng đồng ý hiện tại được giữ lại thành danh sách riêng rồi bổ sung số mới. Nhật ký và các lần gửi cũ giữ nguyên.</p>
+{% elif action=='delete' %}
+  <p>Xóa <b>{{ campaign.name }}</b> khỏi danh sách hoạt động và chặn mọi lần gửi tiếp theo. Báo cáo, media và lịch sử được giữ trong bộ lọc <b>Đã xóa</b>. Không xóa khách hàng hoặc phiên đăng nhập Zalo.</p>
+  <label class="send-confirm"><input type="checkbox" name="confirm_delete" value="yes" required> Tôi xác nhận xóa chiến dịch này.</label>
+{% endif %}
+<div class="dialog-actions"><a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a><button class="{{ 'danger-button' if action=='delete' else 'primary' }}" type="submit">{{ titles[action] if action in ('pause','delete','duplicate') else 'Lưu thay đổi' }}</button></div>
+</form></section>
+{% endblock %}

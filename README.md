@@ -93,7 +93,7 @@ Form có ba phần: cài đặt chung (hành động, tài khoản, tên), danh 
 
 Danh sách riêng lưu trong campaign_contacts và chỉ áp dụng cho chiến dịch đó; khi để trống thì dùng nhóm khách hàng như trước. Tài khoản gửi đã chọn được lưu và chọn sẵn ở màn hình gửi thật. Lưu/sửa không gọi Zalo hoặc tự gửi. Chỉ sửa được bản nháp chưa mô phỏng và chưa có bản xem trước/lần gửi thật để bảo toàn nhật ký. Cơ sở dữ liệu cũ tự thêm cột account_id và bảng liên kết, không xóa dữ liệu.
 
-Đã có lựa chọn nhắn tin và kết bạn riêng; media hoặc lịch gửi chưa triển khai. Các phần đó trong ảnh tham chiếu chưa được triển khai.
+Đã có lựa chọn nhắn tin và kết bạn riêng; Media được hỗ trợ qua menu Hành động → Cập nhật nội dung + media; lịch gửi chưa triển khai. Các phần đó trong ảnh tham chiếu chưa được triển khai.
 
 
 ## Soạn lời mời kết bạn và tin nhắn
@@ -102,7 +102,7 @@ Hành động “Nhắn tin, kết bạn đến SĐT” có hai ô lựa chọn 
 
 Tìm người nhận và tạo bản xem trước vẫn không gửi hành động nào. Người dùng xác nhận riêng “Gửi lời mời kết bạn” và “Gửi tin thật”; không tự gửi tin sau lời mời hoặc chờ chấp nhận tự động. Lời mời được lưu với friend_state riêng; tiếp nhận lời mời không có nghĩa đã chấp nhận. Double click, kết quả chưa xác định và khởi động lại không tự gửi lại lời mời. Bản xem trước có bất kỳ hành động đã xử lý không thể xóa để gửi lại.
 
-zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Các mục đổi tên, gắn tag Zalo, media, lịch chạy và giới hạn hành động trong ảnh tham chiếu chưa triển khai.
+zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Đổi tên gợi nhớ, media và giới hạn hành động đã được bổ sung ở các bản sau (xem bên dưới). Gắn tag Zalo và lịch chạy tự động chưa triển khai.
 
 ## Cá nhân hóa lời mời và tin nhắn
 
@@ -133,3 +133,36 @@ Tài khoản cũ `lienhe.viettaxco@gmail.com` được đổi thành `admin` khi
 ## Đặt lại mật khẩu admin trên VPS
 
 Chạy `sudo -u zaloflow /opt/zaloflow/.venv/bin/flask --app app:create_app reset-admin` trong `/opt/zaloflow`. Nhập mật khẩu mới hai lần khi được hỏi (không hiển thị khi gõ), từ 10–256 ký tự. Lệnh tạo admin nếu chưa có, hoặc đổi mật khẩu trên chính tài khoản admin hiện có, giữ nguyên dữ liệu. Không truyền mật khẩu trong dòng lệnh.
+
+## Menu Hành động chiến dịch
+
+Đã có đủ 12 mục theo ảnh tham chiếu:
+
+- **Dừng / tiếp tục chiến dịch**: khóa tạo bản xem trước, mô phỏng và gửi/kết bạn/đổi tên tiếp theo. Không thu hồi hành động đã chuyển đến Zalo và không tự chạy lại khi tiếp tục.
+- **Sửa**: sửa cấu hình chung của bản nháp chưa có bản xem trước/lần gửi. Chiến dịch đã xử lý dùng các mục cập nhật riêng để giữ lịch sử.
+- **Nhân bản**: tạo bản nháp mới với cấu hình, tài khoản, media, giới hạn và danh sách riêng; không chép lần gửi/nhật ký. Có màn hình kiểm tra tên trước khi tạo; lưu không gọi Zalo.
+- **Lấy ID chiến dịch**: sao chép ID, có hiển thị ID nếu clipboard bị chặn.
+- **Cập nhật giới hạn gửi**: hạn mức riêng cho nhắn tin, kết bạn và đổi tên trong 24 giờ gần nhất; khoảng cách tối thiểu giữa các hành động của chiến dịch. 0 là không giới hạn. Một lần xử lý nội dung + media cho một người là một hành động; tính cả thất bại/đang xử lý/chưa xác định, không tính bản xem trước hoặc mô phỏng. Khóa SQLite kiểm tra và ghi nhận trước gọi mạng, chống vượt hạn mức khi mở nhiều tab. Lần gửi cũ được đưa vào bộ đếm theo thời gian tạo bản ghi, do bản cũ chưa lưu riêng thời gian bắt đầu gửi.
+- **Cập nhật nội dung + media**: hỗ trợ một tệp JPG/JPEG, PNG, WEBP, PDF hoặc MP4 tối đa 10 MB. Kiểm tra định dạng và ảnh tối đa 25 triệu điểm ảnh. Media lưu riêng trong instance/media, chỉ chủ tài khoản truy cập; chỉ gửi sau xác nhận. Bản xem trước cũ giữ nguyên nội dung, lời mời và media, kể cả khi chiến dịch đổi/gỡ tệp. PDF/MP4 được SDK gửi dưới dạng tệp đính kèm; chữ và tệp có thể là hai tin trong Zalo. Chỉ báo tiếp nhận khi có mã xác nhận của tệp; nếu chỉ chữ thành công thì kết quả chưa xác định, không tự gửi lại. Chưa hỗ trợ album nhiều tệp hoặc tải media từ URL.
+- **Thêm data**: bổ sung số điện thoại hoặc CSV UTF-8 có phone, tùy chọn name/email/info1…info5; tổng danh sách tối đa 500 số, CSV tối đa 2 MB. Chuẩn hóa +84, loại số trùng, giữ thông tin khách hàng đã có và yêu cầu xác nhận đồng ý. Nhóm hiện tại được chốt thành danh sách riêng trước khi bổ sung; không thay đổi lần gửi cũ.
+- **Xem báo cáo chi tiết**: thống kê theo trạng thái thực, chi tiết nội dung/media đã chốt, nhật ký mô phỏng riêng và xuất CSV gửi thật. CSV bảo vệ các ô bắt đầu bằng ký tự công thức bảng tính. Không suy diễn đã đọc hoặc đã kết bạn từ phản hồi tiếp nhận.
+- **Đăng nhập lại Zalo**: mở đúng hồ sơ đã chọn trong chiến dịch; tài khoản đã kết nối có nút đăng nhập lại bằng QR. Nếu chưa chọn mặc định thì mở danh sách để tự chọn. Vẫn cần xác nhận dùng kết nối không chính thức và quét QR.
+- **Thông tin tài khoản**: tên/nhóm/trạng thái hồ sơ mặc định và các tài khoản đã dùng trong bản xem trước/gửi. Không hiển thị cookie, khóa hoặc token.
+- **Lịch sử chạy**: nhật ký thao tác và bắt đầu/kết quả từng hành động, có phân trang. Lịch sử chỉ ghi từ bản cập nhật này; lần gửi trước đó vẫn có trong báo cáo.
+- **Xóa**: xác nhận rồi đưa vào lưu trữ, dừng mọi hành động tiếp theo và ẩn khỏi danh sách hoạt động. Bộ lọc **Đã xóa** vẫn mở được báo cáo/lịch sử. Không xóa khách hàng, phiên QR, media hoặc nhật ký để tránh mất dữ liệu và gửi trùng.
+
+Các chức năng trên phục vụ quy trình xác nhận từng người nhận. Chưa có bộ chạy hàng loạt, lịch chạy tự động hoặc xác nhận đã đọc. Kiểm thử API giả lập và trình duyệt không thay thế kiểm tra gửi thật từ VPS với người nhận thử.
+
+### Cập nhật VPS cho phiên bản menu Hành động
+
+Trong terminal root của VPS đã triển khai tại /opt/zaloflow:
+
+```sh
+cd /opt/zaloflow
+git pull --ff-only origin main
+bash deployment/update.sh
+```
+
+Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng dịch vụ ZaloFlow vào thư mục root-only /var/backups/zaloflow/update-*, khởi động ứng dụng để nâng cấp SQLite và kiểm tra /login nội bộ. Script chỉ sửa client_max_body_size của tệp Nginx cskh.viettaxco.com lên 12m, giữ cấu hình HTTPS và từ chối tự sửa nếu tệp chứa tên miền khác. Các dịch vụ website khác không bị dừng. Bản sao lưu chứa dữ liệu, khóa và phiên Zalo; bảo vệ thư mục đó. Script không tự khôi phục dữ liệu nếu nâng cấp lỗi; giữ bản sao để kiểm tra trước khi phục hồi.
+
+Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.

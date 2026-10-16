@@ -138,3 +138,22 @@ systemctl status zaloflow --no-pager
 ```
 
 Không cần xóa instance hoặc quét lại nếu phiên còn hiệu lực. Bảng message_sends tự được thêm. Mở Hành động của chiến dịch, chọn tài khoản/khách hàng thử đã đồng ý, tìm người nhận và kiểm tra tên Zalo trước khi xác nhận gửi một tin. Kiểm tra tin đến trong Zalo của người nhận. Không xem kiểm thử mô phỏng hoặc mã tin là chứng cứ người nhận đã đọc. Nếu kết quả chưa xác định, kiểm tra hội thoại trước khi gửi lại thủ công.
+
+## Cập nhật menu Hành động, media và giới hạn gửi
+
+Bản này thêm Pillow vào requirements.txt và nâng giới hạn request của Flask lên 12 MB để nhận media tối đa 10 MB. Nginx của riêng ZaloFlow cũng cần client_max_body_size 12m. Không ghi đè tệp HTTPS do Certbot đã cấu hình bằng mẫu HTTP trong kho.
+
+Với bản triển khai đúng đường dẫn /opt/zaloflow và dịch vụ zaloflow, chạy trong terminal root:
+
+```sh
+cd /opt/zaloflow
+git status --short
+git pull --ff-only origin main
+bash deployment/update.sh
+```
+
+Nếu có thay đổi mã cục bộ, kiểm tra trước khi pull. Script update.sh không tải mã; cần pull thành công trước. Script kiểm tra cấu hình và cài phụ thuộc, tạm dừng riêng ZaloFlow để sao lưu instance (gồm SQLite, media và khóa/phiên QR) vào /var/backups/zaloflow/update-*, rồi khởi động lại và kiểm tra /login. Script giữ nguyên cấu hình HTTPS; chỉ chỉnh giới hạn upload trong tệp Nginx dành riêng cho cskh.viettaxco.com. Nếu tệp chứa tên miền khác hoặc cấu trúc triển khai khác, script dừng để tránh sửa nhầm. Không chạy lại các bước cài VPS lần đầu.
+
+Sau cập nhật, đăng nhập và mở Chiến dịch → Hành động. Kiểm tra dừng/tiếp tục, nhân bản, ID, giới hạn, thêm CSV và báo cáo. Thử media nhỏ với người nhận đã đồng ý: tạo bản xem trước, kiểm tra nội dung/tệp, xác nhận rồi kiểm tra hội thoại trong Zalo. PDF/MP4 là tệp đính kèm. Chưa xác minh gửi thật chỉ bằng các bài kiểm thử nội bộ.
+
+Xóa chiến dịch đưa vào lưu trữ và vẫn đọc được báo cáo/lịch sử qua bộ lọc Đã xóa. Không xóa instance/media để dọn dung lượng nếu các bản xem trước hoặc nhật ký còn tham chiếu. Duy trì sao lưu ngoài VPS nếu dùng dữ liệu thực. Nếu nâng cấp thất bại, giữ nguyên bản sao lưu, xem trạng thái/log dịch vụ trước khi quyết định khôi phục cả mã lẫn dữ liệu tương ứng.

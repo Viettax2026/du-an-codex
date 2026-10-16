@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">← {{ campaign.name }}</a>
+<section class="panel form-panel"><h1>Thông tin tài khoản</h1>
+{% if account %}<dl class="account-info"><dt>Tài khoản đã chọn</dt><dd>{{ account.name }}</dd><dt>Nhóm</dt><dd>{{ account.account_group or 'Chưa phân nhóm' }}</dd><dt>Nền tảng</dt><dd>Zalo cá nhân</dd><dt>Tên Zalo khi đăng nhập</dt><dd>{{ connection.display_name or 'Chưa có thông tin' }}</dd><dt>Trạng thái ghi nhận</dt><dd>{{ 'Đã xác nhận đăng nhập' if connection.state=='connected' else 'Cần đăng nhập lại / chưa kết nối' }}</dd></dl><p class="muted">Trạng thái được ghi nhận lúc đăng nhập, không xác nhận phiên còn hiệu lực liên tục.</p><a class="row-action" href="{{ url_for('campaign_reconnect',campaign_id=campaign.id) }}">Đăng nhập lại Zalo</a>
+{% else %}<p>Chiến dịch chưa chọn tài khoản mặc định. Bạn có thể chọn tài khoản tại màn hình gửi từng tin, hoặc sửa bản nháp để chọn mặc định.</p><a href="{{ url_for('accounts') }}">Quản lý tài khoản Zalo →</a>{% endif %}
+<h2>Tài khoản đã dùng trong bản xem trước / gửi thật</h2>{% for used in used_accounts %}<p>{{ used.name }} · {{ used.account_group or 'Chưa phân nhóm' }} · <a href="{{ url_for('accounts',connect=used.id) }}">Đăng nhập QR</a></p>{% else %}<p>Chưa có.</p>{% endfor %}
+</section>{% endblock %}

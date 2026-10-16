@@ -51,3 +51,22 @@ test('alias uses the nickname API and requires upstream acknowledgement', async 
   assert.deepEqual(await executeMessageAction(api,{action:'alias',uid:'123',message:'Lan'}),{state:'unknown'});
   await assert.rejects(executeMessageAction(api,{action:'alias',uid:'123',message:'x'.repeat(101)}));
 });
+
+test('media uses attachment buffer and requires attachment acknowledgement', async () => {
+  const attachment = {data: Buffer.from('pdf'), filename: 'test.pdf', metadata: {totalSize: 3}};
+  const input = {action: 'send', uid: '123', message: 'Nội dung', attachment};
+  let calls = 0;
+  const api = {sendMessage: async (content, uid, type) => {
+    calls++; assert.equal(content.msg, 'Nội dung'); assert.equal(content.attachments[0], attachment);
+    assert.equal(uid, '123'); assert.equal(type, 0);
+    return {message: {msgId: 1}, attachment: [{msgId: 2}]};
+  }};
+  assert.deepEqual(await executeMessageAction(api, input), {state: 'sent', message_id: '1,2'});
+  assert.equal(calls, 1);
+  api.sendMessage = async () => ({message: {msgId: 1}, attachment: []});
+  assert.deepEqual(await executeMessageAction(api, input), {state: 'unknown'});
+  let dispatched = false;
+  await assert.rejects(executeMessageAction(api, {...input, attachment: {...attachment, filename: 'bad.exe'}}, () => {dispatched = true;}));
+  await assert.rejects(executeMessageAction(api, {...input, attachment: {...attachment, filename: 'bad.png'}}, () => {dispatched = true;}));
+  assert.equal(dispatched, false);
+});

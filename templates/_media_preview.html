@@ -1,0 +1,4 @@
+<div class="media-preview">
+{% if media.mime.startswith('image/') %}<img src="{{ url_for('media_file',media_id=media.id) }}" alt="Media đính kèm: {{ media.filename }}" loading="lazy">{% endif %}
+<a href="{{ url_for('media_file',media_id=media.id) }}">{{ media.filename }}</a><small>{{ (media.size/1024)|round(1) }} KB · {{ media.mime }}</small>
+</div>

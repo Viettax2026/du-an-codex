@@ -1,12 +1,12 @@
 <section class="panel form-panel" id="real-send">
   <h2>Gửi tin qua tài khoản Zalo</h2>
   <p>Gửi từng tin sau khi kiểm tra người nhận. Mỗi khách hàng được gửi một lần trong chiến dịch. Zalo tiếp nhận tin không có nghĩa người nhận đã đọc.</p>
-  {% if connected_accounts and recipients %}
+  {% if connected_accounts and recipients and not campaign.paused %}
   <form method="post" action="{{ url_for('prepare_send', campaign_id=campaign.id) }}">
     <input type="hidden" name="csrf" value="{{ session.csrf }}">
     <label>Tài khoản gửi<select name="account_id" required>{% for a in connected_accounts %}<option value="{{ a.id }}" {% if campaign.account_id==a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
     <label>Khách hàng đã đồng ý nhận tin<select name="contact_id" required>{% for p in recipients %}<option value="{{ p.id }}">{{ p.name }} · {{ p.phone }}</option>{% endfor %}</select></label>
-    <button class="primary">Tìm người nhận và xem trước</button>
+    <button class="primary" {% if campaign.paused %}disabled{% endif %}>Tìm người nhận và xem trước</button>
   </form>
   {% else %}<p class="notice">Cần có tài khoản đã đăng nhập QR và khách hàng đồng ý nhận tin thuộc nhóm chiến dịch.</p><a href="/accounts">Tài khoản Zalo</a> · <a href="/contacts">Khách hàng</a>{% endif %}
   <p class="muted">Tìm bằng số điện thoại có thể bị giới hạn bởi cài đặt riêng tư của người nhận. Kết nối không chính thức có thể bị Zalo hạn chế.</p>
@@ -17,14 +17,14 @@
   <article class="real-send-record">
     <h3>{{ s.contact_name }} · Zalo: {{ s.recipient_name or 'Không có tên hiển thị' }}</h3>
     <p class="muted">Tài khoản gửi: {{ s.account_name }} · Zalo ID: {{ s.recipient_id }} · {{ s.created_at|localtime }}</p>
-    <p class="message-text">{{ s.message }}</p>
+    <p class="message-text">{{ s.message }}</p>{% set media=campaign_media(s.media_id) %}{% if media %}{% include '_media_preview.html' %}{% endif %}
     {% if s.friend_state!='not_requested' %}
     <h4>Lời mời kết bạn</h4><p class="message-text">{{ s.friend_message }}</p>
     {% if s.friend_state=='prepared' %}
       <form method="post" action="{{ url_for('send_friend_request',campaign_id=campaign.id,send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_friend" value="yes" required> Tôi xác nhận gửi lời mời này đến đúng người nhận Zalo.</label>
-        <button class="primary">Gửi lời mời kết bạn</button>
+        <button class="primary" {% if campaign.paused %}disabled{% endif %}>Gửi lời mời kết bạn</button>
       </form>
     {% elif s.friend_state=='friend_requested' %}<p class="notice success">Zalo đã tiếp nhận lời mời · Chưa xác nhận đã chấp nhận kết bạn</p>
     {% elif s.friend_state=='failed' %}<p class="notice error">Không gửi được lời mời kết bạn.</p>
@@ -36,7 +36,7 @@
     <form method="post" action="{{ url_for('change_alias',campaign_id=campaign.id,send_id=s.id) }}">
       <input type="hidden" name="csrf" value="{{ session.csrf }}">
       <label class="send-confirm"><input type="checkbox" name="confirm_alias" value="yes" required> Tôi xác nhận đổi tên gợi nhớ của người nhận này.</label>
-      <button class="primary">Đổi tên gợi nhớ</button>
+      <button class="primary" {% if campaign.paused %}disabled{% endif %}>Đổi tên gợi nhớ</button>
     </form>
     {% elif s.alias_state=='renamed' %}<p class="notice success">Zalo đã tiếp nhận đổi tên gợi nhớ.</p>
     {% elif s.alias_state=='failed' %}<p class="notice error">Không đổi được tên gợi nhớ. Kiểm tra quan hệ bạn bè và phiên đăng nhập.</p>
@@ -46,7 +46,7 @@
       <form method="post" action="{{ url_for('send_message', campaign_id=campaign.id, send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_send" value="yes" required> Tôi đã kiểm tra đúng người nhận và đồng ý gửi nội dung này qua Zalo.</label>
-        <button class="primary">Gửi tin thật</button>
+        <button class="primary" {% if campaign.paused %}disabled{% endif %}>Gửi tin thật</button>
       </form>
     {% elif s.state=='sent' %}<p class="notice success">Zalo đã tiếp nhận · Mã tin: {{ s.message_id }} · Chưa xác nhận đã đọc</p>
     {% elif s.state=='failed' %}<p class="notice error">Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối.</p>
