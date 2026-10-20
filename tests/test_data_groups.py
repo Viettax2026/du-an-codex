@@ -133,3 +133,46 @@ def test_legacy_groups_receive_metadata_without_losing_contacts(app):
     with database(app) as db:
         assert db.execute('SELECT name,data_type,color FROM data_groups').fetchone() == ('Legacy', 'all', '#6860f6')
         assert db.execute('SELECT name,tag FROM contacts').fetchone() == ('Lan', 'Legacy')
+
+
+def test_group_detail_empty_state_filters_pagination_and_import_dates(app):
+    client = app.test_client()
+    register(client)
+    response = post(client, '/data-groups', {'name': 'Details'})
+    assert 'Không có data nào khớp bộ lọc.' in response.text
+    assert 'Chưa có data để phân bố.' in response.text
+    assert 'Đang dùng ở 0 chiến dịch' in response.text
+    assert 'Trang 1/1' in response.text
+    phones = '\n'.join(f'09{index:08}' for index in range(51))
+    post(client, '/data-groups/import', {'group': 'Details', 'phones': phones, 'consent': 'yes'})
+    response = client.get('/data-groups?group=Details')
+    assert response.text.count('name="contact_ids"') == 50
+    assert 'Trang 1/2' in response.text
+    response = client.get('/data-groups?group=Details&p=2')
+    assert response.text.count('name="contact_ids"') == 1
+    assert 'Trang 2/2' in response.text
+    assert 'Không có data nào khớp bộ lọc.' in client.get('/data-groups?group=Details&kind=uid').text
+    assert 'Không có data nào khớp bộ lọc.' in client.get('/data-groups?group=Details&consent=no').text
+    assert client.get('/data-groups?group=Details&kind=invalid').status_code == 400
+    post(client, '/campaigns', {'name': 'Group use', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Details'})
+    assert 'Đang dùng ở 1 chiến dịch' in client.get('/data-groups?group=Details').text
+    with database(app) as db:
+        created, latest, count = db.execute('SELECT created_at,last_import_at,imported_count FROM data_groups').fetchone()
+        assert created and latest and count == 51
+
+
+def test_export_group_selection_is_scoped_and_csv_safe(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Export'})
+    post(client, '/data-groups/import', {'group': 'Export', 'consent': 'yes',
+        'file': (io.BytesIO(b'phone,name\n0901234567,=1+1\n'), 'data.csv')})
+    response = post(client, '/data-groups/export', {'group': 'Export', 'contact_ids': '1'})
+    assert response.mimetype == 'text/csv'
+    assert "'=1+1" in response.data.decode('utf-8-sig')
+    assert '0901234567' in response.data.decode('utf-8-sig')
+    assert post(client, '/data-groups/export', {'group': 'Wrong', 'contact_ids': '1'}).status_code == 404
+    assert post(client, '/data-groups/export', {'group': 'Export'}).status_code == 400
+    other = app.test_client()
+    register(other, 'other')
+    assert post(other, '/data-groups/export', {'group': 'Export', 'contact_ids': '1'}).status_code == 404
