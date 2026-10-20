@@ -439,3 +439,74 @@ def test_delete_group_requires_confirmation_and_preserves_contacts_campaigns(app
         assert db.execute('SELECT count(*) FROM campaigns').fetchone() == (1,)
     other = app.test_client(); register(other, 'other')
     assert other.get('/data-groups/delete?group=Archive').status_code == 404
+
+
+def test_duplicate_group_snapshots_data_without_duplicating_customer_profiles(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Original', 'color': '#123456', 'data_type': 'phone'})
+    raw = b'phone,name,email,info1\n0901234567,Lan,lan@example.com,A\n0912345678,An,an@example.com,B\n'
+    post(client, '/data-groups/import', {'group': 'Original', 'consent': 'yes', 'file': (io.BytesIO(raw), 'original.csv')})
+    with database(app) as db:
+        db.execute("UPDATE contacts SET consent=0 WHERE phone='0912345678'")
+    assert '2 data' in client.get('/data-groups/duplicate?group=Original').text
+    response = post(client, '/data-groups/duplicate', {'group': 'Original', 'name': 'Copy'})
+    assert response.status_code == 200 and 'lan@example.com' not in response.text  # Email remains in the customer profile.
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (2,)
+        assert db.execute("SELECT color,data_type FROM data_groups WHERE name='Copy'").fetchone() == ('#123456', 'phone')
+        assert db.execute('SELECT count(DISTINCT id) FROM data_groups').fetchone() == (2,)
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Copy'").fetchone() == (2,)
+        assert db.execute("SELECT tag,email,info1 FROM contacts WHERE phone='0901234567'").fetchone() == ('Original', 'lan@example.com', 'A')
+    response = post(client, '/data-groups/export', {'group': 'Copy', 'contact_ids': ['1','2']})
+    assert response.mimetype == 'text/csv' and 'lan@example.com' in response.text
+    # Appending to the original does not alter the copied snapshot.
+    post(client, '/data-groups/import', {'group': 'Original', 'phones': '0923456789', 'consent': 'yes'})
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Copy'").fetchone() == (2,)
+    post(client, '/data-groups/duplicate', {'group': 'Copy', 'name': 'Copy again'})
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Copy again'").fetchone() == (2,)
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (3,)
+
+
+def test_copied_group_works_for_campaign_audience_snapshot_rename_and_archive(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Original'})
+    post(client, '/data-groups/import', {'group': 'Original', 'phones': '0901234567', 'consent': 'yes'})
+    post(client, '/data-groups/duplicate', {'group': 'Original', 'name': 'Copy'})
+    post(client, '/campaigns', {'name': 'Copied audience', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Copy'})
+    post(client, '/campaigns/1')  # Existing simulation exercises the copied audience without real Zalo calls.
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM deliveries WHERE campaign_id=1').fetchone() == (1,)
+    post(client, '/campaigns', {'name': 'Snapshot', 'message': 'Hi', 'data_mode': 'direct', 'source_tags': 'Copy', 'phones_consent': 'yes'})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM campaign_contacts WHERE campaign_id=2').fetchone() == (1,)
+    post(client, '/campaigns', {'name': 'Append', 'message': 'Hi'})
+    post(client, '/campaigns/3/data', {'source_tag': 'Copy', 'consent': 'yes'})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM campaign_contacts WHERE campaign_id=3').fetchone() == (1,)
+    post(client, '/data-groups/edit', {'original_group': 'Copy', 'name': 'Renamed', 'color': '#123456'})
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Renamed'").fetchone() == (1,)
+        assert db.execute('SELECT tag FROM campaigns WHERE id=1').fetchone() == ('Renamed',)
+        assert db.execute('SELECT tag FROM contacts').fetchone() == ('Original',)
+    post(client, '/data-groups/delete', {'group': 'Original', 'confirm_delete': 'yes'})
+    assert client.get('/data-groups?group=Renamed').status_code == 200
+    assert client.get('/campaigns/1').status_code == 200
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Renamed'").fetchone() == (1,)
+
+
+def test_duplicate_group_validates_name_authentication_and_ownership(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Private'})
+    for name in ['', 'Private', 'x'*81]:
+        post(client, '/data-groups/duplicate', {'group': 'Private', 'name': name})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM data_groups').fetchone() == (1,)
+    assert client.post('/data-groups/duplicate', data={'group':'Private','name':'No CSRF'}).status_code == 400
+    other = app.test_client(); register(other, 'other')
+    assert other.get('/data-groups/duplicate?group=Private').status_code == 404
+    assert post(other, '/data-groups/duplicate', {'group':'Private','name':'Stolen'}).status_code == 404
+    post(client, '/data-groups/duplicate', {'group':'Private','name':'Empty copy'})
+    assert 'Không có data nào khớp bộ lọc.' in client.get('/data-groups?group=Empty+copy').text

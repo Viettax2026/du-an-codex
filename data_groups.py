@@ -20,6 +20,15 @@ def register_data_groups(app, db, login_required, parse_phones):
         contact_columns = {row['name'] for row in db().execute('PRAGMA table_info(contacts)')}
         if 'data_source' not in contact_columns:
             db().execute("ALTER TABLE contacts ADD COLUMN data_source TEXT NOT NULL DEFAULT ''")
+        db().executescript('''CREATE TABLE IF NOT EXISTS data_group_contacts (
+            group_id INTEGER NOT NULL REFERENCES data_groups(id) ON DELETE CASCADE,
+            contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+            PRIMARY KEY(group_id,contact_id));
+            CREATE INDEX IF NOT EXISTS data_group_contacts_contact ON data_group_contacts(contact_id);
+            CREATE VIEW IF NOT EXISTS contact_group_memberships AS
+            SELECT user_id,tag AS group_name,id AS contact_id FROM contacts
+            UNION SELECT d.user_id,d.name,m.contact_id FROM data_group_contacts m
+                JOIN data_groups d ON d.id=m.group_id JOIN contacts p ON p.id=m.contact_id AND p.user_id=d.user_id;''')
         db().commit()
 
     @app.route('/data-groups', methods=['GET', 'POST'])
@@ -51,7 +60,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         groups = db().execute('''SELECT names.name, d.id, count(p.id) AS total,
             COALESCE(d.data_type,'all') AS data_type, COALESCE(d.color,'#6860f6') AS color FROM
             (SELECT name FROM data_groups WHERE user_id=? UNION SELECT tag FROM contacts WHERE user_id=?) names
-            LEFT JOIN contacts p ON p.tag=names.name AND p.user_id=?
+            LEFT JOIN contacts p ON p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=names.name) AND p.user_id=?
             LEFT JOIN data_groups d ON d.name=names.name AND d.user_id=?
             WHERE d.deleted_at IS NULL GROUP BY names.name ORDER BY names.name''',
             (g.user['id'], g.user['id'], g.user['id'], g.user['id'])).fetchall()
@@ -67,7 +76,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         account_id = request.args.get('account_id', '')
         if account_id and (not account_id.isdigit() or int(account_id) not in {account['id'] for account in accounts}):
             abort(404)
-        where = "user_id=? AND tag=? AND (name LIKE ? OR phone LIKE ? OR zalo_id LIKE ?)"
+        where = "user_id=? AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?) AND (name LIKE ? OR phone LIKE ? OR zalo_id LIKE ?)"
         params = [g.user['id'], selected, *(['%' + query + '%'] * 3)]
         if kind == 'uid':
             where += " AND zalo_id!=''"
@@ -79,7 +88,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         if account_id:
             where += ''' AND (EXISTS (SELECT 1 FROM message_sends s WHERE s.contact_id=contacts.id AND s.account_id=?)
                 OR EXISTS (SELECT 1 FROM campaigns c WHERE c.user_id=contacts.user_id AND c.account_id=? AND c.deleted_at IS NULL
-                    AND ((c.audience_mode='group' AND (c.tag='' OR c.tag=contacts.tag)) OR
+                    AND ((c.audience_mode='group' AND (c.tag='' OR contacts.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=c.tag))) OR
                          (c.audience_mode='list' AND EXISTS (SELECT 1 FROM campaign_contacts cc WHERE cc.campaign_id=c.id AND cc.contact_id=contacts.id)))))'''
             params.extend([int(account_id), int(account_id)])
         filtered = db().execute('SELECT count(*) FROM contacts WHERE ' + where, params).fetchone()[0]
@@ -99,12 +108,12 @@ def register_data_groups(app, db, login_required, parse_phones):
         usage = db().execute('''SELECT count(*) FROM campaigns c WHERE c.user_id=? AND c.deleted_at IS NULL AND
             ((c.audience_mode='group' AND (c.tag=? OR c.tag='')) OR
              (c.audience_mode='list' AND EXISTS (SELECT 1 FROM campaign_contacts cc JOIN contacts p ON p.id=cc.contact_id
-                WHERE cc.campaign_id=c.id AND p.user_id=? AND p.tag=?)))''',
+                WHERE cc.campaign_id=c.id AND p.user_id=? AND p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=?))))''',
             (g.user['id'], selected, g.user['id'], selected)).fetchone()[0] if selected else 0
         runs = db().execute('''SELECT count(*) FROM message_sends s JOIN contacts p ON p.id=s.contact_id
-            WHERE p.user_id=? AND p.tag=? AND (s.state!='prepared' OR s.friend_state NOT IN ('prepared','not_requested')
+            WHERE p.user_id=? AND p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=?) AND (s.state!='prepared' OR s.friend_state NOT IN ('prepared','not_requested')
             OR s.alias_state NOT IN ('prepared','not_requested'))''', (g.user['id'], selected)).fetchone()[0]
-        distribution = db().execute("SELECT count(*) AS phones, sum(zalo_id!='') AS uids, sum(consent=1) AS consented FROM contacts WHERE user_id=? AND tag=?",
+        distribution = db().execute("SELECT count(*) AS phones, sum(zalo_id!='') AS uids, sum(consent=1) AS consented FROM contacts WHERE user_id=? AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)",
                                      (g.user['id'], selected)).fetchone()
         return render_template('data_groups.html', groups=groups, selected=selected, rows=rows,
                                total=total, query=query, page='data_groups', metadata=metadata, usage=usage,
@@ -120,7 +129,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         ids = request.form.getlist('contact_ids')
         if len(ids) > 50 or not ids or not all(value.isdigit() for value in ids):
             abort(400)
-        rows = db().execute('SELECT name,phone,zalo_id,email,info1,info2,info3,info4,info5 FROM contacts WHERE user_id=? AND tag=? AND id IN (' +
+        rows = db().execute('SELECT name,phone,zalo_id,email,info1,info2,info3,info4,info5 FROM contacts WHERE user_id=? AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?) AND id IN (' +
                             ','.join('?' for _ in ids) + ') ORDER BY id', (g.user['id'], selected, *ids)).fetchall()
         if len(rows) != len(set(ids)):
             abort(404)
@@ -165,6 +174,34 @@ def register_data_groups(app, db, login_required, parse_phones):
             db().rollback()
             flash(str(error), 'error')
             return redirect(url_for('data_groups', group=original))
+
+    @app.route('/data-groups/duplicate', methods=['GET','POST'])
+    @login_required
+    def duplicate_data_group():
+        original = request.form.get('group', '') if request.method == 'POST' else request.args.get('group', '')
+        metadata = require_group(original)
+        count = db().execute('SELECT count(*) FROM contact_group_memberships WHERE user_id=? AND group_name=?', (g.user['id'], original)).fetchone()[0]
+        if request.method == 'POST':
+            name = request.form.get('name', '').strip()
+            try:
+                if not name or len(name) > 80:
+                    raise ValueError('Tên nhóm cần từ 1 đến 80 ký tự.')
+                db().execute('BEGIN IMMEDIATE')
+                metadata = require_group(original)
+                if db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
+                                 (g.user['id'], name, g.user['id'], name)).fetchone():
+                    raise ValueError('Tên nhóm đã tồn tại. Vui lòng chọn tên khác.')
+                result = db().execute('''INSERT INTO data_groups(user_id,name,data_type,color,created_at)
+                    VALUES (?,?,?,?,CURRENT_TIMESTAMP)''', (g.user['id'], name, metadata['data_type'] if metadata else 'all', metadata['color'] if metadata else '#6860f6'))
+                db().execute('''INSERT INTO data_group_contacts(group_id,contact_id)
+                    SELECT ?,contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?''', (result.lastrowid, g.user['id'], original))
+                db().commit()
+                flash('Đã nhân bản nhóm cùng danh sách data. Không tạo trùng hồ sơ khách hàng hoặc sao chép chiến dịch.', 'success')
+                return redirect(url_for('data_groups', group=name))
+            except ValueError as error:
+                db().rollback()
+                flash(str(error), 'error')
+        return render_template('group_duplicate.html', original=original, count=count, page='data_groups')
 
     @app.route('/data-groups/delete', methods=['GET','POST'])
     @login_required

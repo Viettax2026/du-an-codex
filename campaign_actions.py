@@ -326,7 +326,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 incoming.update(read_contacts(request.files.get('file'), parse_phones))
                 source = request.form.get('source_tag', '')
                 if source:
-                    for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND tag=? AND consent=1', (g.user['id'], source)):
+                    for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND consent=1 AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)', (g.user['id'], source)):
                         incoming.setdefault(person['phone'], dict(person))
                 if not incoming:
                     raise ValueError('Nhập số điện thoại, chọn tệp hoặc chọn nhóm để bổ sung.')
@@ -352,7 +352,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
             except (ValueError, UnicodeError, csv.Error) as error:
                 db().rollback()
                 flash(str(error) if isinstance(error, ValueError) and not isinstance(error, UnicodeError) else 'CSV cần đúng định dạng UTF-8.', 'error')
-        return render_template('campaign_action.html', campaign=campaign, action='data', page='campaigns', data_tags=db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall())
+        return render_template('campaign_action.html', campaign=campaign, action='data', page='campaigns', data_tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall())
 
     @app.route('/campaigns/<int:campaign_id>/delete', methods=['GET', 'POST'])
     @login_required

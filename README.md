@@ -169,7 +169,7 @@ Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướn
 
 ## Nhóm data và nguồn data chiến dịch
 
-Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Nhóm dùng chung trường nhóm khách hàng hiện tại; mỗi khách hàng thuộc một nhóm. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
+Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
 
 Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có hai lựa chọn:
 
@@ -183,3 +183,7 @@ Tệp tối đa 2 MB và 500 dòng mỗi lần nhập. TXT mỗi dòng một s�
 Cập nhật VPS theo quy trình `deployment/update.sh` hiện có để cài thêm `openpyxl==3.1.5` và `xlrd==2.0.2` và khởi động lại dịch vụ. Bảng nhóm được tạo bổ sung khi khởi động, không xóa dữ liệu cũ.
 
 Tab **Từ template Excel ZaloFlow** hỗ trợ chọn hoặc kéo thả một tệp, tự đọc và xem trước trước khi lưu. Có thể dùng tiêu đề `name,phone,info1…info5` hoặc `Tên,Số điện thoại,Info 1…Info 5`. Tab **File Excel/CSV của khách hàng** cho phép tự chọn cột và bỏ dòng tiêu đề. Chuẩn hóa/xem trước chưa ghi dữ liệu; chỉ nút **Thêm vào nhóm** mới lưu.
+
+### Nhân bản nhóm data
+
+Biểu tượng hai ô vuông cạnh nhóm mở màn hình **Nhân bản nhóm data**, cho phép đặt tên mới. Nhóm sao chép có ID riêng, giữ màu, loại data và danh sách hiện tại, bao gồm khách hàng chưa đồng ý nhận tin. Hai nhóm dùng chung hồ sơ khách hàng; không tạo thêm số điện thoại trùng hoặc đổi nhóm gốc. Thêm khách hàng mới vào nhóm gốc sau đó không tự bổ sung vào bản sao. Nhóm sao chép dùng được trong chiến dịch, bộ lọc tài khoản và xuất CSV; chiến dịch chỉ lấy khách hàng đã đồng ý nhận tin. Không sao chép chiến dịch hoặc nhật ký gửi. Nút sao chép nhỏ tại huy hiệu ID vẫn chép ID vào clipboard.

@@ -148,7 +148,7 @@ def create_app(test_config=None):
     def audience(campaign):
         return db().execute('''SELECT p.* FROM contacts p WHERE p.user_id=? AND p.consent=1 AND
             ((?='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?)) OR
-             (?='group' AND (?='' OR p.tag=?)))
+             (?='group' AND (?='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=?))))
              ORDER BY p.id''', (g.user['id'], campaign['audience_mode'], campaign['id'], campaign['audience_mode'], campaign['tag'], campaign['tag'])).fetchall()
 
     def campaign_fields():
@@ -168,13 +168,13 @@ def create_app(test_config=None):
         if mode not in (None, 'direct', 'group'):
             raise ValueError('Nguồn data không hợp lệ.')
         if mode == 'group':
-            if not tag or not db().execute('SELECT 1 FROM contacts WHERE user_id=? AND tag=?', (g.user['id'], tag)).fetchone():
+            if not tag or not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=?', (g.user['id'], tag)).fetchone():
                 raise ValueError('Chọn nhóm data hiện có.')
             return name, message, tag, account_id, []
         incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
         incoming.update(read_contacts(request.files.get('data_file'), parse_phones))
         for source in request.form.getlist('source_tags'):
-            for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND tag=? AND consent=1', (g.user['id'], source)):
+            for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND consent=1 AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)', (g.user['id'], source)):
                 incoming.setdefault(person['phone'], dict(person))
         if len(incoming) > 500:
             raise ValueError('Danh sách chiến dịch tối đa 500 số.')
@@ -395,14 +395,14 @@ def create_app(test_config=None):
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
             (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
               AND ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
-                   (c.audience_mode='group' AND (c.tag='' OR p.tag=c.tag)))) AS audience
+                   (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag))))) AS audience
             FROM campaigns c WHERE user_id=? AND name LIKE ?
               AND ((?='deleted' AND deleted_at IS NOT NULL) OR (?!='deleted' AND deleted_at IS NULL))
               AND (?='' OR ?='deleted' OR (?='paused' AND paused=1) OR (status=? AND paused=0)) AND (?='' OR tag=?)
               AND (?='' OR created_at >= datetime('now', ?)) ORDER BY id DESC''',
             (g.user['id'], '%' + query + '%', status, status, status, status, status, status, tag, tag,
              days, '-' + (days or '0') + ' days')).fetchall()
-        tags = db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
+        tags = db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
         selected = next((row for row in rows if row['id'] == selected_id), None)
         logs = []
@@ -439,7 +439,7 @@ def create_app(test_config=None):
         phones = db().execute('SELECT p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? ORDER BY p.id', (campaign_id,)).fetchall()
         return render_template('campaign_edit.html', campaign=campaign, phones='\n'.join(p['phone'] for p in phones),
             accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall(),
-            tags=db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
+            tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>', methods=['GET', 'POST'])
     @login_required
