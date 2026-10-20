@@ -46,3 +46,5 @@ document.querySelectorAll('[data-copy-id]').forEach(button => button.addEventLis
   try { await navigator.clipboard.writeText(button.dataset.copyId); button.textContent = 'Đã chép ID'; }
   catch { button.textContent = `ID: ${button.dataset.copyId}`; }
 }));
+const accountFilter = document.querySelector('[data-account-filter]');
+if (accountFilter) accountFilter.addEventListener('change', () => accountFilter.form.requestSubmit());

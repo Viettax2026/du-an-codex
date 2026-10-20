@@ -176,3 +176,26 @@ def test_export_group_selection_is_scoped_and_csv_safe(app):
     other = app.test_client()
     register(other, 'other')
     assert post(other, '/data-groups/export', {'group': 'Export', 'contact_ids': '1'}).status_code == 404
+
+
+def test_account_dropdown_uses_owned_accounts_and_filters_campaign_data(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Accounts'})
+    post(client, '/data-groups/import', {'group': 'Accounts', 'phones': '0901234567', 'consent': 'yes'})
+    with database(app) as db:
+        db.execute("INSERT INTO zalo_accounts(user_id,name) VALUES (1,'Kế Toán Viettax')")
+        db.execute("INSERT INTO zalo_accounts(user_id,name) VALUES (1,'Admin kế toán')")
+    response = client.get('/data-groups?group=Accounts')
+    assert 'Kế Toán Viettax' in response.text and 'Admin kế toán' in response.text
+    post(client, '/campaigns', {'name': 'Account campaign', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Accounts', 'account_id': '1'})
+    response = client.get('/data-groups?group=Accounts&account_id=1')
+    assert '<option value="1" selected>' in response.text
+    assert 'name="contact_ids"' in response.text
+    assert 'name="contact_ids"' not in client.get('/data-groups?group=Accounts&account_id=2').text
+    assert 'name="contact_ids"' in client.get('/data-groups?group=Accounts').text
+    other = app.test_client()
+    register(other, 'other')
+    assert 'Kế Toán Viettax' not in other.get('/data-groups').text
+    assert other.get('/data-groups?account_id=1').status_code == 404
+    assert client.get('/data-groups?account_id=invalid').status_code == 404

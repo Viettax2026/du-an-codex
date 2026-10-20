@@ -58,6 +58,10 @@ def register_data_groups(app, db, login_required, parse_phones):
         consent = request.args.get('consent', '')
         if kind not in ('', 'phone', 'uid') or consent not in ('', 'yes', 'no'):
             abort(400)
+        accounts = db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? ORDER BY name,id', (g.user['id'],)).fetchall()
+        account_id = request.args.get('account_id', '')
+        if account_id and (not account_id.isdigit() or int(account_id) not in {account['id'] for account in accounts}):
+            abort(404)
         where = "user_id=? AND tag=? AND (name LIKE ? OR phone LIKE ? OR zalo_id LIKE ?)"
         params = [g.user['id'], selected, *(['%' + query + '%'] * 3)]
         if kind == 'uid':
@@ -67,6 +71,12 @@ def register_data_groups(app, db, login_required, parse_phones):
         if consent:
             where += ' AND consent=?'
             params.append(int(consent == 'yes'))
+        if account_id:
+            where += ''' AND (EXISTS (SELECT 1 FROM message_sends s WHERE s.contact_id=contacts.id AND s.account_id=?)
+                OR EXISTS (SELECT 1 FROM campaigns c WHERE c.user_id=contacts.user_id AND c.account_id=? AND c.deleted_at IS NULL
+                    AND ((c.audience_mode='group' AND (c.tag='' OR c.tag=contacts.tag)) OR
+                         (c.audience_mode='list' AND EXISTS (SELECT 1 FROM campaign_contacts cc WHERE cc.campaign_id=c.id AND cc.contact_id=contacts.id)))))'''
+            params.extend([int(account_id), int(account_id)])
         filtered = db().execute('SELECT count(*) FROM contacts WHERE ' + where, params).fetchone()[0]
         pages = max(1, math.ceil(filtered / 50))
         number = max(1, min(request.args.get('p', 1, type=int), pages))
@@ -87,7 +97,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         return render_template('data_groups.html', groups=groups, selected=selected, rows=rows,
                                total=total, query=query, page='data_groups', metadata=metadata, usage=usage,
                                runs=runs, distribution=distribution, filtered=filtered, number=number, pages=pages,
-                               kind=kind, consent=consent,
+                               kind=kind, consent=consent, accounts=accounts, account_id=account_id,
                                data_type_labels={'all': 'Mọi loại dữ liệu', 'phone': 'Số điện thoại', 'uid': 'UID'})
 
     @app.post('/data-groups/export')
