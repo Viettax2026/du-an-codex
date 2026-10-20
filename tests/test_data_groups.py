@@ -87,3 +87,49 @@ def test_invalid_excel_and_large_import_are_atomic(app):
         assert response.status_code == 200
         with database(app) as db:
             assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+
+
+def test_create_group_dialog_and_saved_preferences(app):
+    client = app.test_client()
+    register(client)
+    page = client.get('/data-groups').text
+    assert 'id="create-group-dialog"' in page
+    assert 'Tạo nhóm data' in page
+    response = post(client, '/data-groups', {'name': 'Tháng 10', 'data_type': 'phone', 'color': '#EF1234'})
+    assert response.status_code == 200
+    assert 'Số điện thoại' in response.text
+    assert 'data-group-color="#ef1234"' in response.text
+    with database(app) as db:
+        assert db.execute('SELECT name,data_type,color FROM data_groups').fetchone() == ('Tháng 10', 'phone', '#ef1234')
+    # The same group name must not silently reset its saved preferences.
+    response = post(client, '/data-groups', {'name': 'Tháng 10', 'data_type': 'uid', 'color': '#000000'})
+    assert 'Tên nhóm đã tồn tại' in response.text
+    assert 'data-reopen="yes"' in response.text
+    with database(app) as db:
+        assert db.execute('SELECT data_type,color FROM data_groups').fetchall() == [('phone', '#ef1234')]
+
+
+def test_invalid_group_preferences_and_csrf_are_rejected(app):
+    client = app.test_client()
+    register(client)
+    for fields in [{'name': '  '}, {'name': 'Invalid', 'data_type': 'unknown'},
+                   {'name': 'Invalid', 'color': 'red;display:none'}]:
+        assert post(client, '/data-groups', fields).status_code == 200
+    assert client.post('/data-groups', data={'name': 'Missing CSRF'}).status_code == 400
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM data_groups').fetchone() == (0,)
+
+
+def test_legacy_groups_receive_metadata_without_losing_contacts(app):
+    from app import create_app
+    client = app.test_client()
+    register(client)
+    post(client, '/contacts', {'name': 'Lan', 'phone': '0901234567', 'tag': 'Legacy'})
+    with database(app) as db:
+        db.execute('DROP TABLE data_groups')
+        db.execute('CREATE TABLE data_groups (id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,name TEXT NOT NULL,UNIQUE(user_id,name))')
+        db.execute("INSERT INTO data_groups(user_id,name) VALUES (1,'Legacy')")
+    create_app({'TESTING': True, 'DATABASE': app.config['DATABASE'], 'SECRET_KEY': 'test-only'})
+    with database(app) as db:
+        assert db.execute('SELECT name,data_type,color FROM data_groups').fetchone() == ('Legacy', 'all', '#6860f6')
+        assert db.execute('SELECT name,tag FROM contacts').fetchone() == ('Lan', 'Legacy')

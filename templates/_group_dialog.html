@@ -1,0 +1,13 @@
+<dialog class="group-dialog" id="create-group-dialog" data-reopen="{{ 'yes' if request.method=='POST' else 'no' }}" aria-labelledby="group-dialog-title">
+<form method="post" action="{{ url_for('data_groups') }}">
+<input type="hidden" name="csrf" value="{{ session.csrf }}">
+<header class="group-dialog-heading"><span class="group-folder" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><h2 id="group-dialog-title">Tạo nhóm data</h2><button type="button" class="group-close" data-close-group aria-label="Đóng">×</button></header>
+<div class="group-dialog-body">
+{% if request.method=='POST' %}{% for category,message in get_flashed_messages(with_categories=true) %}<div role="alert" class="notice {{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+<label for="group-name">TÊN NHÓM <span class="required-mark">*</span></label><input id="group-name" name="name" required maxlength="80" value="{{ request.form.get('name','') }}" autofocus autocomplete="off">
+<label for="group-data-type">LOẠI DATA CHÍNH</label><select id="group-data-type" name="data_type">{% for value,title in data_type_labels.items() %}<option value="{{ value }}" {{ 'selected' if request.form.get('data_type','all')==value }}>{{ title }}</option>{% endfor %}</select>
+<label for="group-color">MÀU NHÓM</label><input id="group-color" type="color" name="color" value="{{ request.form.get('color','#6860f6') if request.form.get('color','#6860f6')|length==7 else '#6860f6' }}" aria-label="Màu nhóm">
+</div>
+<footer class="group-dialog-footer"><button class="ghost" type="button" data-close-group>Hủy</button><button class="purple-button" type="submit" data-create-group>Tạo nhóm</button></footer>
+</form>
+</dialog>
