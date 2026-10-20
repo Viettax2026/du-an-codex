@@ -3,6 +3,9 @@ import re
 import csv
 import io
 import math
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from data_sources import initialize_data_sources, create_source_batch, record_contact_source
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
 from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts
@@ -29,6 +32,7 @@ def register_data_groups(app, db, login_required, parse_phones):
             SELECT user_id,tag AS group_name,id AS contact_id FROM contacts
             UNION SELECT d.user_id,d.name,m.contact_id FROM data_group_contacts m
                 JOIN data_groups d ON d.id=m.group_id JOIN contacts p ON p.id=m.contact_id AND p.user_id=d.user_id;''')
+        initialize_data_sources(db)
         db().commit()
 
     @app.route('/data-groups', methods=['GET', 'POST'])
@@ -105,6 +109,9 @@ def register_data_groups(app, db, login_required, parse_phones):
                             (*params, (number - 1) * 50)).fetchall()
         total = next((row['total'] for row in groups if row['name'] == selected), 0)
         metadata = db().execute('SELECT * FROM data_groups WHERE user_id=? AND name=?', (g.user['id'], selected)).fetchone()
+        source_summary = db().execute('''SELECT label FROM contact_data_sources WHERE user_id=? AND contact_id IN
+            (SELECT contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?) ORDER BY id DESC LIMIT 1''',
+            (g.user['id'],g.user['id'],selected)).fetchone()
         usage = db().execute('''SELECT count(*) FROM campaigns c WHERE c.user_id=? AND c.deleted_at IS NULL AND
             ((c.audience_mode='group' AND (c.tag=? OR c.tag='')) OR
              (c.audience_mode='list' AND EXISTS (SELECT 1 FROM campaign_contacts cc JOIN contacts p ON p.id=cc.contact_id
@@ -116,7 +123,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         distribution = db().execute("SELECT count(*) AS phones, sum(zalo_id!='') AS uids, sum(consent=1) AS consented FROM contacts WHERE user_id=? AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)",
                                      (g.user['id'], selected)).fetchone()
         return render_template('data_groups.html', groups=groups, selected=selected, rows=rows,
-                               total=total, query=query, page='data_groups', metadata=metadata, usage=usage,
+                               total=total, query=query, page='data_groups', metadata=metadata, usage=usage, source_summary=source_summary,
                                runs=runs, distribution=distribution, filtered=filtered, number=number, pages=pages,
                                kind=kind, consent=consent, accounts=accounts, account_id=account_id,
                                data_type_labels={'all': 'Mọi loại dữ liệu', 'phone': 'Số điện thoại', 'uid': 'UID'})
@@ -241,6 +248,25 @@ def register_data_groups(app, db, login_required, parse_phones):
             raise ValueError('Mỗi lần nhập từ 1 đến 500 số điện thoại.')
         return group, incoming, invalid
 
+    @app.get('/data-groups/source-history/<int:contact_id>')
+    @login_required
+    def group_source_history(contact_id):
+        group = request.args.get('group', '')
+        require_group(group)
+        contact = db().execute('''SELECT id,phone,data_source,current_source_id FROM contacts WHERE id=? AND user_id=?
+            AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?)''',
+            (contact_id,g.user['id'],g.user['id'],group)).fetchone()
+        if not contact:
+            abort(404)
+        sources = []
+        for source in db().execute('SELECT * FROM contact_data_sources WHERE contact_id=? AND user_id=? ORDER BY id DESC',
+                                    (contact_id,g.user['id'])):
+            time = datetime.fromisoformat(source['created_at']).replace(tzinfo=timezone.utc).astimezone(ZoneInfo('Asia/Bangkok')).strftime('%H:%M:%S %d/%m/%Y') if source['created_at'] else None
+            sources.append(dict(id=source['id'], label=source['label'], filename=source['filename'],
+                                source_type=source['source_type'], group_id=source['group_id'], batch_id=source['batch_id'],
+                                created_at=time, current=source['id']==contact['current_source_id']))
+        return jsonify(phone=contact['phone'], sources=sources)
+
     @app.post('/data-groups/import/columns')
     @login_required
     def inspect_group_import():
@@ -282,20 +308,26 @@ def register_data_groups(app, db, login_required, parse_phones):
             added = 0
             upload = request.files.get('file')
             filename = re.sub(r'[\x00-\x1f\x7f]', '', (upload.filename or '').replace('\\', '/').split('/')[-1])[:150] if upload else ''
-            source = 'Tải file lên · ' + filename if filename else 'Nhập trực tiếp'
+            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'],group))
+            batch_id = create_source_batch(db, g.user['id'], group, filename)
+            recorded = 0
             for phone, row in incoming.items():
-                exists = db().execute('SELECT 1 FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
-                if not exists:
+                contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
+                if not contact:
                     insert_contact(db(), g.user['id'], phone, row, tag=group, consent=consent)
-                    db().execute('UPDATE contacts SET data_source=? WHERE user_id=? AND phone=?', (source, g.user['id'], phone))
+                    contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'],phone)).fetchone()
                     added += 1
-            if added:
-                db().execute('''INSERT INTO data_groups(user_id,name,last_import_at,imported_count)
-                    VALUES (?,?,CURRENT_TIMESTAMP,?) ON CONFLICT(user_id,name) DO UPDATE SET
-                    last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+excluded.imported_count''',
-                    (g.user['id'], group, added))
+                if db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
+                                (g.user['id'],group,contact['id'])).fetchone():
+                    record_contact_source(db, g.user['id'], contact['id'], batch_id)
+                    recorded += 1
+            if recorded:
+                db().execute('''UPDATE data_groups SET last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+?
+                    WHERE user_id=? AND name=?''', (added,g.user['id'],group))
+            else:
+                db().execute('DELETE FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,g.user['id']))
             db().commit()
-            flash(f'Đã thêm {added} khách hàng; bỏ qua {len(incoming)-added} số đã có và {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên nhóm và thông tin khách hàng cũ.', 'success')
+            flash(f'Đã thêm {added} khách hàng; giữ {len(incoming)-added} số đã có, ghi nguồn cho {recorded} khách hàng và {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên nhóm và thông tin khách hàng cũ.', 'success')
         except ValueError as error:
             db().rollback()
             flash(str(error), 'error')

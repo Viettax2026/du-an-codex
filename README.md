@@ -187,3 +187,7 @@ Tab **Từ template Excel ZaloFlow** hỗ trợ chọn hoặc kéo thả một t
 ### Nhân bản nhóm data
 
 Biểu tượng hai ô vuông cạnh nhóm mở màn hình **Nhân bản nhóm data**, cho phép đặt tên mới. Nhóm sao chép có ID riêng, giữ màu, loại data và danh sách hiện tại, bao gồm khách hàng chưa đồng ý nhận tin. Hai nhóm dùng chung hồ sơ khách hàng; không tạo thêm số điện thoại trùng hoặc đổi nhóm gốc. Thêm khách hàng mới vào nhóm gốc sau đó không tự bổ sung vào bản sao. Nhóm sao chép dùng được trong chiến dịch, bộ lọc tài khoản và xuất CSV; chiến dịch chỉ lấy khách hàng đã đồng ý nhận tin. Không sao chép chiến dịch hoặc nhật ký gửi. Nút sao chép nhỏ tại huy hiệu ID vẫn chép ID vào clipboard.
+
+### Lịch sử nguồn data
+
+Bấm cột **Nguồn data** để xem tệp nguồn, thời điểm ghi nhận (Asia/Bangkok), ID danh sách và ID lô nhập. Nguồn đang dùng được giữ lại khi nhập tệp khác; lần nhập sau được ghi thêm vào lịch sử. Data cũ chưa có nguồn có thể nhập lại tệp gốc vào cùng nhóm để bổ sung nguồn mà không tạo trùng hoặc đổi thông tin/đồng ý nhận tin của khách hàng. Không tự suy đoán tên tệp, ngày nhập hoặc ID lô từ dữ liệu cũ.

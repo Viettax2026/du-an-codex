@@ -271,3 +271,38 @@ if (fileImportForm) {
   });
   fileImportForm.addEventListener('submit', event => { if (!ready || (invalidCount > 0 && !skipInvalid.checked)) { event.preventDefault(); status.textContent = !ready ? 'Bấm Format chuẩn dữ liệu để có số hợp lệ trước khi thêm vào nhóm.' : 'Xác nhận bỏ qua dòng lỗi hoặc sửa tệp trước khi thêm vào nhóm.'; } });
 }
+
+const sourceHistoryDialog = document.querySelector('#source-history-dialog');
+if (sourceHistoryDialog) {
+  const body = sourceHistoryDialog.querySelector('[data-source-history-body]');
+  const title = sourceHistoryDialog.querySelector('#source-history-title');
+  let sourceRequest = 0;
+  sourceHistoryDialog.querySelectorAll('[data-close-source-history]').forEach(button => button.addEventListener('click', () => sourceHistoryDialog.close()));
+  sourceHistoryDialog.addEventListener('close', () => { sourceRequest += 1; });
+  document.querySelectorAll('[data-source-history]').forEach(button => button.addEventListener('click', async () => {
+    const request = ++sourceRequest;
+    body.textContent = 'Đang tải lịch sử nguồn…'; title.textContent = 'Lịch sử nguồn';
+    sourceHistoryDialog.showModal();
+    try {
+      const response = await fetch(button.dataset.sourceHistory, {headers: {Accept: 'application/json'}});
+      if (!response.ok) throw new Error('Không tải được lịch sử nguồn. Vui lòng tải lại trang.');
+      const data = await response.json();
+      if (request !== sourceRequest) return;
+      title.textContent = `Lịch sử nguồn: ${data.phone}`;
+      body.replaceChildren();
+      if (!data.sources.length) {
+        body.textContent = 'Dữ liệu cũ chưa ghi nhận nguồn. Nhập lại tệp gốc vào nhóm này để bổ sung nguồn; thông tin khách hàng được giữ nguyên.';
+      }
+      data.sources.forEach(source => {
+        const card = document.createElement('section'); card.className = 'source-history-card' + (source.current ? ' current' : '');
+        const heading = document.createElement('div'); heading.className = 'source-history-card-heading';
+        const name = document.createElement('b'); name.textContent = source.source_type === 'file' ? 'Tải file lên' : source.source_type === 'direct' ? 'Nhập trực tiếp' : 'Nguồn đã ghi nhận'; heading.append(name);
+        if (source.current) { const badge = document.createElement('span'); badge.className = 'data-badge'; badge.textContent = 'Đang dùng'; heading.append(badge); }
+        const filename = document.createElement('p'); filename.textContent = source.filename || source.label;
+        const details = document.createElement('p'); details.className = 'source-history-time';
+        details.textContent = `Thời điểm: ${source.created_at || 'Chưa ghi nhận'}${source.group_id ? ' · Danh sách #' + String(source.group_id).padStart(4, '0') : ''}${source.batch_id ? ' · Lô #' + source.batch_id : ''}`;
+        card.append(heading); card.append(filename); card.append(details); body.append(card);
+      });
+    } catch (error) { if (request === sourceRequest) body.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn. Tải lại trang và đăng nhập.' : error.message; }
+  }));
+}

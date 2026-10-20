@@ -510,3 +510,55 @@ def test_duplicate_group_validates_name_authentication_and_ownership(app):
     assert post(other, '/data-groups/duplicate', {'group':'Private','name':'Stolen'}).status_code == 404
     post(client, '/data-groups/duplicate', {'group':'Private','name':'Empty copy'})
     assert 'Không có data nào khớp bộ lọc.' in client.get('/data-groups?group=Empty+copy').text
+
+
+def test_reimport_fills_missing_source_and_preserves_customer_information(app):
+    client = app.test_client(); register(client)
+    post(client, '/contacts', {'name': 'Existing Lan', 'phone': '0901234567', 'tag': 'Legacy'})
+    response = client.get('/data-groups?group=Legacy')
+    assert 'Chưa ghi nhận nguồn' in response.text
+    assert client.get('/data-groups/source-history/1?group=Legacy').json['sources'] == []
+    raw = b'phone,name\n0901234567,Changed name\n'
+    post(client, '/data-groups/import', {'group': 'Legacy', 'consent': 'yes', 'file': (io.BytesIO(raw), 'CSKH (3).csv')})
+    with database(app) as db:
+        name, consent, source = db.execute('SELECT name,consent,data_source FROM contacts').fetchone()
+        assert (name, consent) == ('Existing Lan', 0)
+        assert source == 'Tải file lên · CSKH (3).csv'
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (1,)
+    response = client.get('/data-groups/source-history/1?group=Legacy')
+    event = response.json['sources'][0]
+    assert event['filename'] == 'CSKH (3).csv' and event['current']
+    assert event['created_at'] and event['group_id'] and event['batch_id']
+    post(client, '/data-groups/import', {'group': 'Legacy', 'file': (io.BytesIO(raw), 'Second.csv')})
+    sources = client.get('/data-groups/source-history/1?group=Legacy').json['sources']
+    assert len(sources) == 2
+    assert sources[0]['filename'] == 'Second.csv' and not sources[0]['current']
+    assert sources[1]['filename'] == 'CSKH (3).csv' and sources[1]['current']
+
+
+def test_source_history_is_shared_by_group_copies_but_scoped_to_owner(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name':'Sources'})
+    post(client, '/data-groups/import', {'group':'Sources', 'file':(io.BytesIO(b'phone\n0901234567\n'),'source.csv')})
+    post(client, '/data-groups/duplicate', {'group':'Sources','name':'Copy'})
+    assert client.get('/data-groups/source-history/1?group=Copy').json['sources'][0]['filename'] == 'source.csv'
+    post(client, '/data-groups', {'name':'Other group'})
+    assert client.get('/data-groups/source-history/1?group=Other+group').status_code == 404
+    other = app.test_client(); register(other, 'other')
+    post(other, '/data-groups', {'name':'Sources'})
+    assert other.get('/data-groups/source-history/1?group=Sources').status_code == 404
+
+
+def test_old_source_labels_migrate_without_inventing_date_or_batch(app):
+    from app import create_app
+    client = app.test_client(); register(client)
+    post(client, '/contacts', {'name':'Lan','phone':'0901234567','tag':'Old'})
+    with database(app) as db:
+        db.execute("UPDATE contacts SET data_source='Tải file lên · old.xlsx'")
+    for _ in range(2):
+        create_app({'TESTING':True,'DATABASE':app.config['DATABASE'],'SECRET_KEY':'test-only'})
+    source = client.get('/data-groups/source-history/1?group=Old').json['sources'][0]
+    assert source['filename'] == 'old.xlsx' and source['current']
+    assert source['created_at'] is None and source['batch_id'] is None
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contact_data_sources').fetchone() == (1,)
