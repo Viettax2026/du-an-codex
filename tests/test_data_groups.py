@@ -298,3 +298,32 @@ def test_customer_column_mapping_rejects_missing_duplicate_and_foreign_columns(a
     other = app.test_client(); register(other, 'other')
     assert post(other, '/data-groups/import/columns', {'group': 'Validate', 'file': (io.BytesIO(raw), 'data.csv')}).status_code == 404
     assert client.post('/data-groups/import/columns', data={'group': 'Validate'}).status_code == 400
+
+
+def test_template_legacy_xls_preview_and_save_with_vietnamese_headers(app):
+    from pathlib import Path
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Legacy Excel'})
+    data = (Path(__file__).parent / 'fixtures/template-legacy.xls').read_bytes()
+    response = post(client, '/data-groups/import/preview', {'group': 'Legacy Excel', 'file': (io.BytesIO(data), 'template.xls')})
+    assert response.status_code == 200
+    assert response.json['rows'][0]['phone'] == '0901234567'
+    assert response.json['rows'][0]['name'] == 'Lan'
+    assert response.json['rows'][0]['info1'] == 'Thông tin A'
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    post(client, '/data-groups/import', {'group': 'Legacy Excel', 'file': (io.BytesIO(data), 'template.xls'), 'consent': 'yes'})
+    with database(app) as db:
+        assert db.execute('SELECT name,phone,info5 FROM contacts').fetchone() == ('Lan', '0901234567', 'E')
+    response = post(client, '/data-groups/import/preview', {'group': 'Legacy Excel', 'import_mode': 'mapped',
+        'skip_header': 'yes', 'column_phone': '1', 'column_name': '0', 'file': (io.BytesIO(data), 'customer.xls')})
+    assert response.json['existing'] == 1
+
+
+def test_template_rejects_invalid_xls_without_saving(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Invalid XLS'})
+    response = post(client, '/data-groups/import/preview', {'group': 'Invalid XLS', 'file': (io.BytesIO(b'broken'), 'broken.xls')})
+    assert response.status_code == 400 and response.json['error']
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)

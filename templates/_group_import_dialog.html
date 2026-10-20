@@ -16,12 +16,14 @@
 <input type="hidden" name="import_mode" value="mapped" disabled>
 <div data-customer-mapping><label class="skip-header-choice"><input type="checkbox" name="skip_header" value="yes" checked disabled> Bỏ qua dòng đầu (dòng tiêu đề)</label>
 <div class="column-mapping-grid">{% for key,title in [('name','Tên'),('phone','Số điện thoại'),('info1','Info 1'),('info2','Info 2'),('info3','Info 3'),('info4','Info 4'),('info5','Info 5')] %}<label>{{ title }}<select name="column_{{ key }}" data-column-field="{{ key }}" disabled><option value="">— Bỏ qua —</option></select></label>{% endfor %}</div></div>
-<div data-template-help hidden><p>Tệp mẫu có cột <code>phone</code>; tùy chọn <code>name, zalo_id, email, info1…info5</code>.</p><div class="data-template-links"><a class="ghost" href="{{ url_for('static',filename='data-template.xlsx') }}" download>↓ Tải template Excel</a><a class="ghost" href="{{ url_for('static',filename='data-template.csv') }}" download>↓ Tải CSV mẫu</a></div></div>
-<label class="ghost spreadsheet-upload-label" for="import-spreadsheet">▤ Tải file Excel/CSV</label><input id="import-spreadsheet" type="file" name="file" accept=".xlsx,.csv" disabled><p data-upload-filename>Chưa chọn tệp.</p><p class="muted">Tối đa 2 MB, 500 dòng data. Chọn cột Số điện thoại để chuẩn hóa; các trường khác có thể bỏ qua. Excel .xls chưa hỗ trợ.</p>
+<div data-template-help hidden><h3>Tải file theo template Excel ZaloFlow</h3></div>
+<label class="ghost spreadsheet-upload-label" for="import-spreadsheet" tabindex="0" role="button" data-spreadsheet-dropzone><span class="spreadsheet-upload-icon" aria-hidden="true">↥</span><span><b>Chọn file Excel/CSV</b><small>Hỗ trợ .xlsx, .xls và .csv</small></span></label><input id="import-spreadsheet" type="file" name="file" accept=".xlsx,.xls,.csv" disabled hidden><p data-upload-filename>Chưa chọn tệp.</p>
+<div data-template-downloads hidden><p>Dữ liệu sẽ được tự động đọc theo cấu trúc chuẩn và hiển thị ở bảng bên dưới.</p><div class="data-template-links"><a href="{{ url_for('static',filename='data-template.xlsx') }}" download>↓ Tải template Excel</a><a href="{{ url_for('static',filename='data-template.csv') }}" download>↓ Tải CSV mẫu</a></div></div>
+<p class="muted">Tối đa 2 MB, 500 dòng data. Kiểm tra bảng xem trước trước khi thêm vào nhóm.</p>
 </section>
 <div class="data-format-toolbar"><span data-preview-status role="status" aria-live="polite">Chưa có dữ liệu</span><button type="button" class="ghost" data-format-import>⟳ Format chuẩn dữ liệu</button></div>
 <div class="data-import-preview"><table><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th><th>Info 1</th><th>Info 2</th><th>Info 3</th><th>Info 4</th><th>Info 5</th></tr></thead><tbody data-import-preview><tr><td colspan="8">Chưa có dữ liệu</td></tr></tbody></table></div>
 <label class="send-confirm"><input type="checkbox" name="consent" value="yes"> Tôi xác nhận khách hàng mới đã đồng ý nhận tin.</label><p class="muted">Số đã có được bỏ qua, giữ nguyên thông tin và nhóm. Chỉ khách hàng đã đồng ý mới được sử dụng trong chiến dịch.</p>
 </div>
-<footer class="group-dialog-footer"><button type="button" class="ghost" data-close-import>Hủy</button><button class="purple-button" type="submit" data-save-import disabled>Thêm data vào nhóm</button></footer>
+<footer class="group-dialog-footer"><button type="button" class="ghost" data-close-import>Hủy</button><button class="purple-button" type="submit" data-save-import disabled>Thêm vào nhóm</button></footer>
 </form></dialog>

@@ -37,8 +37,8 @@
 <div data-direct-data>
 <div class="data-toolbar"><button class="ghost" type="button" data-focus-phones>＋ Thêm data</button><button class="ghost" type="button" data-show-groups>▱ Thêm bằng nhóm</button><button class="danger-button" type="button" data-clear-data>Xóa hết</button></div>
 <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>
-<label>Thêm từ file data<input type="file" name="data_file" accept=".txt,.csv,.xlsx"></label>
-<p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx: cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB, 500 dòng. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>.</p>
+<label>Thêm từ file data<input type="file" name="data_file" accept=".txt,.csv,.xlsx,.xls"></label>
+<p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx/.xls: cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB, 500 dòng. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>.</p>
 <div data-group-picker hidden><label>Thêm data hiện tại từ nhóm<select name="source_tags" multiple size="4">{% for t in tags %}<option value="{{ t.tag }}">{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ lấy khách hàng đã đồng ý nhận tin. Danh sách được chốt khi lưu chiến dịch.</p></div>
 <label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
 <p class="muted">Tối đa 500 số trong chiến dịch; số trùng chỉ lưu một lần. Thông tin khách hàng đã có được giữ nguyên.</p>

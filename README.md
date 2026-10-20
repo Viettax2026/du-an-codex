@@ -169,7 +169,7 @@ Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướn
 
 ## Nhóm data và nguồn data chiến dịch
 
-Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`. Nhóm dùng chung trường nhóm khách hàng hiện tại; mỗi khách hàng thuộc một nhóm. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
+Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Nhóm dùng chung trường nhóm khách hàng hiện tại; mỗi khách hàng thuộc một nhóm. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
 
 Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có hai lựa chọn:
 
@@ -178,6 +178,8 @@ Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có h
 
 Menu Hành động → **Thêm data** cũng hỗ trợ TXT/CSV/Excel và thêm bằng nhóm. Việc bổ sung chuyển danh sách hiện tại thành danh sách riêng, giữ lịch sử và chống gửi trùng như trước. Lưu data không gọi Zalo.
 
-Tệp tối đa 2 MB và 500 dòng mỗi lần nhập. TXT mỗi dòng một số. CSV/Excel cần cột `phone`, tùy chọn `name,zalo_id,email,info1,info2,info3,info4,info5`. Có tệp mẫu ở `static/data-template.csv`. Excel dùng định dạng văn bản cho cột số điện thoại; `.xls` chưa hỗ trợ. Chưa có nguồn dữ liệu quét để nhập.
+Tệp tối đa 2 MB và 500 dòng mỗi lần nhập. TXT mỗi dòng một số. CSV/Excel cần cột `phone`, tùy chọn `name,zalo_id,email,info1,info2,info3,info4,info5`. Có tệp mẫu ở `static/data-template.csv`. Excel dùng định dạng văn bản cho cột số điện thoại; hỗ trợ cả `.xlsx` và `.xls`. Chưa có nguồn dữ liệu quét để nhập.
 
-Cập nhật VPS theo quy trình `deployment/update.sh` hiện có để cài thêm `openpyxl==3.1.5` và khởi động lại dịch vụ. Bảng nhóm được tạo bổ sung khi khởi động, không xóa dữ liệu cũ.
+Cập nhật VPS theo quy trình `deployment/update.sh` hiện có để cài thêm `openpyxl==3.1.5` và `xlrd==2.0.2` và khởi động lại dịch vụ. Bảng nhóm được tạo bổ sung khi khởi động, không xóa dữ liệu cũ.
+
+Tab **Từ template Excel ZaloFlow** hỗ trợ chọn hoặc kéo thả một tệp, tự đọc và xem trước trước khi lưu. Có thể dùng tiêu đề `name,phone,info1…info5` hoặc `Tên,Số điện thoại,Info 1…Info 5`. Tab **File Excel/CSV của khách hàng** cho phép tự chọn cột và bỏ dòng tiêu đề. Chuẩn hóa/xem trước chưa ghi dữ liệu; chỉ nút **Thêm vào nhóm** mới lưu.

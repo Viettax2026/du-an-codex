@@ -1,6 +1,7 @@
 """Bounded, validated contact imports shared by campaigns and data groups."""
 import csv
 import io
+import unicodedata
 from pathlib import Path
 from zipfile import BadZipFile
 from xml.etree.ElementTree import ParseError
@@ -18,32 +19,20 @@ def read_contacts(upload, parse_phones):
             return {phone: {'phone': phone} for phone in parse_phones(data.decode('utf-8-sig'))}
         if suffix == '.csv':
             reader = csv.DictReader(io.StringIO(data.decode('utf-8-sig')))
+            if reader.fieldnames:
+                reader.fieldnames = [canonical_header(cell) for cell in reader.fieldnames]
             if not reader.fieldnames or 'phone' not in reader.fieldnames:
                 raise ValueError('Tệp cần cột phone; tùy chọn name, zalo_id, email, info1…info5.')
             rows = reader
-        elif suffix == '.xlsx':
-            from openpyxl import load_workbook
-            from zipfile import ZipFile
-            with ZipFile(io.BytesIO(data)) as archive:
-                if sum(item.file_size for item in archive.infolist()) > 20 * 1024 * 1024:
-                    raise ValueError('Tệp Excel giải nén quá lớn.')
-            book = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
-            try:
-                sheet = book.active.iter_rows(values_only=True)
-                headers = [str(cell or '').strip() for cell in next(sheet)]
-                if 'phone' not in headers:
-                    raise ValueError('Excel cần hàng đầu có cột phone.')
-                rows = []
-                for index, row in enumerate(sheet):
-                    if not any(cell is not None and str(cell).strip() for cell in row):
-                        continue
-                    if index >= 500:
-                        raise ValueError('Tệp tối đa 500 dòng.')
-                    rows.append(dict(zip(headers, row)))
-            finally:
-                book.close()
+        elif suffix in ('.xlsx', '.xls'):
+            from werkzeug.datastructures import FileStorage
+            table = read_sheet_rows(FileStorage(stream=io.BytesIO(data), filename=upload.filename))
+            headers = [canonical_header(cell) for cell in table[0]]
+            if 'phone' not in headers:
+                raise ValueError('Excel cần hàng đầu có cột phone hoặc Số điện thoại.')
+            rows = (dict(zip(headers, row)) for row in table[1:])
         else:
-            raise ValueError('Chọn tệp TXT, CSV UTF-8 hoặc Excel .xlsx.')
+            raise ValueError('Chọn tệp TXT, CSV UTF-8 hoặc Excel .xlsx/.xls.')
         result = {}
         for index, row in enumerate(rows):
             if index >= 500:
@@ -89,6 +78,19 @@ def read_sheet_rows(upload):
             except csv.Error:
                 dialect = csv.excel
             source = csv.reader(io.StringIO(text), dialect)
+        elif suffix == '.xls':
+            import xlrd
+            try:
+                legacy = xlrd.open_workbook(file_contents=data, on_demand=True)
+                try:
+                    sheet = legacy.sheet_by_index(0)
+                    if sheet.nrows > 5000 or sheet.ncols > 100:
+                        raise ValueError('Tệp tối đa 5000 dòng kể cả dòng trống và 100 cột.')
+                    source = [sheet.row_values(index) for index in range(sheet.nrows)]
+                finally:
+                    legacy.release_resources()
+            except xlrd.XLRDError as error:
+                raise ValueError('Tệp Excel .xls không hợp lệ.') from error
         elif suffix == '.xlsx':
             from openpyxl import load_workbook
             from zipfile import ZipFile
@@ -98,7 +100,7 @@ def read_sheet_rows(upload):
             book = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
             source = book.active.iter_rows(values_only=True)
         else:
-            raise ValueError('Chọn CSV UTF-8 hoặc Excel .xlsx.')
+            raise ValueError('Chọn CSV UTF-8 hoặc Excel .xlsx/.xls.')
         rows = []
         for index, row in enumerate(source):
             if index >= 5000:
@@ -107,7 +109,7 @@ def read_sheet_rows(upload):
                 continue
             if len(row) > 100:
                 raise ValueError('Tệp tối đa 100 cột.')
-            rows.append(['' if cell is None else str(cell).strip() for cell in row])
+            rows.append(['' if cell is None else str(int(cell)) if isinstance(cell, float) and cell.is_integer() else str(cell).strip() for cell in row])
             if len(rows) > 501:
                 raise ValueError('Tệp tối đa 500 dòng data và một dòng tiêu đề.')
         if not rows:
@@ -146,3 +148,11 @@ def read_mapped_contacts(upload, parse_phones, mapping, skip_header):
     for row in data_rows:
         writer.writerow([row[chosen[field]] if field in chosen and chosen[field] < len(row) else '' for field in fields])
     return read_contacts(FileStorage(stream=io.BytesIO(stream.getvalue().encode('utf-8')), filename='mapped.csv'), parse_phones)
+
+
+def canonical_header(value):
+    normalized = ''.join(char for char in unicodedata.normalize('NFD', str(value or '').strip().lower()) if unicodedata.category(char) != 'Mn').replace('đ', 'd')
+    aliases = {'ten': 'name', 'ho ten': 'name', 'sdt': 'phone', 'so dien thoai': 'phone', 'phone number': 'phone', 'uid': 'zalo_id'}
+    if normalized.startswith('info '):
+        normalized = normalized.replace(' ', '')
+    return aliases.get(normalized, normalized)

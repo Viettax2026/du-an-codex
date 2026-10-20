@@ -68,6 +68,7 @@ if (fileImportForm) {
     status.textContent = message;
   }
   function activateTab(tab) {
+    fileImportForm.dataset.activeTab = tab.dataset.importTab;
     const isText = tab.dataset.importTab === 'txt';
     tabs.forEach(button => { const active = button === tab; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
     const textPanel = fileImportForm.querySelector('#txt-import-panel');
@@ -78,11 +79,14 @@ if (fileImportForm) {
     const mapped = tab.dataset.importTab === 'file';
     fileImportForm.querySelector('[data-customer-mapping]').hidden = !mapped;
     fileImportForm.querySelector('[data-template-help]').hidden = mapped;
+    fileImportForm.querySelector('[data-template-downloads]').hidden = mapped;
+    format.hidden = tab.dataset.importTab === 'template';
     fileImportForm.elements.import_mode.disabled = !mapped;
     fileImportForm.elements.skip_header.disabled = !mapped;
     fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.disabled = !mapped);
     clearPreview();
     if (mapped && spreadsheet.files.length) inspectColumns();
+    else if (!isText && spreadsheet.files.length) formatImport();
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => activateTab(tab));
@@ -140,6 +144,7 @@ if (fileImportForm) {
     clearPreview();
     fileImportForm.querySelector('[data-upload-filename]').textContent = spreadsheet.files[0]?.name || 'Chưa chọn tệp.';
     if (!fileImportForm.elements.import_mode.disabled) inspectColumns();
+    else if (spreadsheet.files.length) formatImport();
   });
   fileImportForm.elements.skip_header.addEventListener('change', () => clearPreview());
   fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.addEventListener('change', () => clearPreview()));
@@ -157,7 +162,7 @@ if (fileImportForm) {
     } catch { status.textContent = 'Không đọc được file TXT. Vui lòng dùng UTF-8.'; }
     finally { event.target.value = ''; }
   });
-  format.addEventListener('click', async () => {
+  async function formatImport() {
     clearPreview('Đang kiểm tra dữ liệu…');
     const current = revision;
     format.disabled = true;
@@ -178,6 +183,15 @@ if (fileImportForm) {
       ready = data.total > 0; save.disabled = !ready;
     } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn hoặc máy chủ không trả dữ liệu. Tải lại trang.' : error.message; }
     finally { format.disabled = false; }
+  }
+  format.addEventListener('click', formatImport);
+  const dropzone = fileImportForm.querySelector('[data-spreadsheet-dropzone]');
+  dropzone.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); spreadsheet.click(); } });
+  ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.add('dragging'); }));
+  ['dragleave', 'drop'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.remove('dragging'); }));
+  dropzone.addEventListener('drop', event => {
+    if (event.dataTransfer.files.length !== 1) { clearPreview('Chọn một file Excel/CSV mỗi lần.'); return; }
+    spreadsheet.files = event.dataTransfer.files; spreadsheet.dispatchEvent(new Event('change'));
   });
   fileImportForm.addEventListener('submit', event => { if (!ready) { event.preventDefault(); status.textContent = 'Bấm Format chuẩn dữ liệu trước khi thêm vào nhóm.'; } });
 }

@@ -1,3 +1,3 @@
 <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones','') }}</textarea></label>
-<label>Thêm từ file data<input type="file" name="file" accept=".txt,.csv,.xlsx"></label>
-<p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx: hàng đầu có cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB và 500 dòng mỗi lần nhập. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>. Excel: nên định dạng cột phone là văn bản để giữ số 0 đầu.</p>
+<label>Thêm từ file data<input type="file" name="file" accept=".txt,.csv,.xlsx,.xls"></label>
+<p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx/.xls: hàng đầu có cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB và 500 dòng mỗi lần nhập. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>. Excel: nên định dạng cột phone là văn bản để giữ số 0 đầu.</p>
