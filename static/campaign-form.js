@@ -69,3 +69,32 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     picker.querySelector('[data-date-token]').addEventListener('click', () => insert('#{TODAY('+picker.querySelector('[data-date-format]').value+')}'));
   });
 });
+
+document.querySelectorAll('.campaign-wizard').forEach(form => {
+  const phones = form.elements.phones;
+  const direct = form.querySelector('[data-direct-data]');
+  const group = form.querySelector('[data-group-data]');
+  function updateDataSource() {
+    const isDirect = form.elements.data_mode.value === 'direct';
+    direct.hidden = !isDirect;
+    group.hidden = isDirect;
+    direct.querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = !isDirect);
+    group.querySelectorAll('select').forEach(el => { el.disabled = isDirect; el.required = !isDirect; });
+    form.elements.phones_consent.required = isDirect;
+    const count = new Set(phones.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)).size;
+    form.querySelector('[data-phone-count]').textContent = count + ' số đã nhập';
+  }
+  form.querySelectorAll('[name=data_mode]').forEach(el => el.addEventListener('change', updateDataSource));
+  phones.addEventListener('input', updateDataSource);
+  form.querySelector('[data-focus-phones]').addEventListener('click', () => phones.focus());
+  form.querySelector('[data-show-groups]').addEventListener('click', () => {
+    const picker = form.querySelector('[data-group-picker]'); picker.hidden = !picker.hidden;
+  });
+  form.querySelector('[data-clear-data]').addEventListener('click', () => {
+    if (!window.confirm('Xóa danh sách nhập, tệp và nhóm đã chọn trong biểu mẫu này?')) return;
+    phones.value = ''; form.elements.data_file.value = '';
+    Array.from(form.elements.source_tags.options).forEach(option => option.selected = false);
+    updateDataSource();
+  });
+  updateDataSource();
+});

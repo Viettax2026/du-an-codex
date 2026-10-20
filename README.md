@@ -166,3 +166,18 @@ bash deployment/update.sh
 Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng dịch vụ ZaloFlow vào thư mục root-only /var/backups/zaloflow/update-*, khởi động ứng dụng để nâng cấp SQLite và kiểm tra /login nội bộ. Script chỉ sửa client_max_body_size của tệp Nginx cskh.viettaxco.com lên 12m, giữ cấu hình HTTPS và từ chối tự sửa nếu tệp chứa tên miền khác. Các dịch vụ website khác không bị dừng. Bản sao lưu chứa dữ liệu, khóa và phiên Zalo; bảo vệ thư mục đó. Script không tự khôi phục dữ liệu nếu nâng cấp lỗi; giữ bản sao để kiểm tra trước khi phục hồi.
 
 Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.
+
+## Nhóm data và nguồn data chiến dịch
+
+Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`. Nhóm dùng chung trường nhóm khách hàng hiện tại; mỗi khách hàng thuộc một nhóm. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
+
+Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có hai lựa chọn:
+
+- **Thêm trực tiếp:** nhập số, tải tệp hoặc **Thêm bằng nhóm** để chốt khách hàng đã đồng ý từ nhóm vào danh sách riêng. Số trùng được loại bỏ; tối đa 500 số trong chiến dịch. **Xóa hết** chỉ xóa lựa chọn trong biểu mẫu, có xác nhận trước khi xóa.
+- **Chọn nhóm data để chạy:** chọn một nhóm, danh sách người nhận theo khách hàng đã đồng ý của nhóm tại thời điểm xử lý. Thay đổi nhóm sẽ ảnh hưởng danh sách chưa xử lý; các bản xem trước và nhật ký đã có vẫn được giữ nguyên.
+
+Menu Hành động → **Thêm data** cũng hỗ trợ TXT/CSV/Excel và thêm bằng nhóm. Việc bổ sung chuyển danh sách hiện tại thành danh sách riêng, giữ lịch sử và chống gửi trùng như trước. Lưu data không gọi Zalo.
+
+Tệp tối đa 2 MB và 500 dòng mỗi lần nhập. TXT mỗi dòng một số. CSV/Excel cần cột `phone`, tùy chọn `name,zalo_id,email,info1,info2,info3,info4,info5`. Có tệp mẫu ở `static/data-template.csv`. Excel dùng định dạng văn bản cho cột số điện thoại; `.xls` chưa hỗ trợ. Chưa có nguồn dữ liệu quét để nhập.
+
+Cập nhật VPS theo quy trình `deployment/update.sh` hiện có để cài thêm `openpyxl==3.1.5` và khởi động lại dịch vụ. Bảng nhóm được tạo bổ sung khi khởi động, không xóa dữ liệu cũ.

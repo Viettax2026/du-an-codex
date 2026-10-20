@@ -1,0 +1,89 @@
+import io
+import sqlite3
+
+from openpyxl import Workbook
+from test_workflow import app, post, register
+
+
+def database(app):
+    return sqlite3.connect(app.config['DATABASE'])
+
+
+def test_group_import_metadata_duplicates_and_consent(app):
+    client = app.test_client()
+    register(client)
+    assert 'Nhóm data' in post(client, '/data-groups', {'name': 'VIP'}).text
+    result = post(client, '/data-groups/import', {'group': 'VIP', 'consent': 'yes',
+        'file': (io.BytesIO('phone,name,email,info1\n+84901234567,Lan,lan@example.com,A\n'.encode()), 'contacts.csv')})
+    assert 'Lan' in result.text
+    post(client, '/data-groups', {'name': 'Other'})
+    post(client, '/data-groups/import', {'group': 'Other', 'phones': '0901234567\n0912345678'})
+    with database(app) as db:
+        assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts WHERE phone=?', ('0901234567',)).fetchone() == ('Lan', 'VIP', 1, 'lan@example.com', 'A')
+        assert db.execute('SELECT consent FROM contacts WHERE phone=?', ('0912345678',)).fetchone() == (0,)
+    # A group that has no consented members contributes no recipients.
+    post(client, '/campaigns', {'name': 'Group', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Other'})
+    with database(app) as db:
+        assert db.execute('SELECT audience_mode,tag FROM campaigns').fetchone() == ('group', 'Other')
+
+
+def test_campaign_file_import_edit_and_snapshot_group(app):
+    client = app.test_client()
+    register(client)
+    book = Workbook()
+    book.active.append(['phone', 'name', 'info2'])
+    book.active.append([901234567, 'Lan', 'Excel'])
+    stream = io.BytesIO()
+    book.save(stream)
+    stream.seek(0)
+    result = post(client, '/campaigns', {'name': 'Excel', 'message': 'Hi', 'data_mode': 'direct',
+        'data_file': (stream, 'data.xlsx'), 'phones_consent': 'yes'})
+    assert 'Excel' in result.text
+    with database(app) as db:
+        assert db.execute('SELECT name,phone,info2 FROM contacts').fetchone() == ('Lan', '0901234567', 'Excel')
+        assert db.execute('SELECT audience_mode FROM campaigns').fetchone() == ('list',)
+    assert 'Cách thêm data vào chiến dịch' in client.get('/campaigns/1/edit').text
+    post(client, '/data-groups', {'name': 'VIP'})
+    post(client, '/data-groups/import', {'group': 'VIP', 'phones': '0912345678', 'consent': 'yes'})
+    post(client, '/campaigns/1/edit', {'name': 'Snapshot', 'message': 'Hi', 'data_mode': 'direct',
+        'source_tags': 'VIP', 'phones_consent': 'yes'})
+    post(client, '/data-groups/import', {'group': 'VIP', 'phones': '0923456789', 'consent': 'yes'})
+    with database(app) as db:
+        assert db.execute('SELECT p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=1').fetchall() == [('0912345678',)]
+    # Existing campaign add-data supports TXT and group snapshot together.
+    post(client, '/campaigns/1/data', {'source_tag': 'VIP', 'consent': 'yes',
+        'file': (io.BytesIO(b'0934567890'), 'data.txt')})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM campaign_contacts WHERE campaign_id=1').fetchone() == (3,)
+
+
+def test_import_errors_rollback_and_tenant_isolation(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Private'})
+    post(client, '/data-groups/import', {'group': 'Private', 'phones': '0901234567',
+        'file': (io.BytesIO(b'phone,name\ninvalid,Bad'), 'bad.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    other = app.test_client()
+    register(other, 'other')
+    assert other.get('/data-groups?group=Private').status_code == 404
+    assert post(other, '/data-groups/import', {'group': 'Private', 'phones': '0901234567'}).status_code == 404
+    post(client, '/campaigns', {'name': 'Missing', 'message': 'Hi', 'data_mode': 'direct', 'phones': '0901234567'})
+    post(client, '/campaigns', {'name': 'Empty', 'message': 'Hi', 'data_mode': 'direct'})
+    post(client, '/campaigns', {'name': 'Missing group', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Secret'})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM campaigns').fetchone() == (0,)
+
+
+def test_invalid_excel_and_large_import_are_atomic(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'VIP'})
+    for content, filename in [(b'broken', 'bad.xlsx'), (b'x' * (2 * 1024 * 1024 + 1), 'big.csv'),
+                              (b'phone\n' + b'0901234567\n' * 501, 'many.csv')]:
+        response = post(client, '/data-groups/import', {'group': 'VIP', 'consent': 'yes',
+            'phones': '0912345678', 'file': (io.BytesIO(content), filename)})
+        assert response.status_code == 200
+        with database(app) as db:
+            assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)

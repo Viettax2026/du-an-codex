@@ -24,9 +24,9 @@
   {% set media=campaign_media(campaign.media_id) %}{% if media %}{% include '_media_preview.html' %}<label class="send-confirm"><input type="checkbox" name="remove_media" value="yes"> Gỡ media khỏi nội dung mới</label>{% endif %}
   {% if campaign.send_message %}<label>Tải media mới (thay thế media hiện tại)<input type="file" name="media" accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4"></label><small>1 tệp JPG, PNG, WEBP, PDF hoặc MP4, tối đa 10 MB. Media chỉ gửi sau khi bạn xác nhận tại bản xem trước.</small>{% else %}<p>Chiến dịch chỉ kết bạn không gửi media. Nhân bản hoặc sửa bản nháp để bật nhắn tin.</p>{% endif %}
 {% elif action=='data' %}
-  <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="6" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones','') }}</textarea></label>
-  <label>Hoặc nhập CSV UTF-8<input type="file" name="file" accept=".csv,text/csv"></label>
-  <p class="muted">CSV có cột phone; tùy chọn name, email, info1…info5. Tối đa 500 số trong toàn chiến dịch. Số trùng bỏ qua; thông tin khách hàng đã có được giữ nguyên.</p>
+  {% include '_data_upload.html' %}
+  <label>Hoặc thêm bằng nhóm data<select name="source_tag"><option value="">Không chọn nhóm</option>{% for t in data_tags %}<option value="{{ t.tag }}">{{ t.tag }}</option>{% endfor %}</select></label>
+  <p class="muted">Chỉ bổ sung khách hàng đã đồng ý trong nhóm được chọn; chốt danh sách tại thời điểm lưu.</p>
   <label class="send-confirm"><input type="checkbox" name="consent" value="yes" required> Tôi xác nhận các khách hàng bổ sung đã đồng ý nhận nội dung này.</label>
   <p>Khi đang dùng nhóm, danh sách khách hàng đồng ý hiện tại được giữ lại thành danh sách riêng rồi bổ sung số mới. Nhật ký và các lần gửi cũ giữ nguyên.</p>
 {% elif action=='delete' %}

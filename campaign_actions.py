@@ -9,6 +9,7 @@ from pathlib import Path
 
 from flask import abort, flash, g, redirect, render_template, request, send_file, url_for
 from PIL import Image
+from data_import import read_contacts, insert_contact
 from werkzeug.utils import secure_filename
 
 
@@ -322,23 +323,13 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 if request.form.get('consent') != 'yes':
                     raise ValueError('Cần xác nhận khách hàng đã đồng ý nhận nội dung này.')
                 incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
-                uploaded = request.files.get('file')
-                if uploaded and uploaded.filename:
-                    data = uploaded.read(2 * 1024 * 1024 + 1)
-                    if len(data) > 2 * 1024 * 1024:
-                        raise ValueError('CSV không vượt quá 2 MB.')
-                    reader = csv.DictReader(io.StringIO(data.decode('utf-8-sig')))
-                    if not reader.fieldnames or 'phone' not in reader.fieldnames:
-                        raise ValueError('CSV cần cột phone; tùy chọn name, email, info1…info5.')
-                    for index, row in enumerate(reader):
-                        if index >= 500:
-                            raise ValueError('CSV tối đa 500 dòng.')
-                        phones = parse_phones(row.get('phone') or '')
-                        if len(phones) != 1:
-                            raise ValueError('Mỗi dòng CSV cần đúng một số điện thoại.')
-                        incoming[phones[0]] = row
+                incoming.update(read_contacts(request.files.get('file'), parse_phones))
+                source = request.form.get('source_tag', '')
+                if source:
+                    for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND tag=? AND consent=1', (g.user['id'], source)):
+                        incoming.setdefault(person['phone'], dict(person))
                 if not incoming:
-                    raise ValueError('Nhập số điện thoại hoặc chọn CSV để bổ sung.')
+                    raise ValueError('Nhập số điện thoại, chọn tệp hoặc chọn nhóm để bổ sung.')
                 db().execute('BEGIN IMMEDIATE')
                 campaign = manager.owned(campaign_id)
                 existing = list(audience(campaign)) if campaign['audience_mode'] == 'group' else db().execute(
@@ -349,13 +340,8 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     db().execute('INSERT OR IGNORE INTO campaign_contacts VALUES (?,?)', (campaign_id, person['id']))
                 added = 0
                 for phone, row in incoming.items():
-                    name = (row.get('name') or 'Khách hàng ' + phone).strip()
-                    extras = [(row.get(key) or '').strip() for key in ('email', 'info1', 'info2', 'info3', 'info4', 'info5')]
-                    if not name or len(name) > 100 or len(extras[0]) > 254 or any(len(value) > 500 for value in extras[1:]):
-                        raise ValueError('Tên, email hoặc thông tin cá nhân hóa vượt độ dài cho phép.')
-                    db().execute('''INSERT INTO contacts(user_id,name,phone,consent,email,info1,info2,info3,info4,info5)
-                        VALUES (?,?,?,1,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO UPDATE SET consent=1''',
-                        (g.user['id'], name, phone, *extras))
+                    insert_contact(db(), g.user['id'], phone, row)
+                    db().execute('UPDATE contacts SET consent=1 WHERE user_id=? AND phone=?', (g.user['id'], phone))
                     person = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
                     added += db().execute('INSERT OR IGNORE INTO campaign_contacts VALUES (?,?)', (campaign_id, person['id'])).rowcount
                 db().execute("UPDATE campaigns SET audience_mode='list' WHERE id=?", (campaign_id,))
@@ -366,7 +352,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
             except (ValueError, UnicodeError, csv.Error) as error:
                 db().rollback()
                 flash(str(error) if isinstance(error, ValueError) and not isinstance(error, UnicodeError) else 'CSV cần đúng định dạng UTF-8.', 'error')
-        return render_template('campaign_action.html', campaign=campaign, action='data', page='campaigns')
+        return render_template('campaign_action.html', campaign=campaign, action='data', page='campaigns', data_tags=db().execute('SELECT DISTINCT tag FROM contacts WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall())
 
     @app.route('/campaigns/<int:campaign_id>/delete', methods=['GET', 'POST'])
     @login_required

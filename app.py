@@ -14,6 +14,7 @@ from flask import Flask, flash, g, jsonify, redirect, render_template, request, 
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
 from personalization import personalize
+from data_import import read_contacts, insert_contact
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 
 
@@ -163,7 +164,24 @@ def create_app(test_config=None):
         account_id = request.form.get('account_id') or None
         if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=?', (account_id, g.user['id'])).fetchone():
             raise ValueError('Tài khoản Zalo không hợp lệ.')
-        phones = parse_phones(request.form.get('phones', ''))
+        mode = request.form.get('data_mode')
+        if mode not in (None, 'direct', 'group'):
+            raise ValueError('Nguồn data không hợp lệ.')
+        if mode == 'group':
+            if not tag or not db().execute('SELECT 1 FROM contacts WHERE user_id=? AND tag=?', (g.user['id'], tag)).fetchone():
+                raise ValueError('Chọn nhóm data hiện có.')
+            return name, message, tag, account_id, []
+        incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
+        incoming.update(read_contacts(request.files.get('data_file'), parse_phones))
+        for source in request.form.getlist('source_tags'):
+            for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND tag=? AND consent=1', (g.user['id'], source)):
+                incoming.setdefault(person['phone'], dict(person))
+        if len(incoming) > 500:
+            raise ValueError('Danh sách chiến dịch tối đa 500 số.')
+        if mode == 'direct' and not incoming:
+            raise ValueError('Thêm ít nhất một số điện thoại hoặc chọn nhóm có khách hàng đồng ý nhận tin.')
+        g.imported_contacts = incoming
+        phones = list(incoming)
         if phones and request.form.get('phones_consent') != 'yes':
             raise ValueError('Cần xác nhận các số điện thoại đã đồng ý nhận nội dung này.')
         return name, message, tag, account_id, phones
@@ -173,6 +191,7 @@ def create_app(test_config=None):
         db().execute('UPDATE campaigns SET audience_mode=? WHERE id=?', ('list' if phones else 'group', campaign_id))
         db().execute('DELETE FROM campaign_contacts WHERE campaign_id=?', (campaign_id,))
         for phone in phones:
+            insert_contact(db(), g.user['id'], phone, getattr(g, 'imported_contacts', {}).get(phone, {}))
             db().execute('''INSERT INTO contacts(user_id,name,phone,consent) VALUES (?,?,?,1)
                 ON CONFLICT(user_id,phone) DO UPDATE SET consent=1''', (g.user['id'], 'Khách hàng ' + phone, phone))
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
@@ -722,6 +741,8 @@ def create_app(test_config=None):
         db().commit()
         click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')
 
+    from data_groups import register_data_groups
+    register_data_groups(app, db, login_required, parse_phones)
     return app
 
 

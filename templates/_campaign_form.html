@@ -1,12 +1,12 @@
 {% set editing = campaign is defined and campaign %}
-<form class="campaign-wizard" method="post" action="{{ url_for('edit_campaign', campaign_id=campaign.id) if editing else url_for('campaigns') }}">
+<form class="campaign-wizard" method="post" enctype="multipart/form-data" action="{{ url_for('edit_campaign', campaign_id=campaign.id) if editing else url_for('campaigns') }}">
 <input type="hidden" name="csrf" value="{{ session.csrf }}">
 <input type="hidden" name="options_present" value="yes">
 <aside class="wizard-steps" aria-label="Các phần cài đặt">
   <a href="#wizard-general"><span>1</span><b>Cài đặt chung</b><small>Tài khoản · Tên chiến dịch</small></a>
   <a href="#wizard-actions"><span>2</span><b>Tùy chọn hành động</b><small>Nhắn tin · Kết bạn</small></a>
-  <a href="#wizard-phones"><span>3</span><b>Danh sách SĐT</b><small>Người nhận · Nhóm khách hàng</small></a>
-  <a href="#wizard-message"><span>4</span><b>Nội dung tin nhắn</b><small>Cá nhân hóa · Xem trước</small></a>
+  <a href="#wizard-source"><span>3</span><b>Cách thêm data</b><small>Nguồn data</small></a><a href="#wizard-phones"><span>4</span><b>Danh sách SĐT</b><small>Nhập tệp · Thêm bằng nhóm</small></a>
+  <a href="#wizard-message"><span>5</span><b>Nội dung tin nhắn</b><small>Cá nhân hóa · Xem trước</small></a>
 </aside>
 <div class="wizard-sections">
 <section class="wizard-card" id="wizard-general"><h3><span>1</span> Cài đặt chung</h3><div class="wizard-card-body">
@@ -28,14 +28,24 @@
   <p class="muted">Chỉ đổi tên gợi nhớ trong tài khoản gửi. Zalo có thể từ chối nếu người nhận chưa là bạn bè.</p>
   <div class="wizard-preview"><b>Tên gợi nhớ mẫu</b><p data-alias-preview></p></div>
 </div></section>
-<section class="wizard-card" id="wizard-phones"><h3><span>3</span> Danh sách SĐT</h3><div class="wizard-card-body">
-  <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>
-  <label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
-  <p class="muted">Tối đa 500 số, số trùng chỉ lưu một lần. Danh sách này chỉ dùng cho chiến dịch hiện tại.</p>
-  <label>Hoặc dùng nhóm khách hàng hiện có<select name="tag"><option value="">Tất cả nhóm</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label>
-  <p class="muted">Khi nhập danh sách SĐT, chiến dịch chỉ dùng các số đó. Để trống danh sách để dùng nhóm đã chọn, gồm khách hàng đồng ý nhận tin.</p>
+{% set data_mode = request.form.get('data_mode', 'direct' if not editing or campaign.audience_mode=='list' else 'group') %}
+<section class="wizard-card" id="wizard-source"><h3><span>3</span> Cách thêm data vào chiến dịch</h3><div class="wizard-card-body data-source-options">
+<label class="data-source-choice"><input type="radio" name="data_mode" value="direct" {{ 'checked' if data_mode=='direct' }}><span><b>Thêm trực tiếp data vào chiến dịch</b><small>Nhập số, tải tệp hoặc thêm data hiện tại từ nhóm vào danh sách riêng.</small></span></label>
+<label class="data-source-choice"><input type="radio" name="data_mode" value="group" {{ 'checked' if data_mode=='group' }}><span><b>Chọn nhóm data để chạy</b><small>Dùng khách hàng đồng ý nhận tin trong nhóm; danh sách thay đổi theo nhóm.</small></span></label>
 </div></section>
-<section class="wizard-card" id="wizard-message"><h3><span>4</span> Nội dung tin nhắn</h3><div class="wizard-card-body">
+<section class="wizard-card" id="wizard-phones"><h3><span>4</span> Danh sách SĐT <small data-phone-count></small></h3><div class="wizard-card-body">
+<div data-direct-data>
+<div class="data-toolbar"><button class="ghost" type="button" data-focus-phones>＋ Thêm data</button><button class="ghost" type="button" data-show-groups>▱ Thêm bằng nhóm</button><button class="danger-button" type="button" data-clear-data>Xóa hết</button></div>
+<label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>
+<label>Thêm từ file data<input type="file" name="data_file" accept=".txt,.csv,.xlsx"></label>
+<p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx: cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB, 500 dòng. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>.</p>
+<div data-group-picker hidden><label>Thêm data hiện tại từ nhóm<select name="source_tags" multiple size="4">{% for t in tags %}<option value="{{ t.tag }}">{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ lấy khách hàng đã đồng ý nhận tin. Danh sách được chốt khi lưu chiến dịch.</p></div>
+<label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
+<p class="muted">Tối đa 500 số trong chiến dịch; số trùng chỉ lưu một lần. Thông tin khách hàng đã có được giữ nguyên.</p>
+</div>
+<div data-group-data><label>Nhóm data<select name="tag"><option value="">Chọn nhóm data</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ khách hàng đồng ý nhận tin được sử dụng. <a href="{{ url_for('data_groups') }}">Quản lý nhóm data →</a></p></div>
+</div></section>
+<section class="wizard-card" id="wizard-message"><h3><span>5</span> Nội dung tin nhắn</h3><div class="wizard-card-body">
   {% set personal_target='message' %}{% include '_personalize_picker.html' %}
   <label>Nội dung<textarea name="message" rows="6" required maxlength="2000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', campaign.message if editing else '') }}</textarea></label>
   <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu.</p>
