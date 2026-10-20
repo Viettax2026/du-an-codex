@@ -75,8 +75,14 @@ if (fileImportForm) {
     textPanel.hidden = !isText; filePanel.hidden = isText;
     filePanel.setAttribute('aria-labelledby', tab.id);
     phones.disabled = !isText; spreadsheet.disabled = isText;
-    fileImportForm.querySelector('[data-file-import-heading]').textContent = tab.dataset.importTab === 'template' ? 'Nhập theo template Excel ZaloFlow' : 'File Excel/CSV của khách hàng';
+    const mapped = tab.dataset.importTab === 'file';
+    fileImportForm.querySelector('[data-customer-mapping]').hidden = !mapped;
+    fileImportForm.querySelector('[data-template-help]').hidden = mapped;
+    fileImportForm.elements.import_mode.disabled = !mapped;
+    fileImportForm.elements.skip_header.disabled = !mapped;
+    fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.disabled = !mapped);
     clearPreview();
+    if (mapped && spreadsheet.files.length) inspectColumns();
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => activateTab(tab));
@@ -90,7 +96,53 @@ if (fileImportForm) {
     });
   });
   phones.addEventListener('input', () => clearPreview());
-  spreadsheet.addEventListener('change', () => clearPreview());
+  let sheetColumns = [];
+  function fillColumns(autoSelect = false) {
+    const aliases = { name: ['name','ten','ho ten','fullname','full name'], phone: ['phone','sdt','so dien thoai','phone number','mobile'] };
+    fileImportForm.querySelectorAll('[data-column-field]').forEach(select => {
+      const previous = select.value;
+      select.replaceChildren(new Option('— Bỏ qua —', ''));
+      sheetColumns.forEach(column => {
+        const label = `Cột ${column.index + 1}${column.sample ? ': ' + column.sample : ''}`;
+        select.add(new Option(label, String(column.index)));
+      });
+      if (!autoSelect) select.value = previous;
+      else if (fileImportForm.elements.skip_header.checked) {
+        const field = select.dataset.columnField;
+        const found = sheetColumns.find(column => {
+          const normalized = column.sample.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim().replace(/đ/g, 'd');
+          return (aliases[field] || [field, field.replace('info', 'info ')]).includes(normalized);
+        });
+        if (found) select.value = String(found.index);
+      }
+    });
+  }
+  async function inspectColumns() {
+    clearPreview('Đang đọc cột từ tệp…');
+    sheetColumns = []; fillColumns(true);
+    const current = revision;
+    const file = spreadsheet.files[0];
+    if (!file) return;
+    fileImportForm.querySelector('[data-upload-filename]').textContent = file.name;
+    if (file.size > 2 * 1024 * 1024) { status.textContent = 'Tệp không vượt quá 2 MB.'; return; }
+    format.disabled = true;
+    try {
+      const response = await fetch(fileImportForm.dataset.columnsUrl, {method: 'POST', body: new FormData(fileImportForm)});
+      const data = await response.json();
+      if (current !== revision) return;
+      if (!response.ok) throw new Error(data.error || 'Không đọc được cột trong tệp.');
+      sheetColumns = data.columns; fillColumns(true);
+      status.textContent = 'Đã đọc tệp. Kiểm tra dòng tiêu đề và chọn cột, rồi bấm Format chuẩn dữ liệu.';
+    } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
+    finally { format.disabled = false; }
+  }
+  spreadsheet.addEventListener('change', () => {
+    clearPreview();
+    fileImportForm.querySelector('[data-upload-filename]').textContent = spreadsheet.files[0]?.name || 'Chưa chọn tệp.';
+    if (!fileImportForm.elements.import_mode.disabled) inspectColumns();
+  });
+  fileImportForm.elements.skip_header.addEventListener('change', () => clearPreview());
+  fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.addEventListener('change', () => clearPreview()));
   fileImportForm.querySelector('[data-txt-upload]').addEventListener('change', async event => {
     const file = event.target.files[0];
     if (!file) return;

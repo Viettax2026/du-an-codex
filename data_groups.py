@@ -5,7 +5,7 @@ import io
 import math
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
-from data_import import read_contacts, insert_contact
+from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts
 
 
 def register_data_groups(app, db, login_required, parse_phones):
@@ -126,10 +126,31 @@ def register_data_groups(app, db, login_required, parse_phones):
         if request.form.get('data_type', 'phone') != 'phone':
             raise ValueError('Hiện hỗ trợ Zalo – User theo SĐT.')
         incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
-        incoming.update(read_contacts(request.files.get('file'), parse_phones))
+        if request.form.get('import_mode') == 'mapped':
+            if incoming:
+                raise ValueError('Chỉ nhập một nguồn dữ liệu mỗi lần.')
+            mapping = {key: request.form.get('column_' + key, '') for key in ('name','phone','info1','info2','info3','info4','info5')}
+            incoming.update(read_mapped_contacts(request.files.get('file'), parse_phones, mapping, request.form.get('skip_header') == 'yes'))
+        else:
+            incoming.update(read_contacts(request.files.get('file'), parse_phones))
         if not incoming or len(incoming) > 500:
             raise ValueError('Mỗi lần nhập từ 1 đến 500 số điện thoại.')
         return group, incoming
+
+    @app.post('/data-groups/import/columns')
+    @login_required
+    def inspect_group_import():
+        group = request.form.get('group', '')
+        if not db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
+                            (g.user['id'], group, g.user['id'], group)).fetchone():
+            abort(404)
+        try:
+            rows = read_sheet_rows(request.files.get('file'))
+            width = max(len(row) for row in rows)
+            return jsonify(columns=[{'index': index, 'sample': rows[0][index][:100] if index < len(rows[0]) else ''}
+                                    for index in range(width)], row_count=len(rows))
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
 
     @app.post('/data-groups/import/preview')
     @login_required

@@ -247,3 +247,54 @@ def test_excel_template_preview_keeps_personalization_and_skips_blank_formatted_
     assert 'File Excel/CSV của khách hàng' in page
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+
+
+def test_customer_csv_column_mapping_inspection_preview_and_save(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Mapped'})
+    raw = 'Ghi chú;Số điện thoại;Họ tên\nKhách VIP;+84901234567;Lan\n'.encode()
+    fields = {'group': 'Mapped', 'import_mode': 'mapped', 'skip_header': 'yes',
+              'column_name': '2', 'column_phone': '1', 'column_info3': '0'}
+    response = post(client, '/data-groups/import/columns', {'group': 'Mapped', 'file': (io.BytesIO(raw), 'customer.csv')})
+    assert response.json['columns'][1]['sample'] == 'Số điện thoại'
+    response = post(client, '/data-groups/import/preview', {**fields, 'file': (io.BytesIO(raw), 'customer.csv')})
+    assert response.status_code == 200
+    assert response.json['rows'][0]['name'] == 'Lan'
+    assert response.json['rows'][0]['phone'] == '0901234567'
+    assert response.json['rows'][0]['info3'] == 'Khách VIP'
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    post(client, '/data-groups/import', {**fields, 'consent': 'yes', 'file': (io.BytesIO(raw), 'customer.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT name,phone,info1,info3 FROM contacts').fetchone() == ('Lan', '0901234567', '', 'Khách VIP')
+
+
+def test_customer_xlsx_mapping_without_header_keeps_first_contact(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'No header'})
+    book = Workbook(); book.active.append(['Lan', 901234567, 'A']); book.active.append(['Bình', '0912345678', 'B'])
+    stream = io.BytesIO(); book.save(stream)
+    fields = {'group': 'No header', 'import_mode': 'mapped', 'column_name': '0', 'column_phone': '1', 'column_info1': '2'}
+    response = post(client, '/data-groups/import/preview', {**fields, 'file': (io.BytesIO(stream.getvalue()), 'data.xlsx')})
+    assert response.json['total'] == 2
+    assert response.json['rows'][0]['phone'] == '0901234567'
+    assert response.json['rows'][0]['info1'] == 'A'
+    assert response.json['rows'][1]['name'] == 'Bình'
+
+
+def test_customer_column_mapping_rejects_missing_duplicate_and_foreign_columns(app):
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Validate'})
+    raw = b'Name,Phone\nLan,0901234567\n'
+    for mapping in [{}, {'column_phone': '99'}, {'column_phone': '-1'}, {'column_phone': '1', 'column_name': '1'}]:
+        response = post(client, '/data-groups/import/preview', {'group': 'Validate', 'import_mode': 'mapped', 'skip_header': 'yes',
+            **mapping, 'file': (io.BytesIO(raw), 'data.csv')})
+        assert response.status_code == 400 and response.json['error']
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    other = app.test_client(); register(other, 'other')
+    assert post(other, '/data-groups/import/columns', {'group': 'Validate', 'file': (io.BytesIO(raw), 'data.csv')}).status_code == 404
+    assert client.post('/data-groups/import/columns', data={'group': 'Validate'}).status_code == 400
