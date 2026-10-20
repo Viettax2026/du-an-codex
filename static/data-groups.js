@@ -85,6 +85,7 @@ if (fileImportForm) {
     fileImportForm.elements.skip_header.disabled = !mapped;
     fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.disabled = !mapped);
     clearPreview();
+    renderRawPreview();
     if (mapped && spreadsheet.files.length) inspectColumns();
     else if (!isText && spreadsheet.files.length) formatImport();
   }
@@ -101,13 +102,38 @@ if (fileImportForm) {
   });
   phones.addEventListener('input', () => clearPreview());
   let sheetColumns = [];
+  let sheetPreviewRows = [];
+  const rawPreview = fileImportForm.querySelector('[data-raw-sheet-preview]');
+  function columnLetter(index) {
+    let value = index + 1; let label = '';
+    while (value > 0) { value -= 1; label = String.fromCharCode(65 + value % 26) + label; value = Math.floor(value / 26); }
+    return label;
+  }
+  function renderRawPreview() {
+    const head = fileImportForm.querySelector('[data-raw-sheet-head]');
+    const body = fileImportForm.querySelector('[data-raw-sheet-body]');
+    head.replaceChildren(); body.replaceChildren();
+    rawPreview.hidden = sheetColumns.length === 0 || fileImportForm.elements.import_mode.disabled;
+    if (rawPreview.hidden) return;
+    const header = document.createElement('tr');
+    sheetColumns.forEach(column => { const cell = document.createElement('th'); cell.textContent = columnLetter(column.index); header.append(cell); });
+    head.append(header);
+    const start = fileImportForm.elements.skip_header.checked ? 1 : 0;
+    const rows = sheetPreviewRows.slice(start, start + 5);
+    rows.forEach(values => {
+      const row = document.createElement('tr');
+      sheetColumns.forEach(column => { const cell = document.createElement('td'); cell.textContent = values[column.index] || ''; row.append(cell); });
+      body.append(row);
+    });
+    if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = sheetColumns.length; cell.textContent = 'Không có dòng data sau khi bỏ tiêu đề.'; row.append(cell); body.append(row); }
+  }
   function fillColumns(autoSelect = false) {
     const aliases = { name: ['name','ten','ho ten','fullname','full name'], phone: ['phone','sdt','so dien thoai','phone number','mobile'] };
     fileImportForm.querySelectorAll('[data-column-field]').forEach(select => {
       const previous = select.value;
       select.replaceChildren(new Option('— Bỏ qua —', ''));
       sheetColumns.forEach(column => {
-        const label = `Cột ${column.index + 1}${column.sample ? ': ' + column.sample : ''}`;
+        const label = `Cột ${columnLetter(column.index)}${column.sample ? ': ' + column.sample : ''}`;
         select.add(new Option(label, String(column.index)));
       });
       if (!autoSelect) select.value = previous;
@@ -123,8 +149,7 @@ if (fileImportForm) {
   }
   async function inspectColumns() {
     clearPreview('Đang đọc cột từ tệp…');
-    sheetColumns = []; fillColumns(true);
-    const current = revision;
+    sheetColumns = []; sheetPreviewRows = []; renderRawPreview(); fillColumns(true);
     const file = spreadsheet.files[0];
     if (!file) return;
     fileImportForm.querySelector('[data-upload-filename]').textContent = file.name;
@@ -133,20 +158,21 @@ if (fileImportForm) {
     try {
       const response = await fetch(fileImportForm.dataset.columnsUrl, {method: 'POST', body: new FormData(fileImportForm)});
       const data = await response.json();
-      if (current !== revision) return;
+      if (spreadsheet.files[0] !== file || fileImportForm.elements.import_mode.disabled) return;
       if (!response.ok) throw new Error(data.error || 'Không đọc được cột trong tệp.');
-      sheetColumns = data.columns; fillColumns(true);
+      sheetColumns = data.columns; sheetPreviewRows = data.preview_rows; fillColumns(true); renderRawPreview();
       status.textContent = 'Đã đọc tệp. Kiểm tra dòng tiêu đề và chọn cột, rồi bấm Format chuẩn dữ liệu.';
-    } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
+    } catch (error) { if (spreadsheet.files[0] === file && !fileImportForm.elements.import_mode.disabled) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
     finally { format.disabled = false; }
   }
   spreadsheet.addEventListener('change', () => {
     clearPreview();
+    sheetColumns = []; sheetPreviewRows = []; renderRawPreview();
     fileImportForm.querySelector('[data-upload-filename]').textContent = spreadsheet.files[0]?.name || 'Chưa chọn tệp.';
     if (!fileImportForm.elements.import_mode.disabled) inspectColumns();
     else if (spreadsheet.files.length) formatImport();
   });
-  fileImportForm.elements.skip_header.addEventListener('change', () => clearPreview());
+  fileImportForm.elements.skip_header.addEventListener('change', () => { clearPreview(); renderRawPreview(); });
   fileImportForm.querySelectorAll('[data-column-field]').forEach(select => select.addEventListener('change', () => clearPreview()));
   fileImportForm.querySelector('[data-txt-upload]').addEventListener('change', async event => {
     const file = event.target.files[0];

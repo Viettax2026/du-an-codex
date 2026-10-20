@@ -148,7 +148,8 @@ def register_data_groups(app, db, login_required, parse_phones):
             rows = read_sheet_rows(request.files.get('file'))
             width = max(len(row) for row in rows)
             return jsonify(columns=[{'index': index, 'sample': rows[0][index][:100] if index < len(rows[0]) else ''}
-                                    for index in range(width)], row_count=len(rows))
+                                    for index in range(width)], row_count=len(rows),
+                           preview_rows=[[cell[:1000] for cell in row] for row in rows[:6]])
         except ValueError as error:
             return jsonify(error=str(error)), 400
 

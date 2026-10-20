@@ -327,3 +327,27 @@ def test_template_rejects_invalid_xls_without_saving(app):
     assert response.status_code == 400 and response.json['error']
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+
+
+def test_raw_excel_preview_preserves_columns_before_mapping_and_limits_rows(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Raw Preview'})
+    book = Workbook(); sheet = book.active
+    sheet.append(['MST', 'Ngày', 'Công ty', '', 'Thành phố', '', 'SĐT', 'Email'])
+    for index in range(7):
+        sheet.append([f'031234567{index}', '2026-10-19', f'Công ty {index}', '', 'Hồ Chí Minh', '', '0384.410.323', f'{index}@example.com'])
+    stream = io.BytesIO(); book.save(stream); raw = stream.getvalue()
+    response = post(client, '/data-groups/import/columns', {'group': 'Raw Preview', 'file': (io.BytesIO(raw), 'customer.xlsx')})
+    assert response.status_code == 200
+    assert response.json['row_count'] == 8
+    assert len(response.json['columns']) == 8
+    assert len(response.json['preview_rows']) == 6  # Header plus first five contacts.
+    assert response.json['preview_rows'][1][3] == ''
+    assert response.json['preview_rows'][1][6] == '0384.410.323'
+    response = post(client, '/data-groups/import/preview', {'group': 'Raw Preview', 'import_mode': 'mapped',
+        'skip_header': 'yes', 'column_name': '2', 'column_phone': '6', 'column_info1': '0', 'file': (io.BytesIO(raw), 'customer.xlsx')})
+    assert response.status_code == 200
+    assert response.json['rows'][0]['phone'] == '0384410323'
+    assert response.json['rows'][0]['name'] == 'Công ty 6'  # Duplicate phone keeps the last row.
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)

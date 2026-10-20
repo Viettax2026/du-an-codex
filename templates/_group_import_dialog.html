@@ -18,6 +18,7 @@
 <div class="column-mapping-grid">{% for key,title in [('name','Tên'),('phone','Số điện thoại'),('info1','Info 1'),('info2','Info 2'),('info3','Info 3'),('info4','Info 4'),('info5','Info 5')] %}<label>{{ title }}<select name="column_{{ key }}" data-column-field="{{ key }}" disabled><option value="">— Bỏ qua —</option></select></label>{% endfor %}</div></div>
 <div data-template-help hidden><h3>Tải file theo template Excel ZaloFlow</h3></div>
 <label class="ghost spreadsheet-upload-label" for="import-spreadsheet" tabindex="0" role="button" data-spreadsheet-dropzone><span class="spreadsheet-upload-icon" aria-hidden="true">↥</span><span><b>Chọn file Excel/CSV</b><small>Hỗ trợ .xlsx, .xls và .csv</small></span></label><input id="import-spreadsheet" type="file" name="file" accept=".xlsx,.xls,.csv" disabled hidden><p data-upload-filename>Chưa chọn tệp.</p>
+<section class="raw-sheet-preview" data-raw-sheet-preview hidden><h3>Preview dữ liệu Excel (5 dòng đầu)</h3><div class="raw-sheet-scroll"><table><thead data-raw-sheet-head></thead><tbody data-raw-sheet-body></tbody></table></div></section>
 <div data-template-downloads hidden><p>Dữ liệu sẽ được tự động đọc theo cấu trúc chuẩn và hiển thị ở bảng bên dưới.</p><div class="data-template-links"><a href="{{ url_for('static',filename='data-template.xlsx') }}" download>↓ Tải template Excel</a><a href="{{ url_for('static',filename='data-template.csv') }}" download>↓ Tải CSV mẫu</a></div></div>
 <p class="muted">Tối đa 2 MB, 500 dòng data. Kiểm tra bảng xem trước trước khi thêm vào nhóm.</p>
 </section>

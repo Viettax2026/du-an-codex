@@ -66,7 +66,7 @@ def parse_phones(raw):
         raise ValueError('Danh sách số điện thoại quá dài.')
     phones = []
     for value in re.split(r'[\n,;]+', raw.strip()):
-        phone = re.sub(r'[\s()+-]', '', value)
+        phone = re.sub(r'[\s().+-]', '', value)
         if not phone:
             continue
         if phone.startswith('84'):
