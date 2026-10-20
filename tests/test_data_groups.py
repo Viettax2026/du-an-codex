@@ -199,3 +199,51 @@ def test_account_dropdown_uses_owned_accounts_and_filters_campaign_data(app):
     assert 'Kế Toán Viettax' not in other.get('/data-groups').text
     assert other.get('/data-groups?account_id=1').status_code == 404
     assert client.get('/data-groups?account_id=invalid').status_code == 404
+
+
+def test_import_preview_normalizes_without_saving_and_revalidates_on_save(app):
+    from test_workflow import token
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Preview'})
+    response = post(client, '/data-groups/import/preview', {'group': 'Preview', 'phones': '+84 901-234-567,0901234567\n0912345678'})
+    assert response.json['total'] == 2 and response.json['added'] == 2
+    assert [row['phone'] for row in response.json['rows']] == ['0901234567', '0912345678']
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    post(client, '/data-groups/import', {'group': 'Preview', 'phones': '0901234567'})
+    response = post(client, '/data-groups/import/preview', {'group': 'Preview', 'phones': '0901234567,0912345678'})
+    assert response.json['existing'] == 1 and response.json['added'] == 1
+    response = post(client, '/data-groups/import/preview', {'group': 'Preview', 'phones': 'not-a-phone'})
+    assert response.status_code == 400 and response.json['error']
+    post(client, '/data-groups/import', {'group': 'Preview', 'phones': 'invalid', 'consent': 'yes'})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (1,)
+    assert client.post('/data-groups/import/preview', data={'group': 'Preview', 'phones': '0901234567'}).status_code == 400
+    other = app.test_client()
+    register(other, 'other')
+    assert post(other, '/data-groups/import/preview', {'group': 'Preview', 'phones': '0901234567'}).status_code == 404
+
+
+def test_excel_template_preview_keeps_personalization_and_skips_blank_formatted_rows(app):
+    from openpyxl import load_workbook
+    from pathlib import Path
+    client = app.test_client()
+    register(client)
+    post(client, '/data-groups', {'name': 'Excel Preview'})
+    book = load_workbook(Path(app.root_path) / 'static/data-template.xlsx')
+    book.active.append([])  # Template has formatting through row 501; write into its first data row.
+    for column, value in enumerate(['0901234567', 'Lan', '', 'lan@example.com', 'Info A'], 1):
+        book.active.cell(2, column, value)
+    stream = io.BytesIO(); book.save(stream); stream.seek(0)
+    response = post(client, '/data-groups/import/preview', {'group': 'Excel Preview', 'file': (stream, 'data.xlsx')})
+    assert response.status_code == 200
+    assert response.json['total'] == 1
+    assert response.json['rows'][0]['info1'] == 'Info A'
+    assert response.json['rows'][0]['email'] == 'lan@example.com'
+    page = client.get('/data-groups?group=Excel+Preview').text
+    assert 'Thêm data vào nhóm “Excel Preview”' in page
+    assert 'Format chuẩn dữ liệu' in page
+    assert 'File Excel/CSV của khách hàng' in page
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)

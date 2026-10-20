@@ -35,6 +35,8 @@ def read_contacts(upload, parse_phones):
                     raise ValueError('Excel cần hàng đầu có cột phone.')
                 rows = []
                 for index, row in enumerate(sheet):
+                    if not any(cell is not None and str(cell).strip() for cell in row):
+                        continue
                     if index >= 500:
                         raise ValueError('Tệp tối đa 500 dòng.')
                     rows.append(dict(zip(headers, row)))

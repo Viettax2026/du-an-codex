@@ -4,7 +4,7 @@ import csv
 import io
 import math
 
-from flask import Response, abort, flash, g, redirect, render_template, request, url_for
+from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
 from data_import import read_contacts, insert_contact
 
 
@@ -118,18 +118,43 @@ def register_data_groups(app, db, login_required, parse_phones):
             writer.writerow(["'" + value if str(value).lstrip().startswith(('=', '+', '-', '@')) else value for value in row])
         return Response('\ufeff' + stream.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename="group-data.csv"'})
 
-    @app.post('/data-groups/import')
-    @login_required
-    def import_group_data():
+    def group_import_input():
         group = request.form.get('group', '')
         if not db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
                             (g.user['id'], group, g.user['id'], group)).fetchone():
             abort(404)
+        if request.form.get('data_type', 'phone') != 'phone':
+            raise ValueError('Hiện hỗ trợ Zalo – User theo SĐT.')
+        incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
+        incoming.update(read_contacts(request.files.get('file'), parse_phones))
+        if not incoming or len(incoming) > 500:
+            raise ValueError('Mỗi lần nhập từ 1 đến 500 số điện thoại.')
+        return group, incoming
+
+    @app.post('/data-groups/import/preview')
+    @login_required
+    def preview_group_import():
         try:
-            incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
-            incoming.update(read_contacts(request.files.get('file'), parse_phones))
-            if not incoming or len(incoming) > 500:
-                raise ValueError('Mỗi lần nhập từ 1 đến 500 số điện thoại.')
+            _, incoming = group_import_input()
+            rows = []
+            existing_count = 0
+            for phone, row in incoming.items():
+                existing = db().execute('SELECT * FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
+                if existing:
+                    existing_count += 1
+                source = dict(existing) if existing else row
+                rows.append({key: source.get(key, '') for key in ('name','phone','email','zalo_id','info1','info2','info3','info4','info5')})
+                rows[-1]['name'] = source.get('name') or 'Khách hàng ' + phone
+            return jsonify(rows=rows, total=len(rows), existing=existing_count, added=len(rows)-existing_count)
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+
+    @app.post('/data-groups/import')
+    @login_required
+    def import_group_data():
+        group = request.form.get('group', '')
+        try:
+            group, incoming = group_import_input()
             consent = int(request.form.get('consent') == 'yes')
             added = 0
             for phone, row in incoming.items():
