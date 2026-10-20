@@ -4,7 +4,17 @@ if (groupDialog) {
   const nameInput = groupDialog.querySelector('[name=name]');
   const createButton = groupDialog.querySelector('[data-create-group]');
   function updateGroupButton() { createButton.disabled = !nameInput.value.trim(); }
-  opener.addEventListener('click', () => { updateGroupButton(); groupDialog.showModal(); });
+  const groupForm = groupDialog.querySelector('form');
+  function setGroupMode(editing, name = '', type = 'all', color = '#6860f6') {
+    groupForm.action = editing ? groupForm.dataset.editUrl : groupForm.dataset.createUrl;
+    groupForm.elements.original_group.value = editing ? name : '';
+    nameInput.value = name; groupForm.elements.data_type.value = type; groupForm.elements.color.value = color;
+    groupDialog.querySelector('#group-dialog-title').textContent = editing ? 'Sửa nhóm data' : 'Tạo nhóm data';
+    createButton.textContent = editing ? 'Lưu thay đổi' : 'Tạo nhóm';
+    updateGroupButton(); groupDialog.showModal();
+  }
+  opener.addEventListener('click', () => setGroupMode(false));
+  document.querySelectorAll('[data-edit-group]').forEach(button => button.addEventListener('click', () => setGroupMode(true, button.dataset.editGroup, button.dataset.groupType, button.dataset.groupEditColor)));
   groupDialog.querySelectorAll('[data-close-group]').forEach(button => button.addEventListener('click', () => groupDialog.close()));
   nameInput.addEventListener('input', updateGroupButton);
   groupDialog.addEventListener('click', event => { if (event.target === groupDialog) {
@@ -27,7 +37,7 @@ if (importDialog) {
 }
 const groupSearch = document.querySelector('[data-search-groups]');
 if (groupSearch) groupSearch.addEventListener('input', () => {
-  document.querySelectorAll('.data-group-link').forEach(link => { link.hidden = !link.textContent.toLocaleLowerCase('vi').includes(groupSearch.value.toLocaleLowerCase('vi')); });
+  document.querySelectorAll('.data-group-row').forEach(row => { row.hidden = !row.textContent.toLocaleLowerCase('vi').includes(groupSearch.value.toLocaleLowerCase('vi')); });
 });
 const selectPage = document.querySelector('[data-select-page]');
 if (selectPage) {
@@ -43,8 +53,9 @@ if (selectPage) {
   choices.forEach(choice => choice.addEventListener('change', updateSelection));
 }
 document.querySelectorAll('[data-copy-id]').forEach(button => button.addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(button.dataset.copyId); button.textContent = 'Đã chép ID'; }
-  catch { button.textContent = `ID: ${button.dataset.copyId}`; }
+  const feedback = document.querySelector('[data-copy-feedback]');
+  try { await navigator.clipboard.writeText(button.dataset.copyId); if (feedback) { feedback.textContent = `Đã sao chép ID ${button.dataset.copyId}`; feedback.hidden = false; } }
+  catch { if (feedback) { feedback.textContent = `ID nhóm: ${button.dataset.copyId} — bạn có thể sao chép số này.`; feedback.hidden = false; } }
 }));
 const accountFilter = document.querySelector('[data-account-filter]');
 if (accountFilter) accountFilter.addEventListener('change', () => accountFilter.form.requestSubmit());

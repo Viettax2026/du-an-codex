@@ -385,3 +385,57 @@ def test_all_invalid_mapped_rows_are_reported_and_cannot_be_saved(app):
     post(client, '/data-groups/import', {**fields, 'skip_invalid': 'yes', 'file': (io.BytesIO(raw), 'invalid.csv')})
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+
+
+def test_group_table_tracks_file_source_and_preserves_it_for_duplicates(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Sources'})
+    data = b'phone\n0866381540\n'
+    response = post(client, '/data-groups/import', {'group': 'Sources', 'file': (io.BytesIO(data), 'CSKH (3).csv')})
+    assert 'Tải file lên · CSKH (3).csv' in response.text
+    for title in ('Tên hiển thị','UID','Link','Tài khoản','Loại','Trạng thái','Nguồn data'):
+        assert f'<th>{title}</th>' in response.text
+    assert 'group-contact-name' in response.text
+    post(client, '/data-groups/import', {'group': 'Sources', 'file': (io.BytesIO(data), 'Different.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT data_source FROM contacts').fetchone() == ('Tải file lên · CSKH (3).csv',)
+
+
+def test_edit_group_keeps_id_data_and_campaign_audience(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Before'})
+    post(client, '/data-groups/import', {'group': 'Before', 'phones': '0901234567', 'consent': 'yes'})
+    post(client, '/campaigns', {'name': 'Keep', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Before'})
+    with database(app) as db:
+        original_id = db.execute('SELECT id FROM data_groups WHERE name=?', ('Before',)).fetchone()[0]
+    response = post(client, '/data-groups/edit', {'original_group': 'Before', 'name': 'After', 'data_type': 'phone', 'color': '#123456'})
+    assert response.status_code == 200
+    with database(app) as db:
+        assert db.execute('SELECT id,name,color FROM data_groups WHERE id=?', (original_id,)).fetchone() == (original_id, 'After', '#123456')
+        assert db.execute('SELECT phone,tag FROM contacts').fetchone() == ('0901234567', 'After')
+        assert db.execute('SELECT tag FROM campaigns').fetchone() == ('After',)
+    other = app.test_client(); register(other, 'other')
+    assert post(other, '/data-groups/edit', {'original_group': 'After', 'name': 'Stolen'}).status_code == 404
+    post(client, '/data-groups', {'name': 'Exists'})
+    post(client, '/data-groups/edit', {'original_group': 'After', 'name': 'Exists'})
+    with database(app) as db:
+        assert db.execute('SELECT tag FROM contacts').fetchone() == ('After',)
+
+
+def test_delete_group_requires_confirmation_and_preserves_contacts_campaigns(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Archive'})
+    post(client, '/data-groups/import', {'group': 'Archive', 'phones': '0901234567', 'consent': 'yes'})
+    post(client, '/campaigns', {'name': 'Keep', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Archive'})
+    assert 'giữ nguyên' in client.get('/data-groups/delete?group=Archive').text
+    assert post(client, '/data-groups/delete', {'group': 'Archive'}).status_code == 400
+    post(client, '/data-groups/delete', {'group': 'Archive', 'confirm_delete': 'yes'})
+    assert client.get('/data-groups?group=Archive').status_code == 404
+    assert client.get('/campaigns/1').status_code == 200
+    assert post(client, '/data-groups/import', {'group': 'Archive', 'phones': '0912345678'}).status_code == 404
+    with database(app) as db:
+        assert db.execute('SELECT phone FROM contacts').fetchall() == [('0901234567',)]
+        assert db.execute('SELECT deleted_at FROM data_groups WHERE name=?', ('Archive',)).fetchone()[0]
+        assert db.execute('SELECT count(*) FROM campaigns').fetchone() == (1,)
+    other = app.test_client(); register(other, 'other')
+    assert other.get('/data-groups/delete?group=Archive').status_code == 404

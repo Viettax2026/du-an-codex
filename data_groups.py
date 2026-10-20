@@ -14,9 +14,12 @@ def register_data_groups(app, db, login_required, parse_phones):
             id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
             name TEXT NOT NULL, UNIQUE(user_id,name))''')
         columns = {row['name'] for row in db().execute('PRAGMA table_info(data_groups)')}
-        for column, definition in {'data_type': "TEXT NOT NULL DEFAULT 'all'", 'color': "TEXT NOT NULL DEFAULT '#6860f6'", 'created_at': 'TEXT', 'last_import_at': 'TEXT', 'imported_count': 'INTEGER NOT NULL DEFAULT 0'}.items():
+        for column, definition in {'data_type': "TEXT NOT NULL DEFAULT 'all'", 'color': "TEXT NOT NULL DEFAULT '#6860f6'", 'created_at': 'TEXT', 'last_import_at': 'TEXT', 'imported_count': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT'}.items():
             if column not in columns:
                 db().execute(f'ALTER TABLE data_groups ADD COLUMN {column} {definition}')
+        contact_columns = {row['name'] for row in db().execute('PRAGMA table_info(contacts)')}
+        if 'data_source' not in contact_columns:
+            db().execute("ALTER TABLE contacts ADD COLUMN data_source TEXT NOT NULL DEFAULT ''")
         db().commit()
 
     @app.route('/data-groups', methods=['GET', 'POST'])
@@ -43,12 +46,14 @@ def register_data_groups(app, db, login_required, parse_phones):
                              (g.user['id'], name, data_type, color.lower()))
                 db().commit()
                 return redirect(url_for('data_groups', group=name))
-        groups = db().execute('''SELECT names.name, count(p.id) AS total,
+        db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) SELECT user_id,tag FROM contacts WHERE user_id=? GROUP BY tag', (g.user['id'],))
+        db().commit()
+        groups = db().execute('''SELECT names.name, d.id, count(p.id) AS total,
             COALESCE(d.data_type,'all') AS data_type, COALESCE(d.color,'#6860f6') AS color FROM
             (SELECT name FROM data_groups WHERE user_id=? UNION SELECT tag FROM contacts WHERE user_id=?) names
             LEFT JOIN contacts p ON p.tag=names.name AND p.user_id=?
             LEFT JOIN data_groups d ON d.name=names.name AND d.user_id=?
-            GROUP BY names.name ORDER BY names.name''',
+            WHERE d.deleted_at IS NULL GROUP BY names.name ORDER BY names.name''',
             (g.user['id'], g.user['id'], g.user['id'], g.user['id'])).fetchall()
         selected = request.args.get('group', groups[0]['name'] if groups else '')
         if selected and selected not in [row['name'] for row in groups]:
@@ -80,7 +85,14 @@ def register_data_groups(app, db, login_required, parse_phones):
         filtered = db().execute('SELECT count(*) FROM contacts WHERE ' + where, params).fetchone()[0]
         pages = max(1, math.ceil(filtered / 50))
         number = max(1, min(request.args.get('p', 1, type=int), pages))
-        rows = db().execute('SELECT * FROM contacts WHERE ' + where + ' ORDER BY id DESC LIMIT 50 OFFSET ?',
+        rows = db().execute('''SELECT contacts.*,
+            (SELECT s.recipient_name FROM message_sends s JOIN zalo_accounts a ON a.id=s.account_id
+             WHERE s.contact_id=contacts.id AND a.user_id=contacts.user_id AND s.recipient_name!='' ORDER BY s.id DESC LIMIT 1) AS display_name,
+            (SELECT group_concat(DISTINCT a.name) FROM message_sends s JOIN zalo_accounts a ON a.id=s.account_id
+             WHERE s.contact_id=contacts.id AND a.user_id=contacts.user_id) AS account_names,
+            EXISTS (SELECT 1 FROM message_sends s WHERE s.contact_id=contacts.id AND
+                (s.state!='prepared' OR s.friend_state NOT IN ('prepared','not_requested') OR s.alias_state NOT IN ('prepared','not_requested'))) AS has_processed
+            FROM contacts WHERE ''' + where + ' ORDER BY id DESC LIMIT 50 OFFSET ?',
                             (*params, (number - 1) * 50)).fetchall()
         total = next((row['total'] for row in groups if row['name'] == selected), 0)
         metadata = db().execute('SELECT * FROM data_groups WHERE user_id=? AND name=?', (g.user['id'], selected)).fetchone()
@@ -104,6 +116,7 @@ def register_data_groups(app, db, login_required, parse_phones):
     @login_required
     def export_group_data():
         selected = request.form.get('group', '')
+        require_group(selected)
         ids = request.form.getlist('contact_ids')
         if len(ids) > 50 or not ids or not all(value.isdigit() for value in ids):
             abort(400)
@@ -118,11 +131,59 @@ def register_data_groups(app, db, login_required, parse_phones):
             writer.writerow(["'" + value if str(value).lstrip().startswith(('=', '+', '-', '@')) else value for value in row])
         return Response('\ufeff' + stream.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename="group-data.csv"'})
 
+    def require_group(name):
+        metadata = db().execute('SELECT * FROM data_groups WHERE user_id=? AND name=?', (g.user['id'], name)).fetchone()
+        if metadata and metadata['deleted_at']:
+            abort(404)
+        if not metadata and not db().execute('SELECT 1 FROM contacts WHERE user_id=? AND tag=?', (g.user['id'], name)).fetchone():
+            abort(404)
+        return metadata
+
+    @app.post('/data-groups/edit')
+    @login_required
+    def edit_data_group():
+        original = request.form.get('original_group', '')
+        require_group(original)
+        name = request.form.get('name', '').strip()
+        data_type = request.form.get('data_type', 'all')
+        color = request.form.get('color', '#6860f6')
+        try:
+            if not name or len(name) > 80 or data_type not in ('all','phone','uid') or not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
+                raise ValueError('Kiểm tra tên nhóm, loại data và màu nhóm.')
+            db().execute('BEGIN IMMEDIATE')
+            if name != original and db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
+                                                  (g.user['id'], name, g.user['id'], name)).fetchone():
+                raise ValueError('Tên nhóm đã tồn tại. Vui lòng chọn tên khác.')
+            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'], original))
+            db().execute('UPDATE data_groups SET name=?,data_type=?,color=? WHERE user_id=? AND name=?', (name, data_type, color.lower(), g.user['id'], original))
+            db().execute('UPDATE contacts SET tag=? WHERE user_id=? AND tag=?', (name, g.user['id'], original))
+            db().execute('UPDATE campaigns SET tag=? WHERE user_id=? AND tag=?', (name, g.user['id'], original))
+            db().commit()
+            flash('Đã sửa nhóm data.', 'success')
+            return redirect(url_for('data_groups', group=name))
+        except ValueError as error:
+            db().rollback()
+            flash(str(error), 'error')
+            return redirect(url_for('data_groups', group=original))
+
+    @app.route('/data-groups/delete', methods=['GET','POST'])
+    @login_required
+    def delete_data_group():
+        name = request.form.get('group', '') if request.method == 'POST' else request.args.get('group', '')
+        metadata = require_group(name)
+        if request.method == 'POST':
+            if request.form.get('confirm_delete') != 'yes':
+                abort(400)
+            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'], name))
+            db().execute('UPDATE data_groups SET deleted_at=CURRENT_TIMESTAMP WHERE user_id=? AND name=?', (g.user['id'], name))
+            db().commit()
+            flash('Đã ẩn nhóm khỏi danh sách. Khách hàng và dữ liệu chiến dịch được giữ nguyên.', 'success')
+            return redirect(url_for('data_groups'))
+        return render_template('group_delete.html', name=name, page='data_groups')
+
     def group_import_input(preview=False):
         group = request.form.get('group', '')
-        if not db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
-                            (g.user['id'], group, g.user['id'], group)).fetchone():
-            abort(404)
+        require_group(group)
         if request.form.get('data_type', 'phone') != 'phone':
             raise ValueError('Hiện hỗ trợ Zalo – User theo SĐT.')
         incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
@@ -147,9 +208,7 @@ def register_data_groups(app, db, login_required, parse_phones):
     @login_required
     def inspect_group_import():
         group = request.form.get('group', '')
-        if not db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
-                            (g.user['id'], group, g.user['id'], group)).fetchone():
-            abort(404)
+        require_group(group)
         try:
             rows = read_sheet_rows(request.files.get('file'))
             width = max(len(row) for row in rows)
@@ -184,10 +243,14 @@ def register_data_groups(app, db, login_required, parse_phones):
             group, incoming, invalid = group_import_input()
             consent = int(request.form.get('consent') == 'yes')
             added = 0
+            upload = request.files.get('file')
+            filename = re.sub(r'[\x00-\x1f\x7f]', '', (upload.filename or '').replace('\\', '/').split('/')[-1])[:150] if upload else ''
+            source = 'Tải file lên · ' + filename if filename else 'Nhập trực tiếp'
             for phone, row in incoming.items():
                 exists = db().execute('SELECT 1 FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
                 if not exists:
                     insert_contact(db(), g.user['id'], phone, row, tag=group, consent=consent)
+                    db().execute('UPDATE contacts SET data_source=? WHERE user_id=? AND phone=?', (source, g.user['id'], phone))
                     added += 1
             if added:
                 db().execute('''INSERT INTO data_groups(user_id,name,last_import_at,imported_count)

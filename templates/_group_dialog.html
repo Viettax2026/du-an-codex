@@ -1,5 +1,6 @@
 <dialog class="group-dialog" id="create-group-dialog" data-reopen="{{ 'yes' if request.method=='POST' else 'no' }}" aria-labelledby="group-dialog-title">
-<form method="post" action="{{ url_for('data_groups') }}">
+<form method="post" action="{{ url_for('data_groups') }}" data-create-url="{{ url_for('data_groups') }}" data-edit-url="{{ url_for('edit_data_group') }}">
+<input type="hidden" name="original_group" value="">
 <input type="hidden" name="csrf" value="{{ session.csrf }}">
 <header class="group-dialog-heading"><span class="group-folder" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><h2 id="group-dialog-title">Tạo nhóm data</h2><button type="button" class="group-close" data-close-group aria-label="Đóng">×</button></header>
 <div class="group-dialog-body">
