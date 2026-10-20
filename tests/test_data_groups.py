@@ -352,3 +352,36 @@ def test_raw_excel_preview_preserves_columns_before_mapping_and_limits_rows(app)
     assert response.json['rows'][0]['name'] == 'Công ty 6'  # Duplicate phone keeps the last row.
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+
+
+def test_mapped_import_reports_bad_rows_without_blocking_valid_preview(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Mixed'})
+    raw = b'Phone,Name\n0384.410.323,Lan\n,Binh\nPhone,Header\n099,Invalid\n0912345678,An\n'
+    fields = {'group': 'Mixed', 'import_mode': 'mapped', 'skip_header': 'yes', 'column_phone': '0', 'column_name': '1'}
+    response = post(client, '/data-groups/import/preview', {**fields, 'file': (io.BytesIO(raw), 'mixed.csv')})
+    assert response.status_code == 200
+    assert response.json['total'] == 2 and response.json['invalid'] == 3
+    assert [row['row'] for row in response.json['invalid_rows']] == [3, 4, 5]
+    assert response.json['invalid_rows'][2]['phone'] == '099'
+    assert response.json['rows'][0]['phone'] == '0384410323'
+    # Partial imports require explicit confirmation, even when posting directly.
+    post(client, '/data-groups/import', {**fields, 'file': (io.BytesIO(raw), 'mixed.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
+    post(client, '/data-groups/import', {**fields, 'skip_invalid': 'yes', 'file': (io.BytesIO(raw), 'mixed.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT phone FROM contacts ORDER BY id').fetchall() == [('0384410323',), ('0912345678',)]
+        assert db.execute('SELECT imported_count FROM data_groups').fetchone() == (2,)
+
+
+def test_all_invalid_mapped_rows_are_reported_and_cannot_be_saved(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'All invalid'})
+    fields = {'group': 'All invalid', 'import_mode': 'mapped', 'column_phone': '0'}
+    raw = b'not-a-phone\n12345\n'
+    response = post(client, '/data-groups/import/preview', {**fields, 'file': (io.BytesIO(raw), 'invalid.csv')})
+    assert response.status_code == 200 and response.json['total'] == 0 and response.json['invalid'] == 2
+    post(client, '/data-groups/import', {**fields, 'skip_invalid': 'yes', 'file': (io.BytesIO(raw), 'invalid.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)

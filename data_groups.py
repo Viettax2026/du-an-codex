@@ -118,7 +118,7 @@ def register_data_groups(app, db, login_required, parse_phones):
             writer.writerow(["'" + value if str(value).lstrip().startswith(('=', '+', '-', '@')) else value for value in row])
         return Response('\ufeff' + stream.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename="group-data.csv"'})
 
-    def group_import_input():
+    def group_import_input(preview=False):
         group = request.form.get('group', '')
         if not db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
                             (g.user['id'], group, g.user['id'], group)).fetchone():
@@ -126,16 +126,22 @@ def register_data_groups(app, db, login_required, parse_phones):
         if request.form.get('data_type', 'phone') != 'phone':
             raise ValueError('Hiện hỗ trợ Zalo – User theo SĐT.')
         incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
+        invalid = []
         if request.form.get('import_mode') == 'mapped':
             if incoming:
                 raise ValueError('Chỉ nhập một nguồn dữ liệu mỗi lần.')
             mapping = {key: request.form.get('column_' + key, '') for key in ('name','phone','info1','info2','info3','info4','info5')}
-            incoming.update(read_mapped_contacts(request.files.get('file'), parse_phones, mapping, request.form.get('skip_header') == 'yes'))
+            mapped, invalid = read_mapped_contacts(request.files.get('file'), parse_phones, mapping,
+                                                   request.form.get('skip_header') == 'yes', report=True)
+            incoming.update(mapped)
+            if invalid and not preview and request.form.get('skip_invalid') != 'yes':
+                first = invalid[0]
+                raise ValueError(f"Có {len(invalid)} dòng lỗi; dòng {first['row']}, SĐT {first['phone']!r}: {first['reason']} Kiểm tra bảng lỗi hoặc xác nhận bỏ qua dòng lỗi.")
         else:
             incoming.update(read_contacts(request.files.get('file'), parse_phones))
-        if not incoming or len(incoming) > 500:
+        if (not incoming and not (preview and invalid)) or len(incoming) > 500:
             raise ValueError('Mỗi lần nhập từ 1 đến 500 số điện thoại.')
-        return group, incoming
+        return group, incoming, invalid
 
     @app.post('/data-groups/import/columns')
     @login_required
@@ -157,7 +163,7 @@ def register_data_groups(app, db, login_required, parse_phones):
     @login_required
     def preview_group_import():
         try:
-            _, incoming = group_import_input()
+            _, incoming, invalid = group_import_input(preview=True)
             rows = []
             existing_count = 0
             for phone, row in incoming.items():
@@ -166,7 +172,7 @@ def register_data_groups(app, db, login_required, parse_phones):
                     existing_count += 1
                 source = dict(existing) if existing else row
                 rows.append({key: source.get(key, '') for key in ('name','phone','email','zalo_id','info1','info2','info3','info4','info5')})
-            return jsonify(rows=rows, total=len(rows), existing=existing_count, added=len(rows)-existing_count)
+            return jsonify(rows=rows, total=len(rows), existing=existing_count, added=len(rows)-existing_count, invalid=len(invalid), invalid_rows=invalid)
         except ValueError as error:
             return jsonify(error=str(error)), 400
 
@@ -175,7 +181,7 @@ def register_data_groups(app, db, login_required, parse_phones):
     def import_group_data():
         group = request.form.get('group', '')
         try:
-            group, incoming = group_import_input()
+            group, incoming, invalid = group_import_input()
             consent = int(request.form.get('consent') == 'yes')
             added = 0
             for phone, row in incoming.items():
@@ -189,7 +195,7 @@ def register_data_groups(app, db, login_required, parse_phones):
                     last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+excluded.imported_count''',
                     (g.user['id'], group, added))
             db().commit()
-            flash(f'Đã thêm {added} khách hàng; bỏ qua {len(incoming)-added} số đã có. Giữ nguyên nhóm và thông tin khách hàng cũ.', 'success')
+            flash(f'Đã thêm {added} khách hàng; bỏ qua {len(incoming)-added} số đã có và {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên nhóm và thông tin khách hàng cũ.', 'success')
         except ValueError as error:
             db().rollback()
             flash(str(error), 'error')

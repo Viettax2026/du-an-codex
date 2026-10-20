@@ -60,6 +60,12 @@ if (fileImportForm) {
   const tabs = Array.from(fileImportForm.querySelectorAll('[data-import-tab]'));
   let revision = 0;
   let ready = false;
+  let invalidCount = 0;
+  const invalidPanel = fileImportForm.querySelector('[data-import-invalid]');
+  const invalidBody = fileImportForm.querySelector('[data-import-invalid-rows]');
+  const skipInvalid = fileImportForm.elements.skip_invalid;
+  function updateSaveButton() { save.disabled = !ready || (invalidCount > 0 && !skipInvalid.checked); }
+  skipInvalid.addEventListener('change', updateSaveButton);
   let normalizedRows = [];
   let normalizedPage = 1;
   const normalizedPageSize = 100;
@@ -91,6 +97,7 @@ if (fileImportForm) {
   nextPage.addEventListener('click', () => { normalizedPage += 1; renderNormalizedPage(); });
   function clearPreview(message = 'Dữ liệu đã thay đổi. Bấm Format chuẩn dữ liệu để xem trước.') {
     revision += 1; ready = false; save.disabled = true;
+    invalidCount = 0; invalidPanel.hidden = true; invalidBody.replaceChildren(); skipInvalid.checked = false;
     normalizedRows = []; normalizedPage = 1; range.hidden = true; pager.hidden = true;
     preview.replaceChildren();
     const row = document.createElement('tr'); const cell = document.createElement('td');
@@ -230,8 +237,15 @@ if (fileImportForm) {
       normalizedRows = data.rows;
       normalizedPage = 1;
       renderNormalizedPage();
-      status.textContent = `${data.total} số hợp lệ · ${data.added} số mới · ${data.existing} số đã có sẽ bỏ qua.`;
-      ready = data.total > 0; save.disabled = !ready;
+      invalidCount = data.invalid || 0;
+      invalidPanel.hidden = invalidCount === 0;
+      (data.invalid_rows || []).forEach(item => {
+        const row = document.createElement('tr');
+        [item.row, item.phone || '(trống)', item.reason].forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
+        invalidBody.append(row);
+      });
+      status.textContent = `${data.total} số hợp lệ · ${data.added} số mới · ${data.existing} số đã có · ${invalidCount} dòng lỗi.`;
+      ready = data.total > 0; updateSaveButton();
     } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn hoặc máy chủ không trả dữ liệu. Tải lại trang.' : error.message; }
     finally { format.disabled = false; }
   }
@@ -244,5 +258,5 @@ if (fileImportForm) {
     if (event.dataTransfer.files.length !== 1) { clearPreview('Chọn một file Excel/CSV mỗi lần.'); return; }
     spreadsheet.files = event.dataTransfer.files; spreadsheet.dispatchEvent(new Event('change'));
   });
-  fileImportForm.addEventListener('submit', event => { if (!ready) { event.preventDefault(); status.textContent = 'Bấm Format chuẩn dữ liệu trước khi thêm vào nhóm.'; } });
+  fileImportForm.addEventListener('submit', event => { if (!ready || (invalidCount > 0 && !skipInvalid.checked)) { event.preventDefault(); status.textContent = !ready ? 'Bấm Format chuẩn dữ liệu để có số hợp lệ trước khi thêm vào nhóm.' : 'Xác nhận bỏ qua dòng lỗi hoặc sửa tệp trước khi thêm vào nhóm.'; } });
 }

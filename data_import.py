@@ -122,7 +122,7 @@ def read_sheet_rows(upload):
             book.close()
 
 
-def read_mapped_contacts(upload, parse_phones, mapping, skip_header):
+def read_mapped_contacts(upload, parse_phones, mapping, skip_header, report=False):
     from werkzeug.datastructures import FileStorage
     rows = read_sheet_rows(upload)
     width = max(len(row) for row in rows)
@@ -142,12 +142,24 @@ def read_mapped_contacts(upload, parse_phones, mapping, skip_header):
     data_rows = rows[1:] if skip_header else rows
     if not data_rows or len(data_rows) > 500:
         raise ValueError('Tệp cần từ 1 đến 500 dòng data sau khi bỏ tiêu đề.')
-    stream = io.StringIO()
-    writer = csv.writer(stream)
-    writer.writerow(fields)
-    for row in data_rows:
-        writer.writerow([row[chosen[field]] if field in chosen and chosen[field] < len(row) else '' for field in fields])
-    return read_contacts(FileStorage(stream=io.BytesIO(stream.getvalue().encode('utf-8')), filename='mapped.csv'), parse_phones)
+    valid = {}
+    invalid = []
+    for index, row in enumerate(data_rows):
+        values = [row[chosen[field]] if field in chosen and chosen[field] < len(row) else '' for field in fields]
+        stream = io.StringIO()
+        writer = csv.writer(stream)
+        writer.writerow(fields)
+        writer.writerow(values)
+        try:
+            valid.update(read_contacts(FileStorage(stream=io.BytesIO(stream.getvalue().encode('utf-8')), filename='mapped.csv'), parse_phones))
+        except ValueError as error:
+            invalid.append({'row': index + (2 if skip_header else 1), 'phone': values[1][:100], 'reason': str(error).removeprefix('Dòng 2: ')})
+    if report:
+        return valid, invalid
+    if invalid:
+        first = invalid[0]
+        raise ValueError(f"Dòng {first['row']}, SĐT {first['phone']!r}: {first['reason']}")
+    return valid
 
 
 def canonical_header(value):
