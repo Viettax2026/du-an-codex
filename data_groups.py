@@ -166,7 +166,6 @@ def register_data_groups(app, db, login_required, parse_phones):
                     existing_count += 1
                 source = dict(existing) if existing else row
                 rows.append({key: source.get(key, '') for key in ('name','phone','email','zalo_id','info1','info2','info3','info4','info5')})
-                rows[-1]['name'] = source.get('name') or 'Khách hàng ' + phone
             return jsonify(rows=rows, total=len(rows), existing=existing_count, added=len(rows)-existing_count)
         except ValueError as error:
             return jsonify(error=str(error)), 400

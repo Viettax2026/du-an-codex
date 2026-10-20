@@ -209,6 +209,7 @@ def test_import_preview_normalizes_without_saving_and_revalidates_on_save(app):
     response = post(client, '/data-groups/import/preview', {'group': 'Preview', 'phones': '+84 901-234-567,0901234567\n0912345678'})
     assert response.json['total'] == 2 and response.json['added'] == 2
     assert [row['phone'] for row in response.json['rows']] == ['0901234567', '0912345678']
+    assert response.json['rows'][0]['name'] == ''
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (0,)
     post(client, '/data-groups/import', {'group': 'Preview', 'phones': '0901234567'})

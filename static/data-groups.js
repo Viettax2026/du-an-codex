@@ -60,8 +60,38 @@ if (fileImportForm) {
   const tabs = Array.from(fileImportForm.querySelectorAll('[data-import-tab]'));
   let revision = 0;
   let ready = false;
+  let normalizedRows = [];
+  let normalizedPage = 1;
+  const normalizedPageSize = 100;
+  const range = fileImportForm.querySelector('[data-import-range]');
+  const pager = fileImportForm.querySelector('[data-import-pagination]');
+  const previousPage = fileImportForm.querySelector('[data-import-prev]');
+  const nextPage = fileImportForm.querySelector('[data-import-next]');
+  function renderNormalizedPage() {
+    const pages = Math.max(1, Math.ceil(normalizedRows.length / normalizedPageSize));
+    normalizedPage = Math.max(1, Math.min(normalizedPage, pages));
+    const start = (normalizedPage - 1) * normalizedPageSize;
+    const end = Math.min(start + normalizedPageSize, normalizedRows.length);
+    preview.replaceChildren();
+    normalizedRows.slice(start, end).forEach((item, index) => {
+      const row = document.createElement('tr');
+      [start + index + 1, item.name, item.phone, item.info1, item.info2, item.info3, item.info4, item.info5].forEach(value => {
+        const cell = document.createElement('td'); cell.textContent = value || ''; row.append(cell);
+      });
+      preview.append(row);
+    });
+    range.textContent = `Hiển thị ${normalizedRows.length ? start + 1 : 0}–${end} / ${normalizedRows.length} data`;
+    range.hidden = false; pager.hidden = false;
+    fileImportForm.querySelector('[data-import-page]').textContent = `Trang ${normalizedPage}/${pages}`;
+    previousPage.disabled = normalizedPage === 1;
+    nextPage.disabled = normalizedPage === pages;
+    preview.closest('.data-import-preview').scrollTop = 0;
+  }
+  previousPage.addEventListener('click', () => { normalizedPage -= 1; renderNormalizedPage(); });
+  nextPage.addEventListener('click', () => { normalizedPage += 1; renderNormalizedPage(); });
   function clearPreview(message = 'Dữ liệu đã thay đổi. Bấm Format chuẩn dữ liệu để xem trước.') {
     revision += 1; ready = false; save.disabled = true;
+    normalizedRows = []; normalizedPage = 1; range.hidden = true; pager.hidden = true;
     preview.replaceChildren();
     const row = document.createElement('tr'); const cell = document.createElement('td');
     cell.colSpan = 8; cell.textContent = 'Chưa có dữ liệu'; row.append(cell); preview.append(row);
@@ -197,14 +227,9 @@ if (fileImportForm) {
       const data = await response.json();
       if (current !== revision) return;
       if (!response.ok) throw new Error(data.error || 'Không kiểm tra được dữ liệu. Tải lại trang và thử lại.');
-      preview.replaceChildren();
-      data.rows.forEach((item, index) => {
-        const row = document.createElement('tr');
-        [index + 1, item.name, item.phone, item.info1, item.info2, item.info3, item.info4, item.info5].forEach(value => {
-          const cell = document.createElement('td'); cell.textContent = value || '—'; row.append(cell);
-        });
-        preview.append(row);
-      });
+      normalizedRows = data.rows;
+      normalizedPage = 1;
+      renderNormalizedPage();
       status.textContent = `${data.total} số hợp lệ · ${data.added} số mới · ${data.existing} số đã có sẽ bỏ qua.`;
       ready = data.total > 0; save.disabled = !ready;
     } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn hoặc máy chủ không trả dữ liệu. Tải lại trang.' : error.message; }
