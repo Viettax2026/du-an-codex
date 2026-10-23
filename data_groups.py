@@ -285,12 +285,13 @@ def register_data_groups(app, db, login_required, parse_phones):
     @login_required
     def preview_group_import():
         try:
-            _, incoming, invalid = group_import_input(preview=True)
+            group, incoming, invalid = group_import_input(preview=True)
             rows = []
             existing_count = 0
             for phone, row in incoming.items():
                 existing = db().execute('SELECT * FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
-                if existing:
+                if existing and db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
+                                             (g.user['id'],group,existing['id'])).fetchone():
                     existing_count += 1
                 source = dict(existing) if existing else row
                 rows.append({key: source.get(key, '') for key in ('name','phone','email','zalo_id','info1','info2','info3','info4','info5')})
@@ -305,29 +306,35 @@ def register_data_groups(app, db, login_required, parse_phones):
         try:
             group, incoming, invalid = group_import_input()
             consent = int(request.form.get('consent') == 'yes')
-            added = 0
+            db().execute('BEGIN IMMEDIATE')
+            require_group(group)
+            added = created_profiles = 0
             upload = request.files.get('file')
             filename = re.sub(r'[\x00-\x1f\x7f]', '', (upload.filename or '').replace('\\', '/').split('/')[-1])[:150] if upload else ''
             db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'],group))
+            destination_id = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (g.user['id'],group)).fetchone()['id']
             batch_id = create_source_batch(db, g.user['id'], group, filename)
             recorded = 0
             for phone, row in incoming.items():
-                contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
+                contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'],phone)).fetchone()
                 if not contact:
                     insert_contact(db(), g.user['id'], phone, row, tag=group, consent=consent)
                     contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'],phone)).fetchone()
+                    created_profiles += 1
                     added += 1
-                if db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
-                                (g.user['id'],group,contact['id'])).fetchone():
-                    record_contact_source(db, g.user['id'], contact['id'], batch_id)
-                    recorded += 1
+                elif not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
+                                      (g.user['id'],group,contact['id'])).fetchone():
+                    db().execute('INSERT OR IGNORE INTO data_group_contacts(group_id,contact_id) VALUES (?,?)', (destination_id,contact['id']))
+                    added += 1
+                record_contact_source(db, g.user['id'],contact['id'],batch_id)
+                recorded += 1
             if recorded:
                 db().execute('''UPDATE data_groups SET last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+?
                     WHERE user_id=? AND name=?''', (added,g.user['id'],group))
             else:
                 db().execute('DELETE FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,g.user['id']))
             db().commit()
-            flash(f'Đã thêm {added} khách hàng; giữ {len(incoming)-added} số đã có, ghi nguồn cho {recorded} khách hàng và {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên nhóm và thông tin khách hàng cũ.', 'success')
+            flash(f'Đã thêm {added} số vào nhóm ({created_profiles} hồ sơ mới, {added-created_profiles} hồ sơ đã có). {len(incoming)-added} số đã thuộc nhóm. Ghi nguồn cho {recorded} khách hàng, bỏ qua {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên thông tin và nhóm gốc.', 'success')
         except ValueError as error:
             db().rollback()
             flash(str(error), 'error')

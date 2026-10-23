@@ -21,7 +21,9 @@ def test_group_import_metadata_duplicates_and_consent(app):
     with database(app) as db:
         assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts WHERE phone=?', ('0901234567',)).fetchone() == ('Lan', 'VIP', 1, 'lan@example.com', 'A')
         assert db.execute('SELECT consent FROM contacts WHERE phone=?', ('0912345678',)).fetchone() == (0,)
-    # A group that has no consented members contributes no recipients.
+    # Existing profiles are shared with the destination; their consent is retained.
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='Other'").fetchone() == (2,)
     post(client, '/campaigns', {'name': 'Group', 'message': 'Hi', 'data_mode': 'group', 'tag': 'Other'})
     with database(app) as db:
         assert db.execute('SELECT audience_mode,tag FROM campaigns').fetchone() == ('group', 'Other')
@@ -562,3 +564,56 @@ def test_old_source_labels_migrate_without_inventing_date_or_batch(app):
     assert source['created_at'] is None and source['batch_id'] is None
     with database(app) as db:
         assert db.execute('SELECT count(*) FROM contact_data_sources').fetchone() == (1,)
+
+
+def test_import_131_existing_profiles_into_new_group_with_invalid_rows(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name':'Original'})
+    post(client, '/data-groups', {'name':'T100'})
+    phones = [f'09{index:08}' for index in range(131)]
+    with database(app) as db:
+        db.executemany('INSERT INTO contacts(user_id,name,phone,tag,consent,email,info1) VALUES (1,?,?,?,0,?,?)',
+                       [(f'Old name {index}',phone,'Original',f'old{index}@example.com','Keep') for index,phone in enumerate(phones)])
+    stream = io.StringIO()
+    import csv
+    writer = csv.writer(stream); writer.writerow(['phone','name'])
+    for phone in phones: writer.writerow([phone,'Uploaded name'])
+    for bad in ['02822106868','099','bad-phone','13910216623','0933655998 - 0903066147']: writer.writerow([bad,'Bad'])
+    raw = stream.getvalue().encode()
+    fields = {'group':'T100','import_mode':'mapped','skip_header':'yes','column_phone':'0','column_name':'1'}
+    response = post(client, '/data-groups/import/preview', {**fields,'file':(io.BytesIO(raw),'CSKH (3).csv')})
+    assert response.json['total'] == 131 and response.json['added'] == 131
+    assert response.json['existing'] == 0 and response.json['invalid'] == 5
+    # Confirmation is still required for the five rejected rows.
+    post(client, '/data-groups/import', {**fields,'file':(io.BytesIO(raw),'CSKH (3).csv')})
+    with database(app) as db:
+        assert db.execute("SELECT count(*) FROM contact_group_memberships WHERE group_name='T100'").fetchone() == (0,)
+    result = post(client, '/data-groups/import', {**fields,'skip_invalid':'yes','consent':'yes','file':(io.BytesIO(raw),'CSKH (3).csv')})
+    assert 'Đã thêm 131 số vào nhóm' in result.text
+    assert '131 data trong nhóm' in result.text
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (131,)
+        for group in ['Original','T100']:
+            assert db.execute('SELECT count(*) FROM contact_group_memberships WHERE group_name=?',(group,)).fetchone() == (131,)
+        assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts ORDER BY id LIMIT 1').fetchone() == ('Old name 0','Original',0,'old0@example.com','Keep')
+        assert db.execute("SELECT count(*) FROM contacts WHERE data_source='Tải file lên · CSKH (3).csv'").fetchone() == (131,)
+    assert client.get('/data-groups/source-history/1?group=T100').json['sources'][0]['filename'] == 'CSKH (3).csv'
+    response = post(client, '/data-groups/import/preview', {**fields,'file':(io.BytesIO(raw),'CSKH (3).csv')})
+    assert response.json['added'] == 0 and response.json['existing'] == 131
+    post(client, '/data-groups/import', {**fields,'skip_invalid':'yes','file':(io.BytesIO(raw),'CSKH (3).csv')})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM data_group_contacts').fetchone() == (131,)
+        assert db.execute("SELECT imported_count FROM data_groups WHERE name='T100'").fetchone() == (131,)
+
+
+def test_linking_existing_contacts_never_crosses_account_ownership(app):
+    first = app.test_client(); register(first)
+    post(first, '/data-groups', {'name':'Private'})
+    post(first, '/data-groups/import', {'group':'Private','phones':'0901234567','consent':'yes'})
+    second = app.test_client(); register(second,'other')
+    post(second, '/data-groups', {'name':'Target'})
+    post(second, '/data-groups/import', {'group':'Target','phones':'0901234567'})
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone() == (2,)
+        assert db.execute("SELECT user_id FROM contact_group_memberships WHERE group_name='Target'").fetchall() == [(2,)]
+        assert db.execute("SELECT consent FROM contacts WHERE user_id=1").fetchone() == (1,)

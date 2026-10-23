@@ -169,7 +169,7 @@ Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướn
 
 ## Nhóm data và nguồn data chiến dịch
 
-Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ giữ nguyên thông tin và nhóm, không tự chuyển nhóm. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
+Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ liên kết hồ sơ vào nhóm đích nếu chưa thuộc nhóm; giữ nguyên thông tin, trạng thái đồng ý và nhóm gốc. Số đã thuộc nhóm đích không được thêm trùng. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
 
 Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có hai lựa chọn:
 

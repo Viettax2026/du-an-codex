@@ -255,7 +255,7 @@ if (fileImportForm) {
         [item.row, item.phone || '(trống)', item.reason].forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         invalidBody.append(row);
       });
-      status.textContent = `${data.total} số hợp lệ · ${data.added} số mới · ${data.existing} số đã có · ${invalidCount} dòng lỗi.`;
+      status.textContent = `${data.total} số hợp lệ · ${data.added} số cần thêm vào nhóm · ${data.existing} số đã có trong nhóm · ${invalidCount} dòng lỗi.`;
       ready = data.total > 0; updateSaveButton();
     } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn hoặc máy chủ không trả dữ liệu. Tải lại trang.' : error.message; }
     finally { format.disabled = false; }
