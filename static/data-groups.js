@@ -306,3 +306,6 @@ if (sourceHistoryDialog) {
     } catch (error) { if (request === sourceRequest) body.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn. Tải lại trang và đăng nhập.' : error.message; }
   }));
 }
+
+const kindFilter = document.querySelector('[data-kind-filter]');
+if (kindFilter) kindFilter.addEventListener('change', () => kindFilter.form.requestSubmit());
