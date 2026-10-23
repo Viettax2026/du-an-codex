@@ -5,6 +5,45 @@ from flask import abort, flash, g, jsonify, redirect, render_template, request, 
 MEDIA_FILE_LIMIT = 1000
 
 
+def store_library_upload(db, manager, user_id, upload, group=None):
+    """Store one validated file atomically for web and API callers."""
+    new_id = None
+    try:
+        db().execute('BEGIN IMMEDIATE')
+        if group is not None and not db().execute('SELECT 1 FROM media_groups WHERE id=? AND user_id=?', (group,user_id)).fetchone():
+            abort(404)
+        if db().execute('SELECT count(*) FROM campaign_media WHERE user_id=?', (user_id,)).fetchone()[0] >= MEDIA_FILE_LIMIT:
+            raise ValueError(f'Thư viện đã đạt giới hạn {MEDIA_FILE_LIMIT:,} tệp.')
+        new_id = manager.upload(upload)
+        if not new_id:
+            raise ValueError('Chọn tệp để tải lên.')
+        db().execute('UPDATE campaign_media SET library_group_id=? WHERE id=? AND user_id=?', (group,new_id,user_id))
+        db().commit()
+        return new_id
+    except BaseException:
+        media = manager.media(new_id) if new_id else None
+        if media:
+            (manager.media_root/media['storage_name']).unlink(missing_ok=True)
+        db().rollback()
+        raise
+
+
+def remove_library_media(db, manager, user_id, media_id):
+    """Hide referenced media, or remove unreferenced media after explicit deletion."""
+    db().execute('BEGIN IMMEDIATE')
+    media = manager.media(media_id)
+    if not media or media['library_deleted_at']:
+        abort(404)
+    used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=?', (media_id,media_id)).fetchone()
+    if used:
+        db().execute('UPDATE campaign_media SET library_deleted_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?', (media_id,user_id))
+    else:
+        (manager.media_root/media['storage_name']).unlink(missing_ok=True)
+        db().execute('DELETE FROM campaign_media WHERE id=? AND user_id=?', (media_id,user_id))
+    db().commit()
+    return bool(used)
+
+
 def register_media_library(app, db, login_required, manager):
     with app.app_context():
         db().execute('''CREATE TABLE IF NOT EXISTS media_groups (
@@ -85,25 +124,13 @@ def register_media_library(app, db, login_required, manager):
     @login_required
     def upload_library_media():
         group = group_id(request.form.get('group',''))
-        new_id = None
         try:
-            db().execute('BEGIN IMMEDIATE')
-            if db().execute('SELECT count(*) FROM campaign_media WHERE user_id=?',(g.user['id'],)).fetchone()[0]>=MEDIA_FILE_LIMIT:
-                raise ValueError(f'Thư viện đã đạt giới hạn {MEDIA_FILE_LIMIT:,} tệp.')
-            new_id = manager.upload(request.files.get('file'))
-            if not new_id:
-                raise ValueError('Chọn tệp để tải lên.')
-            db().execute('UPDATE campaign_media SET library_group_id=? WHERE id=? AND user_id=?',(group,new_id,g.user['id']))
-            db().commit()
+            new_id = store_library_upload(db, manager, g.user['id'], request.files.get('file'), group)
             if request.accept_mimetypes.best=='application/json':
                 return jsonify(id=new_id,message='Đã tải tệp lên.'),201
             flash('Đã tải tệp lên.','success')
             return redirect(url_for('media_library',group=group or ''))
         except ValueError as error:
-            media = manager.media(new_id) if new_id else None
-            if media:
-                (manager.media_root/media['storage_name']).unlink(missing_ok=True)
-            db().rollback()
             if request.accept_mimetypes.best=='application/json':
                 return jsonify(error=str(error)),400
             flash(str(error),'error')
@@ -145,19 +172,12 @@ def register_media_library(app, db, login_required, manager):
     @app.route('/media/<int:media_id>/delete',methods=['GET','POST'])
     @login_required
     def delete_library_media(media_id):
-        if request.method=='POST':
-            db().execute('BEGIN IMMEDIATE')
         media = owned(media_id)
         used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=?',(media_id,media_id)).fetchone()
         if request.method=='POST':
             if request.form.get('confirm_delete')!='yes':
                 abort(400)
-            if used:
-                db().execute('UPDATE campaign_media SET library_deleted_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?',(media_id,g.user['id']))
-            else:
-                (manager.media_root/media['storage_name']).unlink(missing_ok=True)
-                db().execute('DELETE FROM campaign_media WHERE id=? AND user_id=?',(media_id,g.user['id']))
-            db().commit()
+            used = remove_library_media(db, manager, g.user['id'], media_id)
             flash('Đã ẩn khỏi thư viện; tệp đang dùng trong chiến dịch được giữ lại.' if used else 'Đã xóa tệp.','success')
             return redirect(url_for('media_library'))
         return render_template('media_delete.html',page='media',media=media,used=bool(used))

@@ -296,7 +296,7 @@ if (sourceHistoryDialog) {
       data.sources.forEach(source => {
         const card = document.createElement('section'); card.className = 'source-history-card' + (source.current ? ' current' : '');
         const heading = document.createElement('div'); heading.className = 'source-history-card-heading';
-        const name = document.createElement('b'); name.textContent = source.source_type === 'file' ? 'Tải file lên' : source.source_type === 'direct' ? 'Nhập trực tiếp' : 'Nguồn đã ghi nhận'; heading.append(name);
+        const name = document.createElement('b'); name.textContent = source.source_type === 'file' ? 'Tải file lên' : source.source_type === 'api' ? 'Nhập qua API' : source.source_type === 'direct' ? 'Nhập trực tiếp' : 'Nguồn đã ghi nhận'; heading.append(name);
         if (source.current) { const badge = document.createElement('span'); badge.className = 'data-badge'; badge.textContent = 'Đang dùng'; heading.append(badge); }
         const filename = document.createElement('p'); filename.textContent = source.filename || source.label;
         const details = document.createElement('p'); details.className = 'source-history-time';

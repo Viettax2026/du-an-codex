@@ -167,6 +167,38 @@ Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng d
 
 Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.
 
+## API tích hợp riêng của ZaloFlow
+
+Mở menu **API tích hợp** (`/integrations`) để tạo khóa có thời hạn 1–365 ngày và chọn quyền `data:read`, `data:write`, `media:read`, `media:write`. Mặc định chỉ chọn quyền đọc; mỗi tài khoản có tối đa 10 khóa còn hiệu lực. Khóa chỉ hiện đầy đủ khi tạo, cơ sở dữ liệu chỉ lưu SHA-256; có thể thu hồi ngay tại màn hình này. Gửi `Authorization: Bearer <khóa>` cho API; cookie đăng nhập và `username` không thay thế khóa hoặc chọn chủ dữ liệu. Tệp OpenAPI 3.0.3 tại `/integrations/openapi.json` có thể nhập vào Postman. API này chạy trên chính ZaloFlow, không gọi dịch vụ akaAgent.
+
+| Phương thức | Đường dẫn | Chức năng |
+| --- | --- | --- |
+| GET / POST | `/api/v1/data-groups` | Danh sách / tạo nhóm data |
+| GET / POST | `/api/v1/data-groups/{group_id}/members` | Danh sách / thêm data theo SĐT |
+| GET / POST | `/api/v1/media-groups` | Danh sách / tạo nhóm Media |
+| GET / POST | `/api/v1/media` | Danh sách / tải lên một tệp |
+| GET | `/api/v1/media/{media_id}/file` | Tải tệp về với cùng khóa API |
+| PATCH / DELETE | `/api/v1/media/{media_id}` | Chuyển nhóm / xóa Media |
+
+Danh sách dùng `page`, `per_page` (mặc định 50, tối đa 100). API nhóm hỗ trợ `search`; Media hỗ trợ `q`, `kind` và `group_id`. Phản hồi JSON có `status`, `error_code`, `message`, `data`; API tải tệp trả nội dung tệp. Lỗi trả HTTP 400/401/403/404/409/413/415 theo tài liệu. CSRF vẫn áp dụng cho biểu mẫu web; API dùng bearer độc lập với phiên web.
+
+Thêm data bằng JSON như sau, thay ID trong đường dẫn bằng ID nhóm lấy từ danh sách:
+
+```json
+{
+  "data": [{"name": "Khách hàng mẫu", "phone": "0901234567", "info1": "CRM"}],
+  "source_name": "CRM nội bộ",
+  "consent": false,
+  "dry_run": true
+}
+```
+
+Tối đa 500 dòng/yêu cầu, dùng cùng quy tắc chuẩn hóa số Việt Nam như nhập Excel. Mỗi dòng cần một SĐT; API chưa hỗ trợ nhập chỉ email hoặc nhóm UID. Các trường tùy chọn gồm `name`, `zalo_id`, `email`, `info1`…`info5`. Dòng sai được bỏ qua, trả lý do (tối đa 100 lỗi chi tiết), các số trùng giữ dòng đầu. Kết quả có `received_count`, `added_count`, `existing_count`, `invalid_count`; `added_count` tính số mới thuộc nhóm, kể cả hồ sơ đã có ở nhóm khác. Hồ sơ cũ giữ nguyên tên/thông tin, nhóm gốc và consent. Khách mới mặc định consent=false; chỉ đặt true khi đã có sự đồng ý. Nhập thật (`dry_run:false`) ghi nguồn **Nhập qua API** và tên nguồn, xuất hiện ngay trong nhóm và lịch sử nguồn trên web.
+
+Header tùy chọn `Idempotency-Key` (1–128 ký tự chữ/số hoặc `_.:-`) giúp thử lại lần nhập thật với cùng khóa API, nhóm và nội dung mà không ghi thêm lô/nguồn. Tái sử dụng mã với nội dung khác trả 409. Chạy thử không lưu mã và không thay đổi khách hàng, nhóm hoặc nguồn. Mỗi lần nhập khác dùng mã mới. Dữ liệu và kết quả mã nhập được lưu cùng transaction, gồm cả khi có yêu cầu đồng thời.
+
+Media dùng multipart `file`, tùy chọn `group_id`; giữ giới hạn/kiểm tra định dạng của thư viện. PATCH nhận `{"group_id":123}` hoặc null để bỏ nhóm. DELETE cần `{"confirm_delete":true}`; tệp đang dùng trong chiến dịch/lịch sử gửi chỉ ẩn khỏi thư viện, trả `retained_for_campaigns:true`. Các đường dẫn tải tệp API vẫn yêu cầu quyền `media:read`.
+
 ## Thư viện Media
 
 Menu **Media** quản lý ảnh JPG/JPEG, PNG, WEBP, video MP4 và tài liệu PDF, tối đa 10 MB/tệp và 1.000 tệp/tài khoản. Có nhóm riêng, tải nhiều tệp lần lượt, kéo thả, dán ảnh bằng Ctrl+V, lọc tên/đuôi/ngày, sắp xếp, xem dạng lưới/danh sách và xem trước. Nút Dán ảnh dùng quyền clipboard của trình duyệt; khi không được cấp quyền có thể dùng Ctrl+V hoặc chọn tệp.

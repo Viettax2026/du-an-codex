@@ -199,11 +199,13 @@ def create_app(test_config=None):
 
     @app.before_request
     def security():
+        g.user = None
+        if request.blueprint == 'public_api':
+            return  # The API blueprint requires bearer authentication for every route.
         session.setdefault('csrf', secrets.token_hex(24))
         if request.method == 'POST' and not secrets.compare_digest(
                 session['csrf'], request.form.get('csrf', '')):
             return 'Phiên làm việc không hợp lệ. Vui lòng tải lại trang.', 400
-        g.user = None
         if session.get('user_id'):
             g.user = db().execute('SELECT id, name, username FROM users WHERE id=?',
                                   (session['user_id'],)).fetchone()
@@ -748,6 +750,8 @@ def create_app(test_config=None):
     register_data_groups(app, db, login_required, parse_phones)
     from media_library import register_media_library
     register_media_library(app, db, login_required, manager)
+    from public_api import register_public_api
+    register_public_api(app, db, login_required, manager, parse_phones)
     return app
 
 

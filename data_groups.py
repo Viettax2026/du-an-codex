@@ -11,6 +11,34 @@ from flask import Response, abort, flash, g, jsonify, redirect, render_template,
 from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts
 
 
+def save_group_members(db, user_id, group, incoming, consent=0, filename='', source_type=None):
+    """Persist validated members and provenance in the caller's transaction."""
+    added = created_profiles = 0
+    db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (user_id,group))
+    destination_id = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,group)).fetchone()['id']
+    batch_id = create_source_batch(db, user_id, group, filename, source_type)
+    recorded = 0
+    for phone, row in incoming.items():
+        contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (user_id,phone)).fetchone()
+        if not contact:
+            insert_contact(db(), user_id, phone, row, tag=group, consent=consent)
+            contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (user_id,phone)).fetchone()
+            created_profiles += 1
+            added += 1
+        elif not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
+                              (user_id,group,contact['id'])).fetchone():
+            db().execute('INSERT OR IGNORE INTO data_group_contacts(group_id,contact_id) VALUES (?,?)', (destination_id,contact['id']))
+            added += 1
+        record_contact_source(db, user_id,contact['id'],batch_id)
+        recorded += 1
+    if recorded:
+        db().execute('''UPDATE data_groups SET last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+?
+            WHERE user_id=? AND name=?''', (added,user_id,group))
+    else:
+        db().execute('DELETE FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,user_id))
+    return {'added': added, 'created_profiles': created_profiles, 'recorded': recorded}
+
+
 def register_data_groups(app, db, login_required, parse_phones):
     with app.app_context():
         db().execute('''CREATE TABLE IF NOT EXISTS data_groups (
@@ -308,31 +336,10 @@ def register_data_groups(app, db, login_required, parse_phones):
             consent = int(request.form.get('consent') == 'yes')
             db().execute('BEGIN IMMEDIATE')
             require_group(group)
-            added = created_profiles = 0
             upload = request.files.get('file')
-            filename = re.sub(r'[\x00-\x1f\x7f]', '', (upload.filename or '').replace('\\', '/').split('/')[-1])[:150] if upload else ''
-            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'],group))
-            destination_id = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (g.user['id'],group)).fetchone()['id']
-            batch_id = create_source_batch(db, g.user['id'], group, filename)
-            recorded = 0
-            for phone, row in incoming.items():
-                contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'],phone)).fetchone()
-                if not contact:
-                    insert_contact(db(), g.user['id'], phone, row, tag=group, consent=consent)
-                    contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'],phone)).fetchone()
-                    created_profiles += 1
-                    added += 1
-                elif not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
-                                      (g.user['id'],group,contact['id'])).fetchone():
-                    db().execute('INSERT OR IGNORE INTO data_group_contacts(group_id,contact_id) VALUES (?,?)', (destination_id,contact['id']))
-                    added += 1
-                record_contact_source(db, g.user['id'],contact['id'],batch_id)
-                recorded += 1
-            if recorded:
-                db().execute('''UPDATE data_groups SET last_import_at=CURRENT_TIMESTAMP, imported_count=imported_count+?
-                    WHERE user_id=? AND name=?''', (added,g.user['id'],group))
-            else:
-                db().execute('DELETE FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,g.user['id']))
+            result = save_group_members(db, g.user['id'], group, incoming, consent,
+                                        upload.filename if upload else '')
+            added, created_profiles, recorded = (result[key] for key in ('added','created_profiles','recorded'))
             db().commit()
             flash(f'Đã thêm {added} số vào nhóm ({created_profiles} hồ sơ mới, {added-created_profiles} hồ sơ đã có). {len(incoming)-added} số đã thuộc nhóm. Ghi nguồn cho {recorded} khách hàng, bỏ qua {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên thông tin và nhóm gốc.', 'success')
         except ValueError as error:

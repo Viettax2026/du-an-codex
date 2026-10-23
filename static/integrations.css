@@ -1,0 +1,7 @@
+.integrations-screen .sidebar{overflow-y:auto}
+.integrations-screen .table-scroll table{min-width:760px}
+.integrations-screen .api-guide .table-scroll table{min-width:650px}
+.integrations-screen fieldset{border:1px solid #dce4ee;border-radius:10px;padding:16px 18px}
+.integrations-screen fieldset label:last-child{margin-bottom:0}
+.integrations-screen .api-guide code{overflow-wrap:anywhere}
+.integrations-screen input[data-new-api-key]{font-family:monospace;font-size:14px}
