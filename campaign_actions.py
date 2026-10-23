@@ -298,8 +298,19 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 campaign = manager.owned(campaign_id)
                 if request.files.get('media') and not campaign['send_message']:
                     raise ValueError('Media chỉ dùng cho chiến dịch có nhắn tin.')
+                library_id = request.form.get('library_media_id','')
+                chosen = None
+                if library_id:
+                    if not library_id.isdigit() or not campaign['send_message']:
+                        raise ValueError('Media thư viện không hợp lệ.')
+                    chosen = manager.media(int(library_id))
+                    if not chosen or chosen['library_deleted_at']:
+                        raise ValueError('Không tìm thấy media trong thư viện của bạn.')
+                    manager.attachment(chosen['id'])
+                    if request.files.get('media') and request.files['media'].filename:
+                        raise ValueError('Chọn tệp tải mới hoặc media thư viện, mỗi lần một nguồn.')
                 new_media_id = manager.upload(request.files.get('media'))
-                media_id = new_media_id or (None if request.form.get('remove_media') == 'yes' else campaign['media_id'])
+                media_id = new_media_id or (chosen['id'] if chosen else None) or (None if request.form.get('remove_media')=='yes' else campaign['media_id'])
                 db().execute('UPDATE campaigns SET message=?,friend_message=?,media_id=? WHERE id=?',
                              (message, invitation, media_id, campaign_id))
                 manager.event(campaign_id, 'content', 'Cập nhật nội dung và media cho các bản xem trước tạo sau thời điểm này.')
@@ -312,7 +323,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     (manager.media_root / media['storage_name']).unlink(missing_ok=True)
                 db().rollback()
                 flash(str(error), 'error')
-        return render_template('campaign_action.html', campaign=campaign, action='content', page='campaigns')
+        return render_template('campaign_action.html', campaign=campaign, action='content', page='campaigns', library_media=db().execute('SELECT id,filename FROM campaign_media WHERE user_id=? AND library_deleted_at IS NULL ORDER BY id DESC', (g.user['id'],)).fetchall())
 
     @app.route('/campaigns/<int:campaign_id>/data', methods=['GET', 'POST'])
     @login_required

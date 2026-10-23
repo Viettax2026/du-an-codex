@@ -167,6 +167,12 @@ Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng d
 
 Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.
 
+## Thư viện Media
+
+Menu **Media** quản lý ảnh JPG/JPEG, PNG, WEBP, video MP4 và tài liệu PDF, tối đa 10 MB/tệp và 1.000 tệp/tài khoản. Có nhóm riêng, tải nhiều tệp lần lượt, kéo thả, dán ảnh bằng Ctrl+V, lọc tên/đuôi/ngày, sắp xếp, xem dạng lưới/danh sách và xem trước. Nút Dán ảnh dùng quyền clipboard của trình duyệt; khi không được cấp quyền có thể dùng Ctrl+V hoặc chọn tệp.
+
+Tệp lưu trong bộ lưu trữ riêng trên máy chủ (mặc định `instance/media`), chỉ chủ tài khoản truy cập; chưa kết nối Cloudflare R2. Chọn tệp đã tải tại **Hành động → Cập nhật nội dung + media** để dùng cho chiến dịch. Xóa tệp chưa dùng sẽ xóa khỏi ổ đĩa sau xác nhận; tệp đã gắn chiến dịch hoặc lịch sử gửi chỉ được ẩn khỏi thư viện và được giữ lại để bảo toàn nội dung đã chốt. Các tệp được giữ lại vẫn tính vào dung lượng và hạn mức.
+
 ## Nhóm data và nguồn data chiến dịch
 
 Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ liên kết hồ sơ vào nhóm đích nếu chưa thuộc nhóm; giữ nguyên thông tin, trạng thái đồng ý và nhóm gốc. Số đã thuộc nhóm đích không được thêm trùng. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.

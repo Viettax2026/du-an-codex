@@ -214,6 +214,9 @@ def create_app(test_config=None):
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
         response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+        if request.endpoint == 'preview_library_media' and response.mimetype == 'application/pdf':
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            response.headers['Content-Security-Policy'] = response.headers['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'")
         response.headers['Cache-Control'] = 'no-store'
         return response
 
@@ -743,6 +746,8 @@ def create_app(test_config=None):
 
     from data_groups import register_data_groups
     register_data_groups(app, db, login_required, parse_phones)
+    from media_library import register_media_library
+    register_media_library(app, db, login_required, manager)
     return app
 
 
