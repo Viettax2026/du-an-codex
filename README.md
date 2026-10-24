@@ -87,6 +87,8 @@ Bộ kết nối khôi phục phiên AES-GCM trong tiến trình Node, không tr
 
 Cập nhật VPS đã có bộ kết nối: git pull --ff-only origin main rồi systemctl restart zaloflow. Cơ sở dữ liệu tự thêm bảng, không xóa dữ liệu hoặc phiên QR đã có.
 
+Trang **Chiến dịch** có bảng gọn, menu trái thu gọn/mở rộng, bộ lọc thời gian/trạng thái/tài khoản/loại hành động/nhóm, khung chi tiết có thể đóng và bảng tiến trình riêng bên phải. Chọn tên hoặc dòng chiến dịch để mở chi tiết và nhật ký; tab Trợ lý hướng dẫn thao tác. Tiến độ gửi thật chỉ tăng khi mọi hành động đã chọn trong bản gửi được xác nhận thành công; lỗi/chưa xác định/chờ xác nhận không tính hoàn tất. Nhật ký mô phỏng có nhãn riêng. Ngày hiển thị là ngày tạo, chưa có lịch gửi tự động. Nút dừng/tiếp tục mở màn hình xác nhận hiện có, không tự gửi khi bấm tiếp tục.
+
 ## Tạo và sửa chiến dịch theo số điện thoại
 
 Form có ba phần: cài đặt chung (hành động, tài khoản, tên), danh sách SĐT và nội dung có xem trước {{name}}. Có thể nhập tối đa 500 số Việt Nam, mỗi dòng một số; +84 được chuẩn hóa về 0, loại số trùng. Phải xác nhận đồng ý nhận tin trước khi lưu danh sách. Khách hàng hiện có được giữ nguyên tên/nhóm; người mới lưu tên tạm theo số điện thoại.

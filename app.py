@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
 from personalization import personalize
@@ -396,29 +396,89 @@ def create_app(test_config=None):
         days = request.args.get('days', '')
         days = days if days in ('7', '30', '90') else ''
         tag = request.args.get('tag', '').strip()[:80]
-        rows = db().execute('''SELECT c.*,
+        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
+        account_id = request.args.get('account_id', '')
+        log_account_id = request.args.get('log_account_id', '')
+        valid_accounts = {str(row['id']) for row in accounts}
+        if any(value and value not in valid_accounts for value in (account_id, log_account_id)):
+            abort(404)
+        kind = request.args.get('kind', '')
+        if kind not in ('', 'message', 'friend', 'both'):
+            abort(400)
+        rows = db().execute('''SELECT c.*,a.name AS account_name,
+            (SELECT group_concat(DISTINCT za.name) FROM message_sends ms JOIN zalo_accounts za ON za.id=ms.account_id AND za.user_id=c.user_id WHERE ms.campaign_id=c.id) AS used_accounts,
+            coalesce(r.sent_total,0) AS sent_total,coalesce(r.confirmed,0) AS confirmed,
+            coalesce(r.waiting,0) AS waiting,coalesce(r.sending,0) AS sending,
+            coalesce(r.uncertain,0) AS uncertain,coalesce(r.failed,0) AS failed,
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
             (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
               AND ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
                    (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag))))) AS audience
-            FROM campaigns c WHERE user_id=? AND name LIKE ?
-              AND ((?='deleted' AND deleted_at IS NOT NULL) OR (?!='deleted' AND deleted_at IS NULL))
-              AND (?='' OR ?='deleted' OR (?='paused' AND paused=1) OR (status=? AND paused=0)) AND (?='' OR tag=?)
-              AND (?='' OR created_at >= datetime('now', ?)) ORDER BY id DESC''',
+            FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
+            LEFT JOIN (SELECT campaign_id,count(*) AS sent_total,
+                sum(state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
+                sum(state='prepared' OR friend_state='prepared' OR alias_state='prepared') AS waiting,
+                sum(state='sending' OR friend_state='sending' OR alias_state='sending') AS sending,
+                sum(state='unknown' OR friend_state='unknown' OR alias_state='unknown') AS uncertain,
+                sum(state='failed' OR friend_state='failed' OR alias_state='failed') AS failed
+                FROM message_sends GROUP BY campaign_id) r ON r.campaign_id=c.id
+            WHERE c.user_id=? AND c.name LIKE ?
+              AND ((?='deleted' AND c.deleted_at IS NOT NULL) OR (?!='deleted' AND c.deleted_at IS NULL))
+              AND (?='' OR ?='deleted' OR (?='paused' AND c.paused=1) OR (c.status=? AND c.paused=0)) AND (?='' OR c.tag=?)
+              AND (?='' OR c.created_at >= datetime('now', ?)) AND (?='' OR c.account_id=?)
+              AND (?='' OR (?='message' AND c.send_message=1 AND c.send_friend=0)
+                  OR (?='friend' AND c.send_message=0 AND c.send_friend=1) OR (?='both' AND c.send_message=1 AND c.send_friend=1))
+              ORDER BY c.id DESC''',
             (g.user['id'], '%' + query + '%', status, status, status, status, status, status, tag, tag,
-             days, '-' + (days or '0') + ' days')).fetchall()
+             days, '-' + (days or '0') + ' days', account_id, account_id, kind, kind, kind, kind)).fetchall()
+        rows = [dict(row) for row in rows]
+        for row in rows:
+            if row['deleted_at']:
+                label, tone = 'Đã xóa', 'muted'
+            elif row['paused']:
+                label, tone = 'Đã dừng', 'paused'
+            elif row['sending']:
+                label, tone = 'Đang xử lý', 'draft'
+            elif row['uncertain']:
+                label, tone = 'Cần kiểm tra', 'warning'
+            elif row['failed']:
+                label, tone = 'Có lỗi', 'warning'
+            elif row['waiting']:
+                label, tone = 'Chờ xác nhận', 'draft'
+            elif row['sent_total']:
+                label, tone = ('Đã xử lý', 'complete') if row['confirmed']>=max(row['audience'],row['sent_total']) else ('Đang thực hiện', 'draft')
+            elif row['status']=='simulated':
+                label, tone = 'Đã mô phỏng', 'complete'
+            else:
+                label, tone = 'Bản nháp', 'draft'
+            row.update(display_status=label, status_tone=tone,
+                       progress_done=row['confirmed'] if row['sent_total'] else row['total'],
+                       progress_total=max(row['audience'],row['sent_total'] or row['total']),
+                       progress_basis='Gửi qua Zalo' if row['sent_total'] else 'Mô phỏng')
+            row['progress_percent'] = min(100,round(100*row['progress_done']/row['progress_total'])) if row['progress_total'] else 0
         tags = db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
         selected = next((row for row in rows if row['id'] == selected_id), None)
         logs = []
         if selected:
-            logs = db().execute('''SELECT d.*, p.name FROM deliveries d
-                JOIN contacts p ON p.id=d.contact_id WHERE d.campaign_id=?
-                ORDER BY d.id DESC LIMIT 100''', (selected['id'],)).fetchall()
+            if not log_account_id:
+                logs.extend(dict(row, log_type='simulation') for row in db().execute('''SELECT d.*, p.name FROM deliveries d
+                    JOIN contacts p ON p.id=d.contact_id AND p.user_id=? WHERE d.campaign_id=?
+                    ORDER BY d.id DESC LIMIT 100''', (g.user['id'],selected['id'])))
+            logs.extend(dict(row, log_type='zalo') for row in db().execute('''SELECT s.*,a.name AS account_name FROM message_sends s
+                JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=? WHERE s.campaign_id=? AND (?='' OR s.account_id=?)
+                ORDER BY s.id DESC LIMIT 100''', (g.user['id'],selected['id'],log_account_id,log_account_id)))
+            logs = sorted(logs,key=lambda item:(item['created_at'],item['id']),reverse=True)[:100]
+        def campaign_link(**changes):
+            values=dict(q=query,days=days,status=status,tag=tag,account_id=account_id,kind=kind,log_account_id=log_account_id)
+            if selected:
+                values['selected']=selected['id']
+            values.update(changes)
+            return url_for('campaigns',**values)
         return render_template('campaigns.html', campaigns=rows, tags=tags,
-                               query=query, status=status, days=days, tag=tag,
-                               selected=selected, logs=logs, page='campaigns',
-                               accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall())
+                               query=query, status=status, days=days, tag=tag,kind=kind,
+                               account_id=account_id,log_account_id=log_account_id,campaign_link=campaign_link,
+                               selected=selected, logs=logs, page='campaigns', accounts=accounts)
 
     @app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
     @login_required

@@ -49,3 +49,29 @@ document.querySelectorAll('[data-copy]').forEach(button => button.addEventListen
     status.textContent = 'Trình duyệt chưa cho phép sao chép. Bạn có thể chọn và sao chép nội dung bằng tay.';
   }
 }));
+
+document.querySelector('[name=log_account_id]')?.addEventListener('change', () => filters.requestSubmit());
+document.querySelectorAll('[data-open-guide]').forEach(button => button.addEventListener('click', () => {
+  activateTab(document.querySelector('#tab-guide'));
+  document.querySelector('[data-guide-title]').textContent = `Trợ lý · ${button.dataset.campaignName}`;
+  if (innerWidth <= 850) document.querySelector('.progress-panel').scrollIntoView({behavior:'smooth',block:'start'});
+}));
+document.querySelector('[data-toggle-campaign-detail]')?.addEventListener('click', event => {
+  const button = event.currentTarget;
+  const expanded = button.getAttribute('aria-expanded') === 'true';
+  button.setAttribute('aria-expanded', String(!expanded));
+  document.querySelector('#campaign-detail-content').hidden = expanded;
+  button.closest('.campaign-inline-detail').classList.toggle('is-collapsed', expanded);
+  button.querySelector('span').textContent = expanded ? '⌃' : '⌄';
+});
+document.querySelector('[data-toggle-campaign-nav]')?.addEventListener('click', event => {
+  const expanded = document.body.classList.toggle('campaign-nav-expanded');
+  event.currentTarget.setAttribute('aria-expanded', String(expanded));
+  event.currentTarget.setAttribute('aria-label', expanded ? 'Thu gọn menu' : 'Mở rộng menu');
+  event.currentTarget.title = expanded ? 'Thu gọn menu' : 'Mở rộng menu';
+  event.currentTarget.textContent = expanded ? '‹' : '›';
+});
+document.querySelectorAll('[data-campaign-url]').forEach(row => row.addEventListener('click', event => {
+  if (event.target.closest('button,a,input,select,details')) return;
+  location.assign(row.dataset.campaignUrl);
+}));
