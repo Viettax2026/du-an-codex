@@ -11,6 +11,7 @@ from flask import abort, flash, g, redirect, render_template, request, send_file
 from PIL import Image
 from data_import import read_contacts, insert_contact
 from campaign_exclusions import contact_is_excluded
+from campaign_group_picker import CAMPAIGN_CONTACT_LIMIT
 from werkzeug.utils import secure_filename
 
 
@@ -77,7 +78,7 @@ def parse_phones(raw):
         if phone not in phones:
             phones.append(phone)
     if len(phones) > 500:
-        raise ValueError('Mỗi chiến dịch tối đa 500 số điện thoại.')
+        raise ValueError('Mỗi lần nhập tối đa 500 số điện thoại.')
     return phones
 
 
@@ -350,8 +351,8 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 campaign = manager.owned(campaign_id)
                 existing = list(audience(campaign, apply_exclusions=False)) if campaign['audience_mode'] == 'group' else db().execute(
                     'SELECT p.* FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=?', (campaign_id,)).fetchall()
-                if len({p['phone'] for p in existing} | set(incoming)) > 500:
-                    raise ValueError('Tổng danh sách chiến dịch tối đa 500 số điện thoại.')
+                if len({p['phone'] for p in existing} | set(incoming)) > CAMPAIGN_CONTACT_LIMIT:
+                    raise ValueError('Tổng danh sách chiến dịch tối đa 10.000 khách hàng.')
                 for person in existing:
                     db().execute('INSERT OR IGNORE INTO campaign_contacts VALUES (?,?)', (campaign_id, person['id']))
                 added = 0

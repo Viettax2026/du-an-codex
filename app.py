@@ -17,6 +17,7 @@ from personalization import personalize
 from data_import import read_contacts, insert_contact
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
+from campaign_group_picker import read_snapshot_contacts, CAMPAIGN_CONTACT_LIMIT
 
 
 def create_app(test_config=None):
@@ -175,16 +176,25 @@ def create_app(test_config=None):
             return name, message, tag, account_id, []
         incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
         incoming.update(read_contacts(request.files.get('data_file'), parse_phones))
+        needs_confirmation = bool(incoming)
+        for person in read_snapshot_contacts(db, g.user['id'], request.form.get('source_contact_ids','')):
+            incoming.setdefault(person['phone'], dict(person))
         for source in request.form.getlist('source_tags'):
-            for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND consent=1 AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)', (g.user['id'], source)):
+            metadata=db().execute('SELECT deleted_at FROM data_groups WHERE user_id=? AND name=?',(g.user['id'],source)).fetchone()
+            if metadata and metadata['deleted_at']:
+                raise ValueError('Nhóm data đã được lưu trữ. Chọn lại nhóm.')
+            members=db().execute('SELECT * FROM contacts WHERE user_id=? AND consent=1 AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)', (g.user['id'], source)).fetchall()
+            if not members:
+                raise ValueError('Nhóm data không có khách hàng đã đồng ý nhận tin.')
+            for person in members:
                 incoming.setdefault(person['phone'], dict(person))
-        if len(incoming) > 500:
-            raise ValueError('Danh sách chiến dịch tối đa 500 số.')
+        if len(incoming) > CAMPAIGN_CONTACT_LIMIT:
+            raise ValueError('Danh sách chiến dịch tối đa 10.000 khách hàng.')
         if mode == 'direct' and not incoming:
             raise ValueError('Thêm ít nhất một số điện thoại hoặc chọn nhóm có khách hàng đồng ý nhận tin.')
         g.imported_contacts = incoming
         phones = list(incoming)
-        if phones and request.form.get('phones_consent') != 'yes':
+        if needs_confirmation and request.form.get('phones_consent') != 'yes':
             raise ValueError('Cần xác nhận các số điện thoại đã đồng ý nhận nội dung này.')
         return name, message, tag, account_id, phones
 
@@ -502,8 +512,9 @@ def create_app(test_config=None):
             except ValueError as error:
                 db().rollback()
                 flash(str(error), 'error')
-        phones = db().execute('SELECT p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? ORDER BY p.id', (campaign_id,)).fetchall()
-        return render_template('campaign_edit.html', campaign=campaign, phones='\n'.join(p['phone'] for p in phones),
+        members = db().execute('SELECT p.id,p.name,p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? AND p.user_id=? ORDER BY p.id', (campaign_id,g.user['id'])).fetchall()
+        snapshot = [dict(row) for row in members] if len(members)>500 else []
+        return render_template('campaign_edit.html', campaign=campaign, phones='' if snapshot else '\n'.join(p['phone'] for p in members), snapshot_contacts=snapshot,
             accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall(),
             tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
 
@@ -815,6 +826,8 @@ def create_app(test_config=None):
     register_media_library(app, db, login_required, manager)
     from campaign_exclusions import register_campaign_exclusions
     register_campaign_exclusions(app, db, login_required, manager, parse_phones)
+    from campaign_group_picker import register_campaign_group_picker
+    register_campaign_group_picker(app, db, login_required)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
     return app

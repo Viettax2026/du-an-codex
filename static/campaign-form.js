@@ -28,7 +28,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     alias.disabled = !rename.checked;
     form.querySelector('[data-alias-preview]').textContent = samplePersonalization(alias.value);
     preview.textContent = samplePersonalization(content.value) || 'Nhập nội dung để xem trước.';
-    consent.required = Boolean(phones.value.trim());
+    consent.required = form.elements.data_mode.value === 'direct' && Boolean(phones.value.trim() || form.elements.data_file.files.length);
     content.required = messageEnabled.checked;
     invitation.required = friendEnabled.checked;
     invitation.disabled = !friendEnabled.checked;
@@ -78,22 +78,23 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     const isDirect = form.elements.data_mode.value === 'direct';
     direct.hidden = !isDirect;
     group.hidden = isDirect;
-    direct.querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = !isDirect);
+    direct.querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = !isDirect || el.dataset.snapshotDisabled === 'true');
     group.querySelectorAll('select').forEach(el => { el.disabled = isDirect; el.required = !isDirect; });
-    form.elements.phones_consent.required = isDirect;
-    const count = new Set(phones.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)).size;
-    form.querySelector('[data-phone-count]').textContent = count + ' số đã nhập';
+    form.elements.phones_consent.required = isDirect && Boolean(phones.value.trim() || form.elements.data_file.files.length);
+    const count = new Set(phones.value.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)).size;
+    let snapshotCount = 0;
+    try { snapshotCount = JSON.parse(form.elements.source_contact_ids.value || '[]').length; } catch { /* Server validates malformed IDs. */ }
+    form.querySelector('[data-phone-count]').textContent = `${count} số nhập tay · ${snapshotCount} data từ nhóm`;
   }
   form.querySelectorAll('[name=data_mode]').forEach(el => el.addEventListener('change', updateDataSource));
   phones.addEventListener('input', updateDataSource);
+  form.elements.data_file.addEventListener('change', updateDataSource);
+  form.elements.source_contact_ids.addEventListener('change', updateDataSource);
   form.querySelector('[data-focus-phones]').addEventListener('click', () => phones.focus());
-  form.querySelector('[data-show-groups]').addEventListener('click', () => {
-    const picker = form.querySelector('[data-group-picker]'); picker.hidden = !picker.hidden;
-  });
   form.querySelector('[data-clear-data]').addEventListener('click', () => {
     if (!window.confirm('Xóa danh sách nhập, tệp và nhóm đã chọn trong biểu mẫu này?')) return;
     phones.value = ''; form.elements.data_file.value = '';
-    Array.from(form.elements.source_tags.options).forEach(option => option.selected = false);
+    form.dispatchEvent(new Event('campaign-clear-snapshot'));
     updateDataSource();
   });
   updateDataSource();
@@ -156,7 +157,10 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     const fields = form.elements;
     const direct = fields.data_mode.value === 'direct';
     const validPhones = hasValidPhones();
-    const hasData = (!fields.phones.value.trim() || validPhones) && (validPhones || fields.data_file.files.length>0 || [...fields.source_tags.selectedOptions].length>0);
+    let snapshotCount = 0;
+    try { snapshotCount = JSON.parse(fields.source_contact_ids.value || '[]').length; } catch { /* Server validates IDs. */ }
+    const hasData = (!fields.phones.value.trim() || validPhones) && (validPhones || fields.data_file.files.length>0 || snapshotCount>0);
+    const needsConsent = Boolean(fields.phones.value.trim() || fields.data_file.files.length);
     const actionsValid = (fields.send_message.checked || fields.send_friend.checked) &&
       (!fields.send_friend.checked || (fields.friend_message.value.trim().length>0 && fields.friend_message.validity.valid)) &&
       (!fields.rename_enabled.checked || (fields.rename_template.value.trim().length>0 && fields.rename_template.validity.valid));
@@ -164,7 +168,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       action:Boolean(fields.action.value), account:Boolean(fields.account_id.value),
       name:Boolean(fields.name.value.trim()) && fields.name.validity.valid, actions:actionsValid,
       source:['direct','group'].includes(fields.data_mode.value),
-      phones:direct ? hasData && fields.phones_consent.checked : Boolean(fields.tag.value),
+      phones:direct ? hasData && (!needsConsent || fields.phones_consent.checked) : Boolean(fields.tag.value),
       message:!fields.send_message.checked || (Boolean(fields.message.value.trim()) && fields.message.validity.valid)
     };
     steps.forEach(step => {

@@ -49,9 +49,14 @@
 <label>Số điện thoại, mỗi dòng một số<textarea name="phones" rows="5" maxlength="15000" placeholder="0901234567&#10;0912345678">{{ request.form.get('phones', phones if editing else '') }}</textarea></label>
 <label>Thêm từ file data<input type="file" name="data_file" accept=".txt,.csv,.xlsx,.xls"></label>
 <p class="muted">TXT: mỗi dòng một số. CSV UTF-8 / Excel .xlsx/.xls: cột phone; tùy chọn name, zalo_id, email, info1…info5. Tối đa 2 MB, 500 dòng. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>.</p>
-<div data-group-picker hidden><label>Thêm data hiện tại từ nhóm<select name="source_tags" multiple size="4">{% for t in tags %}<option value="{{ t.tag }}">{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ lấy khách hàng đã đồng ý nhận tin. Danh sách được chốt khi lưu chiến dịch.</p></div>
+<input type="hidden" name="source_contact_ids" value='{{ snapshot_contacts|default([])|map(attribute="id")|list|tojson }}' data-group-snapshot-ids>
+<div class="campaign-group-snapshot" data-group-snapshot-preview data-initial-group-snapshot='{{ snapshot_contacts|default([])|tojson }}' hidden>
+  <div class="group-snapshot-heading"><b data-group-snapshot-summary></b><span>Danh sách riêng · không tự nhận data mới từ nhóm</span></div>
+  <div class="group-snapshot-table"><table><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th><th></th></tr></thead><tbody data-group-snapshot-rows></tbody></table></div>
+  <nav class="group-snapshot-pages"><button type="button" data-group-snapshot-prev aria-label="Trang trước">‹</button><span data-group-snapshot-page></span><button type="button" data-group-snapshot-next aria-label="Trang sau">›</button></nav>
+</div>
 <label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
-<p class="muted">Tối đa 500 số trong chiến dịch; số trùng chỉ lưu một lần. Thông tin khách hàng đã có được giữ nguyên.</p>
+<p class="muted">Nhập tay/tệp tối đa 500 số mỗi lần. Danh sách chiến dịch tối đa 10.000 khách hàng khi thêm từ nhóm; số trùng được gộp, thông tin và trạng thái đồng ý cũ được giữ nguyên.</p>
 </div>
 <div data-group-data><label>Nhóm data<select name="tag"><option value="">Chọn nhóm data</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ khách hàng đồng ý nhận tin được sử dụng. <a href="{{ url_for('data_groups') }}">Quản lý nhóm data →</a></p></div>
 </div></section>
@@ -66,3 +71,5 @@
 </form>
 
 {% include '_exclusion_dialogs.html' %}
+
+{% include '_campaign_group_picker.html' %}

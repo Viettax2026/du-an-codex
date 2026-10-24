@@ -1,0 +1,37 @@
+.campaign-group-dialog{width:min(800px,calc(100vw - 24px));max-height:90dvh;border:1px solid #cbd8e8;border-radius:16px;background:#f5f8fd;color:#192c45;padding:0;overflow:hidden}
+.campaign-group-dialog::backdrop{background:#29394e66;backdrop-filter:blur(2px)}
+.campaign-group-dialog>header,.campaign-group-dialog>footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 25px;border-bottom:1px solid #cad8e9}
+.campaign-group-dialog h2{font-size:20px;margin:0}
+.campaign-group-dialog>header>button{border:0;background:transparent;padding:0 5px;color:#8396b1;font-size:27px}
+.campaign-group-dialog-body{padding:22px;max-height:calc(90dvh - 164px);overflow:auto}
+.campaign-group-dialog-body>p:first-child{font-size:14px;line-height:1.65;color:#8295b0;margin:12px 0 18px}
+.campaign-group-search{display:flex;gap:10px;margin-bottom:20px}
+.campaign-group-search>input{margin:0;flex:1;min-width:0;background:#e7eef7;border:1px solid #c9d7e8;border-radius:7px;font-size:14px;height:48px}
+.campaign-group-search>button{font-size:13px;background:#e7eef7;border:1px solid #c9d7e8;border-radius:7px;color:#344e6c;padding:9px 16px;flex-shrink:0}
+.campaign-group-options{max-height:390px;overflow:auto;scrollbar-width:thin;scrollbar-color:#c8d6e7 transparent}
+.campaign-group-choice{display:flex;align-items:center;gap:15px;padding:17px 20px;border:1px solid #c8d7e8;border-radius:7px;margin:0 0 7px;color:#192c45;cursor:pointer;background:#f5f8fd;min-height:80px}
+.campaign-group-choice:has(input:checked){border-color:#8d80ff;background:#efecff}
+.campaign-group-choice:has(input:disabled){opacity:.65;cursor:default}
+.campaign-group-choice>input{width:16px;height:16px;margin:0;accent-color:#6860f6;flex-shrink:0}
+.campaign-group-choice>svg{width:21px;height:21px;flex-shrink:0}
+.campaign-group-choice>span{min-width:0}
+.campaign-group-choice b{display:block;font-size:15px;font-weight:650;overflow-wrap:anywhere}
+.campaign-group-choice small{display:block;font-size:12px;font-weight:400;color:#7287a2;margin-top:6px;line-height:1.4}
+.campaign-group-options .group-picker-empty{font-size:13px;padding:20px;color:#7d91ac;text-align:center}
+.campaign-group-dialog .campaign-group-status{font-size:12px;color:#7a8fab;line-height:1.5;margin-bottom:0}
+.campaign-group-dialog .campaign-group-status.is-error{color:#ac414c}
+.campaign-group-dialog>footer{justify-content:flex-end;border-bottom:0;border-top:1px solid #cad8e9;padding:17px 24px}
+.campaign-group-dialog>footer>button{font-size:13px;padding:10px 18px;background:transparent;color:#536c8a}
+.campaign-group-dialog>footer>.campaign-group-primary{background:#6860f6;color:#fff;border-radius:8px}
+.campaign-group-dialog [hidden]{display:none!important}
+.campaign-group-snapshot{margin:16px 0 20px;border:1px solid #cbd8e9;border-radius:9px;overflow:hidden;background:#f7faff}
+.group-snapshot-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;font-size:12px}
+.group-snapshot-heading>span{color:#8295b0;font-size:11px}
+.group-snapshot-table{overflow:auto;max-height:300px}
+.group-snapshot-table table{min-width:450px}
+.group-snapshot-table th,.group-snapshot-table td{padding:9px 12px;font-size:12px;border-bottom:1px solid #dce5ef}
+.group-snapshot-table th{background:#e9eff8;position:sticky;top:0}
+.group-snapshot-table td button{padding:2px 8px;background:transparent;color:#8e9cb1;font-size:19px}
+.group-snapshot-pages{display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:6px 12px;font-size:11px;color:#8295b0;border-top:1px solid #dce5ef}
+.group-snapshot-pages button{padding:2px 8px;background:transparent;color:#637b9b;font-size:19px}
+@media(max-width:600px){.campaign-group-dialog>header{padding:18px}.campaign-group-dialog h2{font-size:18px}.campaign-group-dialog-body{padding:16px}.campaign-group-dialog-body>p:first-child{font-size:13px}.campaign-group-search{gap:8px}.campaign-group-search>button{padding:8px 12px;font-size:12px}.campaign-group-choice{padding:14px 12px;gap:10px}.campaign-group-choice b{font-size:13px}.campaign-group-choice small{font-size:11px}.group-snapshot-heading{flex-wrap:wrap;gap:5px}.campaign-group-dialog>footer{padding:14px 18px}}
