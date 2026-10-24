@@ -1,5 +1,5 @@
 {% set editing = campaign is defined and campaign %}
-<form class="campaign-wizard" method="post" enctype="multipart/form-data" action="{{ url_for('edit_campaign', campaign_id=campaign.id) if editing else url_for('campaigns') }}">
+<form class="campaign-wizard" method="post" enctype="multipart/form-data" action="{{ url_for('duplicate_campaign',campaign_id=campaign.id) if duplicating|default(false) else url_for('edit_campaign', campaign_id=campaign.id) if editing else url_for('campaigns') }}">
 <input type="hidden" name="csrf" value="{{ session.csrf }}">
 <input type="hidden" name="options_present" value="yes">
 <aside class="wizard-steps" aria-label="Các phần cài đặt">
@@ -8,7 +8,8 @@
     ('actions','Tùy chọn hành động',[('actions','Hành động')]),
     ('source','Cách thêm data vào chiến dịch',[('source','Nguồn data')]),
     ('phones','Danh sách SĐT',[('phones','SĐT')]),
-    ('message','Nội dung tin nhắn',[('message','Nội dung tin nhắn'),('media','Media')])
+    ('message','Nội dung tin nhắn',[('message','Nội dung tin nhắn'),('media','Media')]),
+    ('schedule','Lịch chạy',[('schedule_kind','Loại lịch'),('schedule_date','Ngày chạy'),('schedule_stop','Giờ dừng')])
   ] %}
   <a href="#wizard-{{ target }}" data-wizard-step="{{ target }}" class="{{ 'is-active' if loop.first }}" {% if loop.first %}aria-current="step"{% endif %}>
     <span class="wizard-step-marker" aria-hidden="true" data-step-number="{{ loop.index }}">{{ loop.index }}</span>
@@ -21,15 +22,15 @@
 <section class="wizard-card" id="wizard-general"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-general-body" data-wizard-toggle><span>1</span> Cài đặt chung<svg class="wizard-heading-spark" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg><svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-general-body" class="wizard-card-body">
   <div class="wizard-platform"><i aria-hidden="true"></i> Zalo</div>
   <label>Hành động <strong class="wizard-required" aria-hidden="true">*</strong><select name="action"><option value="phone_actions">Zalo – Nhắn tin, kết bạn đến SĐT</option></select></label>
-  <label>Tài khoản <small class="wizard-field-hint">Có thể chọn sau</small><select name="account_id"><option value="">Chọn sau ở màn hình gửi</option>{% for a in accounts %}<option value="{{ a.id }}" {% if editing and campaign.account_id==a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
-  <label>Tên chiến dịch <strong class="wizard-required" aria-hidden="true">*</strong><input name="name" value="{{ request.form.get('name', campaign.name if editing else '') }}" required maxlength="120" placeholder="Ví dụ: Chăm sóc khách hàng tháng 10"></label>
+  <label>Tài khoản <small class="wizard-field-hint">Có thể chọn sau</small><select name="account_id"><option value="">Chọn sau ở màn hình gửi</option>{% for a in accounts %}<option value="{{ a.id }}" {% if request.form.get('account_id',campaign.account_id|string if editing and campaign.account_id else '')==a.id|string %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
+  <label>Tên chiến dịch <strong class="wizard-required" aria-hidden="true">*</strong><input name="name" value="{{ request.form.get('name', ((campaign.name[:105] ~ ' (Bản sao)') if duplicating|default(false) else campaign.name) if editing else '') }}" required maxlength="120" placeholder="Ví dụ: Chăm sóc khách hàng tháng 10"></label>
 </div></section>
 <section class="wizard-card" id="wizard-actions"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-actions-body" data-wizard-toggle><span>2</span> Tùy chọn hành động<svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-actions-body" class="wizard-card-body">
   <label class="send-confirm"><input type="checkbox" name="send_message" value="yes" {% if not editing or campaign.send_message %}checked{% endif %}> Nhắn tin</label>
   <label class="send-confirm"><input type="checkbox" name="send_friend" value="yes" {% if editing and campaign.send_friend %}checked{% endif %}> Kết bạn</label>
   {% set personal_target='friend_message' %}{% include '_personalize_picker.html' %}
   <label>Nội dung lời mời kết bạn (tối đa 150 ký tự)<textarea name="friend_message" rows="4" maxlength="150" placeholder="Xin chào {{ '{{name}}' }}, tôi muốn kết nối với bạn.">{{ request.form.get('friend_message', campaign.friend_message if editing else '') }}</textarea></label>
-  <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để cá nhân hóa. Lời mời và tin nhắn có xác nhận riêng, không tự gửi khi lưu chiến dịch.</p>
+  <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để cá nhân hóa. Khi tắt lịch tự động, lời mời và tin nhắn được xác nhận riêng tại bản xem trước.</p>
   <div class="wizard-preview"><b>Xem trước lời mời với tên mẫu “Lan”</b><p class="message-text" data-friend-preview></p><small data-friend-count></small></div>
   <label class="send-confirm"><input type="checkbox" name="rename_enabled" value="yes" {% if editing and campaign.rename_enabled %}checked{% endif %}> Kiêm đổi tên gợi nhớ trên Zalo</label>
   {% set personal_target='rename_template' %}{% include '_personalize_picker.html' %}
@@ -63,8 +64,9 @@
 <section class="wizard-card" id="wizard-message"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-message-body" data-wizard-toggle><span>5</span> Nội dung tin nhắn<svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-message-body" class="wizard-card-body">
   {% include '_message_composer.html' %}
 </div></section>
+<section class="wizard-card" id="wizard-schedule"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-schedule-body" data-wizard-toggle><span>6</span> Lịch chạy<svg class="wizard-heading-spark" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg><svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-schedule-body" class="wizard-card-body">{% include '_campaign_schedule.html' %}</div></section>
 </div>
-<footer class="wizard-footer"><span>Lưu chiến dịch chưa gửi tin đến Zalo.</span>{% if editing %}<a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a>{% else %}<button type="button" class="ghost" id="cancel-dialog">Hủy</button>{% endif %}<button class="purple-button" type="submit">Lưu chiến dịch</button></footer>
+<footer class="wizard-footer"><span data-schedule-footer>Lưu chiến dịch chưa gửi tin đến Zalo.</span>{% if editing %}<a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a>{% else %}<button type="button" class="ghost" id="cancel-dialog">Hủy</button>{% endif %}<button class="purple-button" type="submit">{{ 'Nhân bản chiến dịch' if duplicating|default(false) else 'Lưu chiến dịch' }}</button></footer>
 </form>
 
 {% include '_exclusion_dialogs.html' %}

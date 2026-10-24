@@ -59,19 +59,31 @@ if ! nginx -t; then
 fi
 
 stopped=0
+scheduler_was_active=0
+scheduler_stopped=0
 on_failure() {
   if [[ "$stopped" == 1 ]]; then
     systemctl start zaloflow || true
   fi
+  if [[ "$scheduler_was_active" == 1 && "$scheduler_stopped" == 1 ]]; then
+    systemctl start zaloflow-scheduler || true
+  fi
   echo "Cập nhật chưa hoàn tất. Giữ nguyên bản sao lưu tại $backup_dir; kiểm tra systemctl status zaloflow." >&2
 }
 trap on_failure ERR
-echo 'Tạm dừng riêng ZaloFlow để sao lưu dữ liệu nhất quán...'
+echo 'Tạm dừng riêng ZaloFlow và bộ chạy lịch để sao lưu dữ liệu nhất quán...'
+if systemctl is-active --quiet zaloflow-scheduler; then
+  scheduler_was_active=1
+  systemctl stop zaloflow-scheduler
+  scheduler_stopped=1
+fi
 systemctl stop zaloflow
 stopped=1
 if [[ -d instance ]]; then
   cp -a instance "$backup_dir/instance"
 fi
+install -m 644 deployment/zaloflow-scheduler.service /etc/systemd/system/zaloflow-scheduler.service
+systemctl daemon-reload
 systemctl start zaloflow
 stopped=0
 systemctl reload nginx
@@ -79,8 +91,11 @@ systemctl reload nginx
 # Poll with short intervals; this checks the application after schema migration.
 for attempt in {1..15}; do
   if curl --silent --fail --connect-timeout 1 --max-time 3 --output /dev/null http://127.0.0.1:8000/login; then
+    systemctl enable --now zaloflow-scheduler
+    scheduler_stopped=0
+    systemctl is-active --quiet zaloflow-scheduler
     trap - ERR
-    echo 'Đã cập nhật ZaloFlow: /login trả HTTP 200. Kiểm tra đăng nhập và menu Hành động trên web.'
+    echo 'Đã cập nhật ZaloFlow: /login trả HTTP 200, bộ chạy lịch đang hoạt động. Kiểm tra Lịch chạy trong chiến dịch.'
     exit 0
   fi
   sleep 1

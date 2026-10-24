@@ -1,5 +1,6 @@
 """Campaign operations, immutable attachments and serialized dispatch limits."""
 import csv
+import json
 import io
 import os
 import re
@@ -13,7 +14,8 @@ from data_import import read_contacts, insert_contact
 from campaign_exclusions import contact_is_excluded
 from campaign_group_picker import CAMPAIGN_CONTACT_LIMIT
 from werkzeug.utils import secure_filename
-from rich_message import read_message, display_message, parse_html, markup
+from rich_message import read_message, display_message, parse_html, markup, render_message, utf16
+from personalization import personalize
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -104,7 +106,7 @@ class CampaignManager:
         if campaign['paused'] or campaign['deleted_at']:
             abort(409, 'Chiến dịch đã dừng hoặc đã xóa. Không thực hiện thêm hành động.')
 
-    def claim(self, campaign_id, send_id, action, expected):
+    def claim(self, campaign_id, send_id, action, expected, guard=None):
         """One writer checks stop, consent, quota and idempotency before dispatch."""
         column, quota = ACTION_COLUMNS[action]
         connection = self.db()
@@ -117,6 +119,8 @@ class CampaignManager:
             if row is None or row[column] != 'prepared':
                 connection.rollback()
                 return False
+            if guard is not None:
+                guard(campaign,row)
             snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id', 'message_styles')
             if any(row[key] != expected[key] for key in snapshot_fields):
                 abort(409, 'Bản xem trước đã thay đổi trong tab khác. Tải lại để kiểm tra và xác nhận đúng nội dung.')
@@ -144,6 +148,24 @@ class CampaignManager:
         except BaseException:
             connection.rollback()
             raise
+
+    def store_preview(self, campaign, person, account, resolved, scheduled=False):
+        """Store one immutable personalized payload inside the caller's write transaction."""
+        alias=personalize(campaign['rename_template'],person,resolved).strip() if campaign['rename_enabled'] else ''
+        if campaign['rename_enabled'] and (not alias or utf16(alias)>100):
+            raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
+        invitation=personalize(campaign['friend_message'],person,resolved) if campaign['send_friend'] else ''
+        if utf16(invitation)>150:
+            raise ValueError('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.')
+        message,styles=render_message(campaign['message'],campaign['message_html'],person,resolved,variant_index=campaign['next_message_variant']) if campaign['send_message'] else ('',[])
+        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles,scheduled)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
+            'prepared' if campaign['send_message'] else 'not_requested',invitation,'prepared' if campaign['send_friend'] else 'not_requested',
+            alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'],json.dumps(styles),int(scheduled)))
+        if campaign['send_message']:
+            self.db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?',(campaign['id'],))
+        self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
+        return row.lastrowid
 
     def result(self, campaign_id, action, send_id, state):
         label = {'send': 'Tin nhắn', 'friend': 'Lời mời kết bạn', 'alias': 'Đổi tên gợi nhớ'}[action]
@@ -299,22 +321,35 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 flash('Tên chiến dịch cần từ 1 đến 120 ký tự.', 'error')
                 db().rollback()
             else:
-                columns = ['message', 'message_html', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
-                           'rename_enabled', 'rename_template', 'audience_mode', 'media_id',
-                           'message_limit', 'friend_limit', 'alias_limit', 'interval_seconds']
-                cur = db().execute(f"INSERT INTO campaigns(user_id,name,{','.join(columns)}) VALUES ({','.join('?' for _ in range(len(columns)+2))})",
-                                   (g.user['id'], name, *(campaign[column] for column in columns)))
-                copied_id = cur.lastrowid
-                db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) SELECT ?,contact_id FROM campaign_contacts WHERE campaign_id=?',
-                             (copied_id, campaign_id))
-                db().execute('INSERT INTO campaign_exclusion_rules(campaign_id,rule_group_id) SELECT ?,rule_group_id FROM campaign_exclusion_rules WHERE campaign_id=?', (copied_id,campaign_id))
-                db().execute('INSERT INTO campaign_exclusion_lists(campaign_id,list_id) SELECT ?,list_id FROM campaign_exclusion_lists WHERE campaign_id=?', (copied_id,campaign_id))
-                manager.event(campaign_id, 'duplicate', f'Nhân bản thành chiến dịch #{copied_id}.')
-                manager.event(copied_id, 'create', f'Bản nháp nhân bản từ chiến dịch #{campaign_id}. Chưa gửi hành động nào.')
-                db().commit()
-                flash('Đã nhân bản cấu hình và danh sách. Bản mới chưa gửi tin.', 'success')
-                return redirect(url_for('campaign_detail', campaign_id=copied_id))
-        return render_template('campaign_action.html', campaign=campaign, action='duplicate', page='campaigns')
+                try:
+                    from campaign_schedule import CONFIG_COLUMNS
+                    columns = ['message', 'message_html', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
+                               'rename_enabled', 'rename_template', 'audience_mode', 'media_id',
+                               'message_limit', 'friend_limit', 'alias_limit', 'interval_seconds', *CONFIG_COLUMNS]
+                    cur = db().execute(f"INSERT INTO campaigns(user_id,name,{','.join(columns)}) VALUES ({','.join('?' for _ in range(len(columns)+2))})",
+                                       (g.user['id'], name, *(campaign[column] for column in columns)))
+                    copied_id = cur.lastrowid
+                    db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) SELECT ?,contact_id FROM campaign_contacts WHERE campaign_id=?',
+                                 (copied_id, campaign_id))
+                    db().execute('INSERT INTO campaign_exclusion_rules(campaign_id,rule_group_id) SELECT ?,rule_group_id FROM campaign_exclusion_rules WHERE campaign_id=?', (copied_id,campaign_id))
+                    db().execute('INSERT INTO campaign_exclusion_lists(campaign_id,list_id) SELECT ?,list_id FROM campaign_exclusion_lists WHERE campaign_id=?', (copied_id,campaign_id))
+                    if request.form.get('options_present')=='yes':
+                        name,message,tag,account_id,phones=manager.form_fields()
+                        db().execute('UPDATE campaigns SET name=?,message=?,tag=?,account_id=? WHERE id=?',(name,message,tag,account_id,copied_id))
+                        manager.save_form_data(copied_id,phones)
+                    manager.event(campaign_id, 'duplicate', f'Nhân bản thành chiến dịch #{copied_id}.')
+                    manager.event(copied_id, 'create', f'Bản nháp nhân bản từ chiến dịch #{campaign_id}.')
+                    db().commit()
+                    flash('Đã nhân bản cấu hình và danh sách. Kiểm tra trạng thái lịch trong chi tiết chiến dịch.', 'success')
+                    return redirect(url_for('campaign_detail', campaign_id=copied_id))
+                except ValueError as error:
+                    db().rollback();flash(str(error),'error')
+        members=db().execute('SELECT p.id,p.name,p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? AND p.user_id=? AND p.deleted_at IS NULL ORDER BY p.id',(campaign_id,g.user['id'])).fetchall()
+        snapshot=[dict(row) for row in members] if len(members)>500 else []
+        return render_template('campaign_edit.html',campaign=campaign,duplicating=True,
+            phones='' if snapshot else '\n'.join(row['phone'] for row in members),snapshot_contacts=snapshot,
+            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name',(g.user['id'],)).fetchall(),
+            tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag',(g.user['id'],)).fetchall(),page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>/limits', methods=['GET', 'POST'])
     @login_required

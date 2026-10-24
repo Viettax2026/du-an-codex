@@ -39,13 +39,13 @@ Dữ liệu được phân tách theo tài khoản. Các biểu mẫu có bảo 
 
 Đã có đăng nhập, dữ liệu bền vững, nhập CSV, tìm khách hàng, phân nhóm, cập nhật đồng ý nhận tin, tạo chiến dịch, xem trước và nhật ký mô phỏng. Giao diện chiến dịch và hộp thoại thêm tài khoản đã được chỉnh theo ảnh Akabiz do người dùng cung cấp. Bộ lọc tìm kiếm/thời gian/trạng thái/nhóm và nhật ký từng chiến dịch sử dụng dữ liệu lưu trong ứng dụng. Trang `/accounts` lưu hồ sơ tên và nhóm; chưa đăng nhập Zalo.
 
-**Kênh Zalo cá nhân có gửi từng tin và lời mời kết bạn sau xác nhận.** Kênh OA/OAuth, webhook, lịch gửi, hàng đợi và ZNS chưa triển khai; số điện thoại không thay cho OA user ID.
+**Kênh Zalo cá nhân có gửi thủ công và gửi theo lịch đã bật.** Kênh OA/OAuth, webhook và ZNS chưa triển khai; số điện thoại không thay cho OA user ID.
 
 Máy chủ Flask hiện tại phục vụ phát triển. Trước khi mở công khai cần máy chủ WSGI, HTTPS, `COOKIE_SECURE=1`, hạn chế tốc độ đăng nhập/đăng ký, kiểm soát đăng ký, quản lý khôi phục tài khoản, sao lưu và vận hành. Không đưa khóa hoặc token vào Git.
 
 ## Hướng sử dụng đã chọn: Zalo cá nhân
 
-Sau khi chạy mô phỏng, sao chép nội dung trong nhật ký và tự gửi qua ứng dụng Zalo. Có bộ kết nối QR cá nhân không chính thức ở phiên bản mới; ứng dụng không tự chọn người nhận và không xác nhận gửi thật. Gửi tự động chưa triển khai.
+Mô phỏng chỉ lưu nội dung để kiểm tra. Có thể gửi thủ công qua bộ kết nối QR hoặc bật lịch tự động cho chiến dịch sau khi chọn tài khoản và kiểm tra data/nội dung. Lịch chỉ xử lý những người chưa có lần gửi trong chiến dịch.
 
 ## Giao diện theo ảnh tham chiếu
 
@@ -53,7 +53,7 @@ Trang `/campaigns` có bảng, bộ lọc, chi tiết và nhật ký bên phải
 
 ## Đăng nhập QR Zalo cá nhân (kết nối không chính thức)
 
-Bộ kết nối dùng [zca-js 2.2.0](https://github.com/RFS-ADRENO/zca-js). Đây không phải API chính thức của Zalo; tác giả cảnh báo có thể bị khóa/hạn chế tài khoản. Người dùng phải xác nhận trước khi tạo QR. QR được lấy từ Zalo, không tự tạo QR giả. Chỉ ghi nhận thành công sau khi Zalo xác nhận. Chưa có gửi tự động, listener, quét data hay tự động kết bạn.
+Bộ kết nối dùng [zca-js 2.2.0](https://github.com/RFS-ADRENO/zca-js). Đây không phải API chính thức của Zalo; tác giả cảnh báo có thể bị khóa/hạn chế tài khoản. Người dùng phải xác nhận trước khi tạo QR. QR được lấy từ Zalo, không tự tạo QR giả. Chỉ ghi nhận thành công sau khi Zalo xác nhận. Có gửi theo lịch với các hành động đã chọn trong chiến dịch; chưa có listener hoặc quét data.
 
 Cần Node.js >=18 và npm trên VPS. Cài phụ thuộc đã khóa phiên bản:
 
@@ -87,26 +87,26 @@ Bộ kết nối khôi phục phiên AES-GCM trong tiến trình Node, không tr
 
 Cập nhật VPS đã có bộ kết nối: git pull --ff-only origin main rồi systemctl restart zaloflow. Cơ sở dữ liệu tự thêm bảng, không xóa dữ liệu hoặc phiên QR đã có.
 
-Trang **Chiến dịch** có bảng gọn, menu trái thu gọn/mở rộng, bộ lọc thời gian/trạng thái/tài khoản/loại hành động/nhóm, khung chi tiết có thể đóng và bảng tiến trình riêng bên phải. Chọn tên hoặc dòng chiến dịch để mở chi tiết và nhật ký; tab Trợ lý hướng dẫn thao tác. Tiến độ gửi thật chỉ tăng khi mọi hành động đã chọn trong bản gửi được xác nhận thành công; lỗi/chưa xác định/chờ xác nhận không tính hoàn tất. Nhật ký mô phỏng có nhãn riêng. Ngày hiển thị là ngày tạo, chưa có lịch gửi tự động. Nút dừng/tiếp tục mở màn hình xác nhận hiện có, không tự gửi khi bấm tiếp tục.
+Trang **Chiến dịch** có bảng gọn, menu trái thu gọn/mở rộng, bộ lọc thời gian/trạng thái/tài khoản/loại hành động/nhóm, khung chi tiết có thể đóng và bảng tiến trình riêng bên phải. Chọn tên hoặc dòng chiến dịch để mở chi tiết và nhật ký; tab Trợ lý hướng dẫn thao tác. Tiến độ gửi thật chỉ tăng khi mọi hành động đã chọn trong bản gửi được xác nhận thành công; lỗi/chưa xác định/chờ xác nhận không tính hoàn tất. Nhật ký mô phỏng có nhãn riêng. Cột ngày hiển thị ngày tạo và trạng thái lịch nếu đã bật. Dừng khóa các hành động mới; tiếp tục cho phép bộ chạy lịch xử lý tiếp trong khung giờ đã lưu.
 
 Biểu mẫu tạo/sửa chiến dịch có thanh bước bên trái, bộ đếm các mục đã điền và dấu tích theo từng bước. Chọn bước để chuyển đến phần tương ứng; tiêu đề từng phần cho phép thu gọn/mở lại. Nếu ô bắt buộc nằm trong phần đang đóng, lưu biểu mẫu sẽ mở lại phần đó để nhập bổ sung.
 
 ## Tạo và sửa chiến dịch theo số điện thoại
 
-Form có ba phần: cài đặt chung (hành động, tài khoản, tên), danh sách SĐT và nội dung có xem trước {{name}}. Có thể nhập tối đa 500 số Việt Nam, mỗi dòng một số; +84 được chuẩn hóa về 0, loại số trùng. Phải xác nhận đồng ý nhận tin trước khi lưu danh sách. Khách hàng hiện có được giữ nguyên tên/nhóm; người mới lưu tên tạm theo số điện thoại.
+Form có các phần cài đặt chung, hành động, nguồn data, danh sách SĐT, nội dung và lịch chạy. Có thể nhập tối đa 500 số Việt Nam, mỗi dòng một số; +84 được chuẩn hóa về 0, loại số trùng. Phải xác nhận đồng ý nhận tin trước khi lưu danh sách. Khách hàng hiện có được giữ nguyên tên/nhóm; người mới lưu tên tạm theo số điện thoại.
 
-Danh sách riêng lưu trong campaign_contacts và chỉ áp dụng cho chiến dịch đó; khi để trống thì dùng nhóm khách hàng như trước. Tài khoản gửi đã chọn được lưu và chọn sẵn ở màn hình gửi thật. Lưu/sửa không gọi Zalo hoặc tự gửi. Chỉ sửa được bản nháp chưa mô phỏng và chưa có bản xem trước/lần gửi thật để bảo toàn nhật ký. Cơ sở dữ liệu cũ tự thêm cột account_id và bảng liên kết, không xóa dữ liệu.
+Danh sách riêng lưu trong campaign_contacts và chỉ áp dụng cho chiến dịch đó; khi để trống thì dùng nhóm khách hàng như trước. Tài khoản gửi đã chọn được lưu và chọn sẵn ở màn hình gửi thật. Lưu/sửa khi tắt lịch không tự gửi; bật lịch sẽ cho phép bộ chạy nền xử lý trong khung giờ đã đặt. Chỉ sửa được bản nháp chưa mô phỏng và chưa có bản xem trước/lần gửi thật để bảo toàn nhật ký. Cơ sở dữ liệu cũ tự thêm cột account_id và bảng liên kết, không xóa dữ liệu.
 
-Đã có lựa chọn nhắn tin và kết bạn riêng; Media được hỗ trợ qua menu Hành động → Cập nhật nội dung + media; lịch gửi chưa triển khai. Các phần đó trong ảnh tham chiếu chưa được triển khai.
+Có lựa chọn nhắn tin/kết bạn riêng, Media và lịch chạy theo ngày/tuần/tháng.
 
 
 ## Soạn lời mời kết bạn và tin nhắn
 
 Hành động “Nhắn tin, kết bạn đến SĐT” có hai ô lựa chọn độc lập. Có thể chỉ nhắn tin, chỉ kết bạn hoặc cả hai. Lời mời tối đa 150 ký tự, hỗ trợ {{name}} và xem trước. Giới hạn kiểm tra cả sau khi chèn tên thật.
 
-Tìm người nhận và tạo bản xem trước vẫn không gửi hành động nào. Người dùng xác nhận riêng “Gửi lời mời kết bạn” và “Gửi tin thật”; không tự gửi tin sau lời mời hoặc chờ chấp nhận tự động. Lời mời được lưu với friend_state riêng; tiếp nhận lời mời không có nghĩa đã chấp nhận. Double click, kết quả chưa xác định và khởi động lại không tự gửi lại lời mời. Bản xem trước có bất kỳ hành động đã xử lý không thể xóa để gửi lại.
+Trong chế độ thủ công, tìm người nhận và tạo bản xem trước không gửi hành động nào. Người dùng xác nhận riêng “Gửi lời mời kết bạn” và “Gửi tin thật”; không tự gửi tin sau lời mời hoặc chờ chấp nhận tự động. Lời mời được lưu với friend_state riêng; tiếp nhận lời mời không có nghĩa đã chấp nhận. Double click, kết quả chưa xác định và khởi động lại không tự gửi lại lời mời. Bản xem trước có bất kỳ hành động đã xử lý không thể xóa để gửi lại.
 
-zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Đổi tên gợi nhớ, media và giới hạn hành động đã được bổ sung ở các bản sau (xem bên dưới). Gắn tag Zalo và lịch chạy tự động chưa triển khai.
+zca-js.sendFriendRequest có thể bị Zalo từ chối nếu đã là bạn bè hoặc bị chặn. SDK lưu ý yêu cầu kết bạn có thể được xử lý như chấp nhận lời mời đã đến; ứng dụng không tự suy diễn trạng thái bạn bè. Kiểm thử API giả lập không xác minh gửi lời mời thật trên VPS. Đổi tên gợi nhớ, media và giới hạn hành động đã được bổ sung ở các bản sau (xem bên dưới). Gắn tag Zalo chưa triển khai. Lịch tự động xử lý các hành động đã chọn, không chờ người nhận chấp nhận kết bạn.
 
 ## Cá nhân hóa lời mời và tin nhắn
 
@@ -264,3 +264,16 @@ Mỗi lần tạo bản xem trước cho người nhận mới chọn biến th�
 **Lưu mẫu** lưu nội dung và định dạng theo tên/nhóm riêng của tài khoản. **Chọn mẫu / Nhóm mẫu nội dung** thay nội dung đang soạn sau xác nhận; **Quản lý mẫu** cho chọn để sửa rồi lưu đè hoặc xóa. Mẫu không chứa tệp đính kèm. Chọn một tệp bằng **Chọn file** hoặc **Từ thư viện Media**, xem trước bằng tên tệp và gỡ bằng biểu tượng thùng rác. Gỡ chỉ bỏ tệp khỏi chiến dịch; không xóa thư viện.
 
 Định dạng được làm sạch phía máy chủ, chuyển sang style ranges của SDK Zalo sau khi cá nhân hóa và lưu cùng bản xem trước/nhật ký. Sửa nội dung sau đó không đổi chữ, định dạng hoặc media của bản xem trước cũ. Các API `/message-templates` và `/composer/*` phục vụ giao diện web, cần phiên đăng nhập và CSRF cho POST; không phải Public API.
+
+## Lịch chạy chiến dịch (UTC+7)
+
+Mục **6. Lịch chạy** có trong Thêm, Sửa, Nhân bản chiến dịch. Chiến dịch cũ và bản sao mặc định tắt lịch; chọn **Bật lịch chạy tự động** và tài khoản gửi rồi lưu để cho phép xử lý tự động. **Hành động → Lịch chạy** cập nhật lịch/tài khoản ngay cả khi chiến dịch đã có nhật ký. Bộ chạy dùng giờ Việt Nam (`Asia/Ho_Chi_Minh`), độc lập múi giờ VPS/trình duyệt.
+
+- Hằng ngày, các thứ trong tuần hoặc ngày 1–31 trong tháng, từ ngày bắt đầu. Tháng thiếu ngày được chọn dùng ngày cuối tháng.
+- Giờ dừng phải sau giờ chạy trong cùng ngày. Không bật giờ dừng thì dừng nhận lượt mới lúc 23:59. Lượt đã bắt đầu có thể hoàn tất sau giờ dừng.
+- **Tiếp tục data hôm sau** cho phép xử lý phần còn lại vào ngày kế tiếp, kể cả khi ngày đó không thuộc lịch tuần/tháng. Bỏ chọn thì chờ đúng ngày lịch kế tiếp. Hết data không gửi lại; data mới của nguồn nhóm chỉ được nhận trong một lần lịch đến hạn.
+- Chỉ dùng khách còn đồng ý nhận tin, thuộc chiến dịch và không bị loại trừ. Bản xem trước thủ công không được bộ chạy tự xác nhận. Mỗi người chỉ có một bản gửi trong chiến dịch; mô phỏng không ảnh hưởng lịch gửi thật.
+- Lịch lưu bản xem trước có nội dung/biến thể/định dạng/media rồi chốt từng hành động trước khi gọi Zalo. Dừng chiến dịch, tắt/đổi lịch và hết giờ được kiểm tra lại ngay trước mỗi lượt. Áp dụng giới hạn 24 giờ và khoảng nghỉ hiện có; gặp giới hạn thì chờ.
+- Không gửi lại hành động lỗi/chưa xác định. Mất đăng nhập, lỗi tìm người nhận/cá nhân hóa, kết quả chưa xác định hoặc tiến trình cũ gián đoạn sẽ hiện **Cần kiểm tra**, ghi lịch sử và dừng lịch. Sửa nguyên nhân rồi lưu lại lịch để tiếp tục các lượt chưa gửi. Hủy bản xem trước tự động sẽ tắt lịch đó.
+
+Bộ chạy riêng: `python -m flask --app app run-scheduler` (Linux), hoặc `--once` để kiểm tra một chu kỳ. Khóa tệp theo database chỉ cho một tiến trình chạy lịch; ràng buộc SQLite và claim bảo vệ cả khi gửi thủ công đồng thời. `deployment/update.sh` dừng bộ lịch cùng web trước khi sao lưu, nâng cấp schema qua web rồi cài/bật dịch vụ `zaloflow-scheduler`. SIGTERM cho lượt đang xử lý hoàn tất trước khi dừng (tối đa 50 giây). Xem `systemctl status zaloflow-scheduler` và `journalctl -u zaloflow-scheduler` khi cần kiểm tra. Khởi động lại không gửi lại lượt đã chốt.

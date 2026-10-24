@@ -141,6 +141,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       const top = sections.getBoundingClientRect().top + 40;
       let active = cards[0];
       cards.forEach(card => { if (card.getBoundingClientRect().top <= top) active = card; });
+      if (sections.scrollTop+sections.clientHeight>=sections.scrollHeight-2) active=cards[cards.length-1];
       activate(active.id.replace('wizard-', ''));
     });
   }, {passive:true});
@@ -166,6 +167,9 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       (!fields.send_friend.checked || (fields.friend_message.value.trim().length>0 && fields.friend_message.validity.valid)) &&
       (!fields.rename_enabled.checked || (fields.rename_template.value.trim().length>0 && fields.rename_template.validity.valid));
     const states = {
+      schedule_kind:!fields.schedule_enabled.checked || Boolean(fields.schedule_kind.value),
+      schedule_date:!fields.schedule_enabled.checked || (Boolean(fields.schedule_date.value) && fields.schedule_date.validity.valid && Boolean(fields.schedule_time.value)),
+      schedule_stop:!fields.schedule_enabled.checked || form.querySelector('[data-schedule-fields]').dataset.scheduleValid!=='false',
       action:Boolean(fields.action.value), account:Boolean(fields.account_id.value),
       name:Boolean(fields.name.value.trim()) && fields.name.validity.valid, actions:actionsValid,
       source:['direct','group'].includes(fields.data_mode.value),

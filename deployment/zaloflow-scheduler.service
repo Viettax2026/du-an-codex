@@ -1,0 +1,25 @@
+[Unit]
+Description=ZaloFlow scheduled campaign worker
+Requires=zaloflow.service
+After=network.target zaloflow.service
+PartOf=zaloflow.service
+
+[Service]
+User=zaloflow
+Group=zaloflow
+WorkingDirectory=/opt/zaloflow
+Environment=ZALO_QR_ENABLED=1
+ExecStart=/opt/zaloflow/.venv/bin/python -m flask --app app run-scheduler
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=50
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/zaloflow/instance
+
+[Install]
+WantedBy=multi-user.target

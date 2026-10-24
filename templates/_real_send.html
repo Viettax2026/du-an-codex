@@ -16,6 +16,7 @@
   {% for s in sends %}
   {% set blocked=s.contact_id not in eligible_ids %}
   <article class="real-send-record">
+    {% if s.scheduled and s.state=='not_requested' and s.friend_state=='not_requested' and s.alias_state=='not_requested' %}<p class="notice">Đã bỏ qua theo điều kiện nhận tin/loại trừ; chưa gửi hành động nào.</p>{% endif %}
     {% if blocked and ('prepared' in [s.state,s.friend_state,s.alias_state]) %}<p class="notice">Khách hàng không còn đủ điều kiện nhận tin hoặc đang được loại trừ. Các hành động chưa gửi đã bị chặn.</p>{% endif %}
     <h3>{{ s.contact_name }} · Zalo: {{ s.recipient_name or 'Không có tên hiển thị' }}</h3>
     <p class="muted">Tài khoản gửi: {{ s.account_name }} · Zalo ID: {{ s.recipient_id }} · {{ s.created_at|localtime }}</p>

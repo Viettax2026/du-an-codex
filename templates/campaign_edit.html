@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
-<section class="campaign-editor"><div class="dialog-heading"><h1>Sửa chiến dịch</h1><a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}" aria-label="Đóng">×</a></div>
+<section class="campaign-editor"><div class="dialog-heading"><h1>{{ 'Nhân bản chiến dịch' if duplicating|default(false) else 'Sửa chiến dịch' }}</h1><a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}" aria-label="Đóng">×</a></div>
 {% include '_campaign_form.html' %}
 </section>
 <script src="{{ url_for('static', filename='campaign-form.js') }}" defer></script>
 <script src="{{ url_for('static', filename='message-composer.js') }}" defer></script>
+<script src="{{ url_for('static', filename='campaign-schedule.js') }}" defer></script>
 {% endblock %}

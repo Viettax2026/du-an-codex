@@ -20,6 +20,7 @@ from data_import import read_contacts, insert_contact, default_contact_consent
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
 from campaign_group_picker import read_snapshot_contacts, CAMPAIGN_CONTACT_LIMIT
+from campaign_schedule import save_schedule
 
 
 def create_app(test_config=None):
@@ -213,6 +214,7 @@ def create_app(test_config=None):
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
             db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) VALUES (?,?)', (campaign_id, contact['id']))
         manager.set_media(campaign_id)
+        save_schedule(db, campaign_id, request.form, request.form.get('account_id') or None)
 
     @app.before_request
     def security():
@@ -256,6 +258,8 @@ def create_app(test_config=None):
         return value
 
     manager = register_campaign_actions(app, db, login_required, audience, connector, personalize)
+    manager.form_fields = campaign_fields
+    manager.save_form_data = save_campaign_phones
 
     @app.route('/register', methods=['GET', 'POST'])
     def register():
@@ -435,7 +439,7 @@ def create_app(test_config=None):
                    (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag)))) AND NOT {exclusion_predicate()}) AS audience
             FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
             LEFT JOIN (SELECT campaign_id,count(*) AS sent_total,
-                sum(state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
+                sum((state='sent' OR friend_state='friend_requested' OR alias_state='renamed') AND state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
                 sum(state='prepared' OR friend_state='prepared' OR alias_state='prepared') AS waiting,
                 sum(state='sending' OR friend_state='sending' OR alias_state='sending') AS sending,
                 sum(state='unknown' OR friend_state='unknown' OR alias_state='unknown') AS uncertain,
@@ -607,29 +611,10 @@ def create_app(test_config=None):
             return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
         try:
             try:
-                alias = personalize(campaign['rename_template'], person, result).strip() if campaign['rename_enabled'] else ''
-                if campaign['rename_enabled'] and (not alias or len(alias) > 100):
-                    raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
-                invitation = personalize(campaign['friend_message'], person, result) if campaign['send_friend'] else ''
-                rendered_message, message_styles = render_message(campaign['message'], campaign['message_html'], person, result, variant_index=campaign['next_message_variant']) if campaign['send_message'] else ('', [])
+                manager.store_preview(campaign,person,account,result)
             except ValueError as error:
-                flash(str(error), 'error')
-                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            if len(rendered_message) > 2000:
-                flash('Tin nhắn sau cá nhân hóa vượt 2000 ký tự.', 'error')
-                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            if campaign['send_friend'] and len(invitation) > 150:
-                flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
-                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
-                str(result.get('name', ''))[:100], rendered_message,
-                'prepared' if campaign['send_message'] else 'not_requested', invitation,
-                'prepared' if campaign['send_friend'] else 'not_requested', alias,
-                'prepared' if campaign['rename_enabled'] else 'not_requested', campaign['media_id'], json.dumps(message_styles)))
-            if campaign['send_message']:
-                db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?', (campaign_id,))
-            manager.event(campaign_id, 'preview', f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
+                flash(str(error),'error')
+                return redirect(url_for('campaign_detail',campaign_id=campaign_id))
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
         except sqlite3.IntegrityError:
@@ -749,10 +734,13 @@ def create_app(test_config=None):
     @login_required
     def cancel_send(campaign_id, send_id):
         manager.owned(campaign_id)
+        scheduled = db().execute('SELECT scheduled FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
         removed = db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
             AND friend_state IN ('prepared','not_requested') AND alias_state IN ('prepared','not_requested')
             AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
         if removed.rowcount:
+            if scheduled and scheduled['scheduled']:
+                db().execute("UPDATE campaigns SET schedule_enabled=0,schedule_revision=schedule_revision+1,schedule_status='Chưa bật lịch' WHERE id=?",(campaign_id,))
             manager.event(campaign_id, 'cancel_preview', f'Hủy bản xem trước #{send_id}, chưa thực hiện hành động nào.')
         db().commit()
         return redirect(url_for('campaign_detail', campaign_id=campaign_id))
@@ -846,6 +834,8 @@ def create_app(test_config=None):
     register_campaign_group_picker(app, db, login_required)
     from contact_management import register_contact_management
     register_contact_management(app, db, login_required)
+    from campaign_schedule import register_campaign_schedule
+    register_campaign_schedule(app, db, login_required, manager, connector, audience)
     from message_composer import register_message_composer
     register_message_composer(app, db, login_required, manager)
     from public_api import register_public_api

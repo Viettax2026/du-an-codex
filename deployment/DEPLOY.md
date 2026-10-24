@@ -1,7 +1,7 @@
 # Triển khai bản dùng thử trên VPS Ubuntu 24.04
 
 Tên miền: cskh.viettaxco.com. IP: 103.77.172.174.
-Đây là bản dùng thử: có quản lý hồ sơ, khách hàng và mô phỏng chiến dịch; có bộ kết nối QR không chính thức cần xác minh trên VPS; chưa gửi tự động. Không dùng dữ liệu khách hàng thực trước khi hoàn thiện vận hành, sao lưu và khôi phục tài khoản.
+Đây là bản dùng thử: có quản lý hồ sơ, khách hàng và mô phỏng chiến dịch; có bộ kết nối QR không chính thức và bộ chạy lịch riêng. Chỉ gửi tự động cho chiến dịch đã được bật lịch. Không dùng dữ liệu khách hàng thực trước khi hoàn thiện vận hành, sao lưu và khôi phục tài khoản.
 
 ## 1. Tải và chuyển mã từ máy Windows
 
@@ -161,3 +161,18 @@ Xóa chiến dịch đưa vào lưu trữ và vẫn đọc được báo cáo/l�
 ### Nếu bản cập nhật đầu tiên báo ứng dụng chưa sẵn sàng sau khi cài Pillow
 
 Script cũ dùng umask 077 cả khi cài thư viện, khiến Pillow chỉ root đọc được trong khi dịch vụ chạy bằng zaloflow. Bản sửa dùng umask 022 riêng cho pip, giữ 077 cho sao lưu và tự cài lại Pillow nếu người dùng dịch vụ không import được. Chạy lại git pull --ff-only origin main rồi bash deployment/update.sh; không cần xóa dữ liệu hoặc tạo lại tài khoản. Script kiểm tra import bằng người dùng zaloflow trước khi dừng dịch vụ. Nếu vẫn lỗi, đọc journalctl -u zaloflow -n 60 --no-pager để xác định nguyên nhân thực tế.
+
+## Bộ chạy lịch tự động
+
+Với bản đang triển khai, dùng `bash deployment/update.sh` sau `git pull --ff-only origin main`; script dừng cả web và bộ lịch trước khi sao lưu, rồi bật dịch vụ lịch sau khi schema/web sẵn sàng.
+
+Khi cài mới, chỉ cài bộ lịch sau khi `/login` đã trả HTTP 200:
+
+```sh
+install -m 644 deployment/zaloflow-scheduler.service /etc/systemd/system/zaloflow-scheduler.service
+systemctl daemon-reload
+systemctl enable --now zaloflow-scheduler
+systemctl status zaloflow-scheduler --no-pager
+```
+
+Dịch vụ chạy bằng người dùng `zaloflow`, cùng database/phiên QR với web. Nếu cấu hình web dùng biến môi trường hoặc đường dẫn instance/database khác, áp dụng cùng cấu hình cho bộ lịch trước khi bật. `systemctl stop zaloflow-scheduler` dừng toàn bộ lịch; nút Dừng chiến dịch hoặc tắt lịch chỉ dừng chiến dịch tương ứng. Theo dõi `journalctl -u zaloflow-scheduler -n 50 --no-pager`. Chỉ bật lịch sau khi kiểm tra nội dung, data và tài khoản gửi.

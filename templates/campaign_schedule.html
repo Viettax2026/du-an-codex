@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">← {{ campaign.name }}</a>
+<section class="panel form-panel schedule-settings-page"><h1>Lịch chạy</h1>
+<p>Lịch chỉ xử lý khách hàng chưa được gửi trong chiến dịch. Kiểm tra nội dung, tài khoản và data trước khi bật.</p>
+<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}">
+<label>Tài khoản gửi<select name="account_id"><option value="">Chọn tài khoản</option>{% for account in accounts %}<option value="{{ account.id }}" {{ 'selected' if account.id==campaign.account_id }}>{{ account.name }}</option>{% endfor %}</select></label>
+{% include '_campaign_schedule.html' %}
+<p data-schedule-footer>Lưu lịch chưa gửi tin khi lịch đang tắt.</p>
+<div class="dialog-actions"><a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a><button type="submit" class="purple-button">Lưu lịch chạy</button></div>
+</form></section><script src="{{ url_for('static',filename='campaign-schedule.js') }}" defer></script>
+{% endblock %}

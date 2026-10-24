@@ -1,0 +1,22 @@
+{% set has_campaign = campaign is defined and campaign %}
+{% set posting = request.method=='POST' %}
+{% set schedule_enabled = request.form.get('schedule_enabled')=='yes' if posting else (campaign.schedule_enabled if has_campaign and not duplicating|default(false) else false) %}
+{% set schedule_kind = request.form.get('schedule_kind',campaign.schedule_kind if has_campaign else 'daily') %}
+{% set schedule_date = request.form.get('schedule_date',(campaign.schedule_date or schedule_today()) if has_campaign else schedule_today()) %}
+{% set schedule_stop_on = request.form.get('schedule_stop_enabled')=='yes' if posting else (campaign.schedule_stop_enabled if has_campaign else false) %}
+{% set schedule_days = request.form.getlist('schedule_weekdays') if posting else (campaign.schedule_weekdays.split(',') if has_campaign and campaign.schedule_weekdays else []) %}
+<div class="campaign-schedule-fields" data-schedule-fields>
+  <input type="hidden" name="schedule_present" value="yes">
+  <label class="schedule-check"><input type="checkbox" name="schedule_enabled" value="yes" {{ 'checked' if schedule_enabled }}> Bật lịch chạy tự động <small>Giờ Việt Nam · UTC+7</small></label>
+  <div data-schedule-options>
+    <fieldset class="schedule-kinds"><legend>Lịch</legend>{% for value,label in [('daily','Hằng ngày'),('weekly','Theo tuần'),('monthly','Theo tháng')] %}<label><input type="radio" name="schedule_kind" value="{{ value }}" {{ 'checked' if schedule_kind==value }}> {{ label }}</label>{% endfor %}</fieldset>
+    <div class="schedule-time-row"><label>Giờ chạy<input type="time" name="schedule_time" value="{{ request.form.get('schedule_time',campaign.schedule_time if has_campaign else '08:00') }}"></label><label>Ngày chạy<input type="date" name="schedule_date" min="2020-01-01" max="2100-12-31" value="{{ schedule_date }}"></label></div>
+    <fieldset class="schedule-weekdays" data-schedule-weekdays hidden><legend>Ngày trong tuần</legend>{% for day,label in [(0,'Thứ 2'),(1,'Thứ 3'),(2,'Thứ 4'),(3,'Thứ 5'),(4,'Thứ 6'),(5,'Thứ 7'),(6,'Chủ nhật')] %}<label><input type="checkbox" name="schedule_weekdays" value="{{ day }}" {{ 'checked' if day|string in schedule_days }}> {{ label }}</label>{% endfor %}</fieldset>
+    <div data-schedule-monthday hidden><label>Ngày trong tháng<input type="number" name="schedule_monthday" min="1" max="31" value="{{ request.form.get('schedule_monthday',campaign.schedule_monthday if has_campaign else schedule_date.split('-')[2]|int) }}"></label><small>Tháng không có ngày đã chọn sẽ chạy vào ngày cuối tháng.</small></div>
+    <label class="schedule-check schedule-continue"><input type="checkbox" name="schedule_continue" value="yes" {{ 'checked' if (request.form.get('schedule_continue')=='yes' if posting else (campaign.schedule_continue if has_campaign else true)) }}> Nếu chưa chạy hết data, hôm sau chiến dịch sẽ tiếp tục chạy theo thời gian hẹn giờ.</label>
+    <p class="schedule-note">Bỏ chọn: chờ ngày lịch kế tiếp. Mỗi khách hàng chỉ được xử lý một lần trong chiến dịch.</p>
+    <div class="schedule-stop-row"><label class="schedule-check"><input type="checkbox" name="schedule_stop_enabled" value="yes" {{ 'checked' if schedule_stop_on }}> <span>Giờ dừng chạy trong ngày <small>(Không bật: dừng nhận lượt mới lúc 23:59 để cập nhật lịch ngày mới)</small></span></label><input type="time" name="schedule_stop" value="{{ request.form.get('schedule_stop',campaign.schedule_stop if has_campaign else '17:00') }}" aria-label="Giờ dừng chạy trong ngày"></div>
+    <p class="schedule-error" data-schedule-error role="status" aria-live="polite"></p>
+  </div>
+  {% if has_campaign and campaign.schedule_error %}<p class="notice error">{{ campaign.schedule_error }}</p>{% endif %}
+</div>
