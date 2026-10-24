@@ -1,0 +1,23 @@
+{% set limit_data=limits_catalog(campaign if campaign is defined and campaign else none,duplicating|default(false)) %}
+{% set settings=limit_data.settings %}
+<div class="campaign-limits" data-campaign-limits data-usage='{{ limit_data.usage|tojson }}' data-usage-url="{{ limit_data.url }}">
+<input type="hidden" name="limits_present" value="yes">
+<div class="limits-top-row"><label>Thời gian nghỉ giữa 2 lần gửi<div class="limit-input"><input type="number" name="interval_seconds" min="0" max="86400" step="1" required value="{{ request.form.get('interval_seconds',settings.interval_seconds) }}"><span>giây</span></div></label><label class="limit-day-mode">Cách tính giới hạn ngày<select name="limits_day_mode"><option value="calendar" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='calendar' }}>Trong ngày · đến 24h (UTC+7)</option><option value="rolling" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='rolling' }}>24 giờ gần nhất</option></select></label></div>
+{% for action,title,prefix,unit in [('send','Nhắn tin','message','tin nhắn'),('friend','Kết bạn','friend','lời mời')] %}
+{% set used=limit_data.usage[action] %}
+<section class="limit-card" data-limit-card="{{ action }}" data-limit-unit="{{ unit }}">
+<h4>Giới hạn {{ title }}</h4>
+<div class="limit-card-grid">
+<div><div class="limit-label-row"><label for="{{ prefix }}-day-limit" data-limit-day-label>{{ 'Giới hạn trong ngày (đến 24h)' if request.form.get('limits_day_mode',settings.limits_day_mode)=='calendar' else 'Giới hạn 24 giờ gần nhất' }}</label><span class="limit-used" data-limit-used>đã chạy {{ used.day_used }}/{{ request.form.get(prefix ~ '_limit',settings[prefix ~ '_limit']) or '∞' }}</span></div>
+<div class="limit-input"><input id="{{ prefix }}-day-limit" name="{{ prefix }}_limit" type="number" min="0" max="86400" step="1" required value="{{ request.form.get(prefix ~ '_limit',settings[prefix ~ '_limit']) }}" data-limit-day><span>{{ unit }}</span></div>
+<div class="limit-progress"><progress data-limit-progress max="{{ settings[prefix ~ '_limit'] or 1 }}" value="{{ [used.day_used, settings[prefix ~ '_limit'] or 1]|min }}" aria-label="Hạn mức {{ title|lower }} đã dùng"></progress><span data-limit-remaining>{{ 'còn ' ~ ([settings[prefix ~ '_limit']-used.day_used,0]|max) ~ ' ' ~ unit if settings[prefix ~ '_limit'] else 'Không giới hạn' }}</span></div></div>
+<div><div class="limit-label-row"><label for="{{ prefix }}-hour-limit">Giới hạn trong giờ (<span data-limit-minutes>{{ request.form.get(prefix ~ '_window_minutes',settings[prefix ~ '_window_minutes']) }}</span> phút)</label><button type="button" class="limit-change-window" data-limit-change-window aria-expanded="false">Đổi số phút/giờ</button></div>
+<div class="limit-input"><input id="{{ prefix }}-hour-limit" name="{{ prefix }}_hour_limit" type="number" min="0" max="86400" step="1" required value="{{ request.form.get(prefix ~ '_hour_limit',settings[prefix ~ '_hour_limit']) }}" data-limit-hour><span>{{ unit }}</span></div>
+<label class="limit-window-editor" data-limit-window-editor hidden>Số phút trong một khung giờ<input name="{{ prefix }}_window_minutes" type="number" min="1" max="1440" step="1" required value="{{ request.form.get(prefix ~ '_window_minutes',settings[prefix ~ '_window_minutes']) }}" data-limit-window></label><small class="limit-hour-used" data-limit-hour-used>Đã chạy {{ used.hour_used }} {{ unit }} trong khung giờ</small></div>
+</div></section>
+{% endfor %}
+<label class="limits-continue"><input type="checkbox" name="limits_continue" value="yes" {{ 'checked' if (request.form.get('limits_continue')=='yes' if request.method=='POST' and request.form.get('limits_present')=='yes' else settings.limits_continue) }}> Chiến dịch sẽ tiếp tục chạy khi 1 trong các hành động đạt giới hạn</label>
+<details class="limits-alias" {{ 'open' if settings.rename_enabled|default(false) or settings.alias_limit }}><summary>Giới hạn đổi tên gợi nhớ (nếu bật)</summary><label>Giới hạn đổi tên trong ngày<div class="limit-input"><input type="number" name="alias_limit" min="0" max="86400" step="1" required value="{{ request.form.get('alias_limit',settings.alias_limit) }}"><span>lần</span></div></label></details>
+<p class="limits-note">Giới hạn áp dụng riêng cho chiến dịch, cộng chung các tài khoản gửi. Nhập 0 để không giới hạn. Tính cả lượt đã bắt đầu, lỗi hoặc chưa xác định; xem trước và mô phỏng không tính. Mỗi tin kèm tệp tính một lượt nhắn tin.</p>
+<p class="limits-status" data-limits-status role="status" aria-live="polite"></p>
+</div>

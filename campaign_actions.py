@@ -16,6 +16,7 @@ from campaign_group_picker import CAMPAIGN_CONTACT_LIMIT
 from werkzeug.utils import secure_filename
 from rich_message import read_message, display_message, parse_html, markup, render_message, utf16
 from personalization import personalize
+from campaign_limits import enforce_limits, save_limits, LIMIT_COLUMNS
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -128,16 +129,7 @@ class CampaignManager:
                 abort(400, 'Khách hàng không còn đồng ý hoặc không thuộc chiến dịch.')
             if contact_is_excluded(self.db, g.user['id'], campaign_id, row['contact_id'], row['recipient_id']):
                 abort(400, 'Người nhận thuộc danh sách loại trừ của chiến dịch.')
-            used = connection.execute('''SELECT count(*) FROM campaign_attempts
-                WHERE campaign_id=? AND action=? AND created_at>=datetime('now','-24 hours')''',
-                (campaign_id, action)).fetchone()[0]
-            if campaign[quota] and used >= campaign[quota]:
-                abort(409, 'Đã đạt giới hạn hành động trong 24 giờ. Cập nhật giới hạn hoặc chờ đủ thời gian.')
-            recent = connection.execute("""SELECT 1 FROM campaign_attempts WHERE campaign_id=?
-                AND created_at>datetime('now', ?) LIMIT 1""",
-                (campaign_id, f"-{campaign['interval_seconds']} seconds")).fetchone()
-            if campaign['interval_seconds'] and recent:
-                abort(409, 'Chưa đủ khoảng cách giữa hai hành động. Vui lòng chờ rồi xác nhận lại.')
+            enforce_limits(self.db,campaign,action)
             connection.execute(f"UPDATE message_sends SET {column}='sending' WHERE id=?", (send_id,))
             connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action) VALUES (?,?,?)',
                                (campaign_id, send_id, action))
@@ -325,7 +317,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     from campaign_schedule import CONFIG_COLUMNS
                     columns = ['message', 'message_html', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
                                'rename_enabled', 'rename_template', 'audience_mode', 'media_id',
-                               'message_limit', 'friend_limit', 'alias_limit', 'interval_seconds', *CONFIG_COLUMNS]
+                               *LIMIT_COLUMNS, *CONFIG_COLUMNS]
                     cur = db().execute(f"INSERT INTO campaigns(user_id,name,{','.join(columns)}) VALUES ({','.join('?' for _ in range(len(columns)+2))})",
                                        (g.user['id'], name, *(campaign[column] for column in columns)))
                     copied_id = cur.lastrowid
@@ -355,26 +347,18 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
     @login_required
     def campaign_limits(campaign_id):
         campaign = manager.owned(campaign_id)
-        fields = [('message_limit', 'Tin nhắn / 24 giờ'), ('friend_limit', 'Lời mời kết bạn / 24 giờ'),
-                  ('alias_limit', 'Đổi tên gợi nhớ / 24 giờ'), ('interval_seconds', 'Khoảng cách giữa các hành động (giây)')]
         if request.method == 'POST':
             try:
-                values = [int(request.form.get(key, '')) for key, _ in fields]
-                if any(value < 0 or value > 86400 for value in values):
-                    raise ValueError()
-            except ValueError:
-                flash('Nhập số nguyên từ 0 đến 86400 cho mỗi giới hạn.', 'error')
-            else:
                 db().execute('BEGIN IMMEDIATE')
                 manager.owned(campaign_id)
-                db().execute('UPDATE campaigns SET message_limit=?,friend_limit=?,alias_limit=?,interval_seconds=? WHERE id=?', (*values, campaign_id))
-                manager.event(campaign_id, 'limits', 'Cập nhật giới hạn: ' + ', '.join(f'{label}: {value}' for (_, label), value in zip(fields, values)))
+                save_limits(db,campaign_id,request.form,legacy=True)
+                manager.event(campaign_id,'limits','Cập nhật giới hạn hành động theo ngày, khung giờ và khoảng nghỉ. Giữ nguyên các lượt đã xử lý.')
                 db().commit()
-                flash('Đã cập nhật giới hạn. Các lần đã xử lý vẫn được tính trong 24 giờ.', 'success')
-                return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-        used = {action: db().execute("SELECT count(*) FROM campaign_attempts WHERE campaign_id=? AND action=? AND created_at>=datetime('now','-24 hours')",
-                                    (campaign_id, action)).fetchone()[0] for action in ACTION_COLUMNS}
-        return render_template('campaign_action.html', campaign=campaign, action='limits', fields=fields, used=used, page='campaigns')
+                flash('Đã cập nhật giới hạn. Các lần đã xử lý vẫn được tính trong hạn mức.','success')
+                return redirect(url_for('campaign_detail',campaign_id=campaign_id))
+            except ValueError as error:
+                db().rollback();flash(str(error),'error')
+        return render_template('campaign_action.html',campaign=campaign,action='limits',page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>/content', methods=['GET', 'POST'])
     @login_required

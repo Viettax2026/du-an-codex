@@ -21,6 +21,7 @@ from campaign_actions import initialize_campaign_actions, register_campaign_acti
 from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
 from campaign_group_picker import read_snapshot_contacts, CAMPAIGN_CONTACT_LIMIT
 from campaign_schedule import save_schedule
+from campaign_limits import save_limits
 
 
 def create_app(test_config=None):
@@ -213,6 +214,7 @@ def create_app(test_config=None):
             insert_contact(db(), g.user['id'], phone, getattr(g, 'imported_contacts', {}).get(phone, {}))
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
             db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) VALUES (?,?)', (campaign_id, contact['id']))
+        save_limits(db,campaign_id,request.form)
         manager.set_media(campaign_id)
         save_schedule(db, campaign_id, request.form, request.form.get('account_id') or None)
 
@@ -834,6 +836,8 @@ def create_app(test_config=None):
     register_campaign_group_picker(app, db, login_required)
     from contact_management import register_contact_management
     register_contact_management(app, db, login_required)
+    from campaign_limits import register_campaign_limits
+    register_campaign_limits(app, db, login_required, manager)
     from campaign_schedule import register_campaign_schedule
     register_campaign_schedule(app, db, login_required, manager, connector, audience)
     from message_composer import register_message_composer

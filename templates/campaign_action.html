@@ -12,10 +12,7 @@
   <label>Tên bản sao<input name="name" maxlength="120" required value="{{ request.form.get('name', (campaign.name[:105] ~ ' (Bản sao)')) }}"></label>
   <p>Sao chép cấu hình, tài khoản, danh sách riêng, media và giới hạn. Bản sao là bản nháp mới, chưa có lần gửi hoặc nhật ký. Nếu dùng nhóm, danh sách vẫn theo nhóm đó.</p>
 {% elif action=='limits' %}
-  <p>Giới hạn áp dụng riêng cho chiến dịch trong <b>24 giờ gần nhất</b>. Nhập 0 để không giới hạn. Tính cả lần thất bại, đang xử lý và chưa xác định; bản xem trước và mô phỏng không tính.</p>
-  <div class="notice">Đã dùng: {{ used.send }} lần nhắn tin · {{ used.friend }} lời mời · {{ used.alias }} lần đổi tên.</div>
-  {% for key,label in fields %}<label>{{ label }}<input type="number" name="{{ key }}" min="0" max="86400" step="1" required value="{{ request.form.get(key,campaign[key]) }}"></label>{% endfor %}
-  <p class="muted">Một lần gửi nội dung + media tới một người được tính là một hành động. Giới hạn này không thay thế hạn mức do Zalo áp dụng.</p>
+  {% include '_campaign_limits.html' %}
 {% elif action=='content' %}
   <p>Nội dung mới áp dụng cho bản xem trước tạo sau khi lưu. Bản xem trước đã có và nhật ký giữ nguyên nội dung, lời mời và media.</p>
   {% include '_message_composer.html' %}
@@ -32,5 +29,6 @@
 {% endif %}
 <div class="dialog-actions"><a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a><button class="{{ 'danger-button' if action=='delete' else 'primary' }}" type="submit">{{ titles[action] if action in ('pause','delete','duplicate') else 'Lưu thay đổi' }}</button></div>
 </form></section>
+{% if action=='limits' %}<script src="{{ url_for('static',filename='campaign-limits.js') }}" defer></script>{% endif %}
 {% if action=='content' %}{% include '_message_composer_dialogs.html' %}<script src="{{ url_for('static',filename='message-composer.js') }}" defer></script>{% endif %}
 {% endblock %}

@@ -14,6 +14,7 @@ from werkzeug.exceptions import HTTPException
 
 from campaign_exclusions import contact_is_excluded
 from rich_message import load_styles
+from campaign_limits import usage, available_actions
 
 TZ = ZoneInfo('Asia/Ho_Chi_Minh')
 CONFIG_COLUMNS = ('schedule_kind','schedule_date','schedule_time','schedule_weekdays',
@@ -131,9 +132,14 @@ class CampaignScheduler:
                 raise ValueError('Bản chờ không thuộc tài khoản gửi của lịch hiện tại.')
         return check
 
-    def pending(self,campaign):
-        return self.db().execute('''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1
-            AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared') ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
+    def pending(self,campaign,actions=None):
+        columns={'send':'state','friend':'friend_state','alias':'alias_state'}
+        selected=set(columns) if actions is None else actions
+        if not selected:
+            return None
+        condition=' OR '.join(columns[a]+"='prepared'" for a in columns if a in selected)
+        return self.db().execute(f'''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1
+            AND ({condition}) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
 
     def dispatch(self,campaign,record,action,guard):
         column={'send':'state','friend':'friend_state','alias':'alias_state'}[action]
@@ -180,7 +186,9 @@ class CampaignScheduler:
         unfinished=self.db().execute("SELECT 1 FROM message_sends WHERE campaign_id=? AND scheduled=1 AND (state='sending' OR friend_state='sending' OR alias_state='sending') LIMIT 1",(campaign_id,)).fetchone()
         if unfinished:
             raise ValueError('Có lần gửi bị gián đoạn. Kiểm tra hội thoại Zalo và lịch sử trước khi tiếp tục.')
-        record=self.pending(campaign)
+        budgets=usage(self.db,campaign)
+        allowed_actions=available_actions(campaign,budgets)
+        record=self.pending(campaign,allowed_actions)
         if record is not None:
             # Remove pending actions for recipients who opted out/left the group, without dispatching.
             allowed={person['id'] for person in self.audience(campaign)}
@@ -189,14 +197,17 @@ class CampaignScheduler:
                 self.manager.event(campaign_id,'schedule_skip',f'Bỏ qua bản gửi #{record["id"]}: khách hàng không còn thuộc danh sách được gửi.')
                 self.db().commit();return
             for action,column in (('send','state'),('friend','friend_state'),('alias','alias_state')):
-                if record[column]=='prepared':
+                if record[column]=='prepared' and action in allowed_actions:
                     self.dispatch(campaign,record,action,guard)
                     self.status(campaign_id,'Đang chạy theo lịch')
                     return  # At most one external action per campaign per tick.
         existing={r['contact_id'] for r in self.db().execute('SELECT contact_id FROM message_sends WHERE campaign_id=?',(campaign_id,))}
         person=next((person for person in self.audience(campaign) if person['id'] not in existing),None)
-        if person is None:
+        if person is None and self.pending(campaign) is None:
             self.db().execute("UPDATE campaigns SET schedule_carry=0,schedule_status='Đã xử lý hết data hiện tại' WHERE id=?",(campaign_id,));self.db().commit();return
+        if not allowed_actions or person is None:
+            self.status(campaign_id,'Đang chờ giới hạn gửi / khoảng nghỉ')
+            return
         # The lookup is read-only. Revalidate window/settings/consent afterwards in a write transaction.
         try:
             resolved=self.connector.message_action(g.user['id'],account['id'],'resolve',phone=person['phone'])

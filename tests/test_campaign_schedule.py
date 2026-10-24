@@ -156,12 +156,13 @@ def test_worker_limits_wait_without_consuming_attempts_and_unknown_never_retries
     post(client,'/contacts',{'name':'Bình','phone':'0912345678','tag':'VIP','consent':'on'})
     post(client,'/campaigns/1/limits',{'message_limit':'1','friend_limit':'0','alias_limit':'0','interval_seconds':'0'})
     tick(app);tick(app);tick(app);tick(app)
-    assert query(app,'SELECT state FROM message_sends ORDER BY id')==[('sent',),('prepared',)]
+    assert query(app,'SELECT state FROM message_sends ORDER BY id')==[('sent',)]
+    assert [call.args[2] for call in connector.message_action.call_args_list]==['resolve','send']
     assert query(app,'SELECT count(*) FROM campaign_attempts')==[(1,)]
     assert campaign(app)['schedule_error']=='' and 'giới hạn' in campaign(app)['schedule_status']
     post(client,'/campaigns/1/limits',{'message_limit':'0','friend_limit':'0','alias_limit':'0','interval_seconds':'0'})
-    connector.message_action.side_effect=lambda *args,**kwargs:{'state':'unknown'}
-    tick(app);assert query(app,'SELECT state FROM message_sends ORDER BY id')==[('sent',),('unknown',)]
+    connector.message_action.side_effect=lambda user,account,action,**kwargs: {'state':'resolved','uid':'123456','name':'Bình'} if action=='resolve' else {'state':'unknown'}
+    tick(app);tick(app);assert query(app,'SELECT state FROM message_sends ORDER BY id')==[('sent',),('unknown',)]
     assert campaign(app)['schedule_error']
     count=connector.message_action.call_count
     tick(app);tick(app);assert connector.message_action.call_count==count
