@@ -29,7 +29,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     form.querySelector('[data-alias-preview]').textContent = samplePersonalization(alias.value);
     preview.textContent = samplePersonalization(content.value) || 'Nhập nội dung để xem trước.';
     consent.required = form.elements.data_mode.value === 'direct' && Boolean(phones.value.trim() || form.elements.data_file.files.length);
-    content.required = messageEnabled.checked;
+    content.required = messageEnabled.checked && !form.querySelector('[data-message-composer].is-enhanced');
     invitation.required = friendEnabled.checked;
     invitation.disabled = !friendEnabled.checked;
     form.querySelector('[data-friend-preview]').textContent = samplePersonalization(invitation.value) || 'Nhập lời mời để xem trước.';
@@ -44,6 +44,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
 
 document.querySelectorAll('.campaign-wizard').forEach(form => {
   form.querySelectorAll('[data-picker]').forEach(picker => {
+    if (picker.closest('[data-message-composer]')) return;
     const target = picker.dataset.picker;
     const textarea = form.elements[target];
     const opener = form.querySelector('[data-picker-open="'+target+'"]');
@@ -169,6 +170,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       name:Boolean(fields.name.value.trim()) && fields.name.validity.valid, actions:actionsValid,
       source:['direct','group'].includes(fields.data_mode.value),
       phones:direct ? hasData && (!needsConsent || fields.phones_consent.checked) : Boolean(fields.tag.value),
+      media:fields.media_mode?.value === 'none' || Boolean(fields.media.files.length || fields.library_media_id.value || form.querySelector('[data-message-composer]').dataset.initialMedia !== 'null'),
       message:!fields.send_message.checked || (Boolean(fields.message.value.trim()) && fields.message.validity.valid)
     };
     steps.forEach(step => {

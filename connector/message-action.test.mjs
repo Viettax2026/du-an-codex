@@ -70,3 +70,22 @@ test('media uses attachment buffer and requires attachment acknowledgement', asy
   await assert.rejects(executeMessageAction(api, {...input, attachment: {...attachment, filename: 'bad.png'}}, () => {dispatched = true;}));
   assert.equal(dispatched, false);
 });
+
+test('rich message and attachment preserve UTF-16 styles; malformed styles never dispatch', async () => {
+  const styles = [{start:3,len:8,st:'b'}, {start:3,len:4,st:'i'}];
+  const attachment = {data:Buffer.from('pdf'),filename:'quote.pdf',metadata:{totalSize:3}};
+  const input = {action:'send',uid:'123',message:'😊 Chào Lan',styles};
+  let calls=0, dispatches=0;
+  const api={sendMessage:async(content,uid,type)=>{
+    calls++;assert.deepEqual(content.styles,styles);assert.equal(content.msg,input.message);assert.equal(uid,'123');assert.equal(type,0);
+    if (content.attachments) assert.equal(content.attachments[0],attachment);
+    return {message:{msgId:5},attachment:[{msgId:6}]};
+  }};
+  assert.deepEqual(await executeMessageAction(api,input,()=>dispatches++),{state:'sent',message_id:'5'});
+  assert.deepEqual(await executeMessageAction(api,{...input,attachment},()=>dispatches++),{state:'sent',message_id:'5,6'});
+  for(const invalid of [[{start:1,len:1,st:'b'}],[{start:3,len:100,st:'b'}],[{start:3,len:2,st:'css'}],[{start:3,len:2,st:'b',onclick:'bad'}],{},[{start:3,len:2,st:'ind_$',indentSize:100}]]) {
+    await assert.rejects(executeMessageAction(api,{...input,styles:invalid},()=>dispatches++));
+  }
+  await assert.rejects(executeMessageAction(api,{...input,action:'friend'},()=>dispatches++));
+  assert.equal(calls,2);assert.equal(dispatches,2);
+});

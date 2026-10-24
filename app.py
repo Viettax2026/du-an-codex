@@ -1,6 +1,7 @@
 import csv
 import click
 import io
+import json
 import os
 import re
 import secrets
@@ -14,6 +15,7 @@ from flask import Flask, abort, flash, g, jsonify, redirect, render_template, re
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
 from personalization import personalize
+from rich_message import read_message, render_message, load_styles, display_message
 from data_import import read_contacts, insert_contact, default_contact_consent
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
@@ -147,6 +149,7 @@ def create_app(test_config=None):
                      (rename_enabled, rename_template, campaign_id))
         db().execute('UPDATE campaigns SET send_message=?,send_friend=?,friend_message=? WHERE id=?',
                      (message_enabled, friend_enabled, invitation, campaign_id))
+        db().execute('UPDATE campaigns SET message_html=? WHERE id=?', (g.get('campaign_message_html',''), campaign_id))
 
     def audience(campaign, apply_exclusions=True):
         return db().execute('''SELECT p.* FROM contacts p JOIN campaigns c ON c.user_id=p.user_id AND c.id=?
@@ -158,7 +161,8 @@ def create_app(test_config=None):
     def campaign_fields():
         if request.form.get('action', 'phone_message') not in ('phone_message', 'phone_actions'):
             raise ValueError('Chỉ hỗ trợ tìm theo số điện thoại và nhắn tin.')
-        name, message, tag = field('name', 120), field('message', 2000), field('tag', 80)
+        name, tag = field('name', 120), field('tag', 80)
+        message, g.campaign_message_html = read_message(request.form)
         message_enabled, _, _ = action_settings()
         personalize(message, {}, strict=False)
         if request.form.get('send_friend') == 'yes':
@@ -208,6 +212,7 @@ def create_app(test_config=None):
             insert_contact(db(), g.user['id'], phone, getattr(g, 'imported_contacts', {}).get(phone, {}))
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
             db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) VALUES (?,?)', (campaign_id, contact['id']))
+        manager.set_media(campaign_id)
 
     @app.before_request
     def security():
@@ -228,6 +233,8 @@ def create_app(test_config=None):
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
         response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+        if request.endpoint in ('campaigns', 'edit_campaign', 'campaign_content'):
+            response.headers['Content-Security-Policy'] += "; media-src 'self' blob:; img-src-elem 'self' data: blob:"
         if request.endpoint == 'preview_library_media' and response.mimetype == 'application/pdf':
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['Content-Security-Policy'] = response.headers['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'")
@@ -540,8 +547,8 @@ def create_app(test_config=None):
             else:
                 try:
                     for person in recipients:
-                        message = personalize(campaign['message'], person, strict=False)
-                        db().execute('INSERT INTO deliveries(campaign_id,contact_id,message) VALUES (?,?,?)', (campaign_id, person['id'], message))
+                        message, styles = render_message(campaign['message'], campaign['message_html'], person, strict=False)
+                        db().execute('INSERT INTO deliveries(campaign_id,contact_id,message,message_styles) VALUES (?,?,?,?)', (campaign_id, person['id'], message, json.dumps(styles)))
                     manager.event(campaign_id, 'simulate', f'Mô phỏng {len(recipients)} tin nhắn; chưa gửi Zalo.')
                     db().commit()
                     flash(f'Đã mô phỏng {len(recipients)} tin nhắn. Chưa gửi tin đến Zalo.', 'success')
@@ -551,7 +558,8 @@ def create_app(test_config=None):
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         logs = db().execute('SELECT d.*, c.name FROM deliveries d JOIN contacts c ON c.id=d.contact_id WHERE campaign_id=? ORDER BY d.id DESC', (campaign_id,)).fetchall()
         try:
-            preview = personalize(campaign['message'], recipients[0] if recipients else {'name':'Nguyễn An'}, strict=False)
+            preview_text, preview_styles = render_message(campaign['message'], campaign['message_html'], recipients[0] if recipients else {'name':'Nguyễn An'}, strict=False)
+            preview = display_message(preview_text, json.dumps(preview_styles))
         except ValueError as error:
             preview = str(error)
         accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
@@ -603,7 +611,7 @@ def create_app(test_config=None):
                 if campaign['rename_enabled'] and (not alias or len(alias) > 100):
                     raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
                 invitation = personalize(campaign['friend_message'], person, result) if campaign['send_friend'] else ''
-                rendered_message = personalize(campaign['message'], person, result) if campaign['send_message'] else ''
+                rendered_message, message_styles = render_message(campaign['message'], campaign['message_html'], person, result) if campaign['send_message'] else ('', [])
             except ValueError as error:
                 flash(str(error), 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
@@ -613,12 +621,12 @@ def create_app(test_config=None):
             if campaign['send_friend'] and len(invitation) > 150:
                 flash('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.', 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
-            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
+            db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', (campaign_id, person['id'], account['id'], result['uid'],
                 str(result.get('name', ''))[:100], rendered_message,
                 'prepared' if campaign['send_message'] else 'not_requested', invitation,
                 'prepared' if campaign['send_friend'] else 'not_requested', alias,
-                'prepared' if campaign['rename_enabled'] else 'not_requested', campaign['media_id']))
+                'prepared' if campaign['rename_enabled'] else 'not_requested', campaign['media_id'], json.dumps(message_styles)))
             manager.event(campaign_id, 'preview', f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
@@ -650,6 +658,10 @@ def create_app(test_config=None):
                 attachment = manager.attachment(record['media_id'])
             except ValueError as error:
                 return str(error), 400
+        try:
+            styles = load_styles(record['message_styles'], record['message'])
+        except ValueError as error:
+            return str(error), 400
         claimed = manager.claim(campaign_id, send_id, 'send', record)
         if not claimed:
             flash('Lần gửi này đã được xử lý. Không gửi lại để tránh trùng tin.', 'error')
@@ -657,7 +669,8 @@ def create_app(test_config=None):
         try:
             result = connector.message_action(g.user['id'], record['account_id'], 'send',
                                               uid=record['recipient_id'], message=record['message'],
-                                              **({'attachment': attachment} if attachment else {}))
+                                              **({'attachment': attachment} if attachment else {}),
+                                              **({'styles': styles} if styles else {}))
         except Exception:
             result = {'state': 'unknown'}
         state = result.get('state') if result.get('state') in ('sent', 'failed', 'unknown') else 'unknown'
@@ -831,6 +844,8 @@ def create_app(test_config=None):
     register_campaign_group_picker(app, db, login_required)
     from contact_management import register_contact_management
     register_contact_management(app, db, login_required)
+    from message_composer import register_message_composer
+    register_message_composer(app, db, login_required, manager)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
     return app

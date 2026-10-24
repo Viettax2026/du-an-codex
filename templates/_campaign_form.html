@@ -8,7 +8,7 @@
     ('actions','Tùy chọn hành động',[('actions','Hành động')]),
     ('source','Cách thêm data vào chiến dịch',[('source','Nguồn data')]),
     ('phones','Danh sách SĐT',[('phones','SĐT')]),
-    ('message','Nội dung tin nhắn',[('message','Nội dung')])
+    ('message','Nội dung tin nhắn',[('message','Nội dung tin nhắn'),('media','Media')])
   ] %}
   <a href="#wizard-{{ target }}" data-wizard-step="{{ target }}" class="{{ 'is-active' if loop.first }}" {% if loop.first %}aria-current="step"{% endif %}>
     <span class="wizard-step-marker" aria-hidden="true" data-step-number="{{ loop.index }}">{{ loop.index }}</span>
@@ -61,10 +61,7 @@
 <div data-group-data><label>Nhóm data<select name="tag"><option value="">Chọn nhóm data</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ khách hàng đồng ý nhận tin được sử dụng. <a href="{{ url_for('data_groups') }}">Quản lý nhóm data →</a></p></div>
 </div></section>
 <section class="wizard-card" id="wizard-message"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-message-body" data-wizard-toggle><span>5</span> Nội dung tin nhắn<svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-message-body" class="wizard-card-body">
-  {% set personal_target='message' %}{% include '_personalize_picker.html' %}
-  <label>Nội dung<textarea name="message" rows="6" required maxlength="2000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', campaign.message if editing else '') }}</textarea></label>
-  <p class="muted">Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu.</p>
-  <div class="wizard-preview"><b>Xem trước với tên mẫu “Lan”</b><p class="message-text" data-message-preview></p></div>
+  {% include '_message_composer.html' %}
 </div></section>
 </div>
 <footer class="wizard-footer"><span>Lưu chiến dịch chưa gửi tin đến Zalo.</span>{% if editing %}<a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a>{% else %}<button type="button" class="ghost" id="cancel-dialog">Hủy</button>{% endif %}<button class="purple-button" type="submit">Lưu chiến dịch</button></footer>
@@ -73,3 +70,5 @@
 {% include '_exclusion_dialogs.html' %}
 
 {% include '_campaign_group_picker.html' %}
+
+{% include '_message_composer_dialogs.html' %}

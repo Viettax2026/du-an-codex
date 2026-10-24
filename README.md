@@ -224,7 +224,7 @@ Media dùng multipart `file`, tùy chọn `group_id`; giữ giới hạn/kiểm 
 
 Menu **Media** quản lý ảnh JPG/JPEG, PNG, WEBP, video MP4 và tài liệu PDF, tối đa 10 MB/tệp và 1.000 tệp/tài khoản. Có nhóm riêng, tải nhiều tệp lần lượt, kéo thả, dán ảnh bằng Ctrl+V, lọc tên/đuôi/ngày, sắp xếp, xem dạng lưới/danh sách và xem trước. Nút Dán ảnh dùng quyền clipboard của trình duyệt; khi không được cấp quyền có thể dùng Ctrl+V hoặc chọn tệp.
 
-Tệp lưu trong bộ lưu trữ riêng trên máy chủ (mặc định `instance/media`), chỉ chủ tài khoản truy cập; chưa kết nối Cloudflare R2. Chọn tệp đã tải tại **Hành động → Cập nhật nội dung + media** để dùng cho chiến dịch. Xóa tệp chưa dùng sẽ xóa khỏi ổ đĩa sau xác nhận; tệp đã gắn chiến dịch hoặc lịch sử gửi chỉ được ẩn khỏi thư viện và được giữ lại để bảo toàn nội dung đã chốt. Các tệp được giữ lại vẫn tính vào dung lượng và hạn mức.
+Tệp lưu trong bộ lưu trữ riêng trên máy chủ (mặc định `instance/media`), chỉ chủ tài khoản truy cập; chưa kết nối Cloudflare R2. Chọn tệp đã tải tại **Thêm/Sửa chiến dịch → Nội dung tin nhắn** hoặc **Hành động → Cập nhật nội dung + media** để dùng cho chiến dịch. Xóa tệp chưa dùng sẽ xóa khỏi ổ đĩa sau xác nhận; tệp đã gắn chiến dịch hoặc lịch sử gửi chỉ được ẩn khỏi thư viện và được giữ lại để bảo toàn nội dung đã chốt. Các tệp được giữ lại vẫn tính vào dung lượng và hạn mức.
 
 Data mới thêm qua biểu mẫu Khách hàng, nhập nhóm TXT/CSV/Excel hoặc API mặc định bật nhận tin. Các ô chọn đồng ý trong biểu mẫu được tích sẵn. Bỏ tích để tạo khách chưa đồng ý; CSV ở mục Khách hàng có thể đặt `consent=0`, API gửi `consent:false`. Nếu không xác nhận thêm thì hồ sơ cũ giữ trạng thái nhận tin. Tích đồng ý khi nhập vào nhóm sẽ cập nhật cả những số đã có trong lần nhập đó; việc cập nhật không gửi tin.
 
@@ -254,3 +254,11 @@ Biểu tượng hai ô vuông cạnh nhóm mở màn hình **Nhân bản nhóm d
 ### Lịch sử nguồn data
 
 Bấm cột **Nguồn data** để xem tệp nguồn, thời điểm ghi nhận (Asia/Bangkok), ID danh sách và ID lô nhập. Nguồn đang dùng được giữ lại khi nhập tệp khác; lần nhập sau được ghi thêm vào lịch sử. Data cũ chưa có nguồn có thể nhập lại tệp gốc vào cùng nhóm để bổ sung nguồn mà không tạo trùng hoặc đổi thông tin/đồng ý nhận tin của khách hàng. Không tự suy đoán tên tệp, ngày nhập hoặc ID lô từ dữ liệu cũ.
+
+## Soạn nội dung chiến dịch
+
+Mục **Nội dung tin nhắn** dùng một nội dung chung, có chế độ văn bản thường hoặc định dạng: đậm, nghiêng, gạch chân/gạch ngang, tiêu đề, danh sách, trích dẫn, thụt lề, chèn đường dẫn và hoàn tác. **Cá nhân hóa** chèn thông tin khách hàng; **Xem trước** dùng dữ liệu mẫu Lan. Giới hạn 2.000 đơn vị ký tự UTF-16 theo Zalo; emoji có thể tính hai đơn vị. Không sinh nội dung hoặc tự xoay biến thể.
+
+**Lưu mẫu** lưu nội dung và định dạng theo tên/nhóm riêng của tài khoản. **Chọn mẫu / Nhóm mẫu nội dung** thay nội dung đang soạn sau xác nhận; **Quản lý mẫu** cho chọn để sửa rồi lưu đè hoặc xóa. Mẫu không chứa tệp đính kèm. Chọn một tệp bằng **Chọn file** hoặc **Từ thư viện Media**, xem trước bằng tên tệp và gỡ bằng biểu tượng thùng rác. Gỡ chỉ bỏ tệp khỏi chiến dịch; không xóa thư viện.
+
+Định dạng được làm sạch phía máy chủ, chuyển sang style ranges của SDK Zalo sau khi cá nhân hóa và lưu cùng bản xem trước/nhật ký. Sửa nội dung sau đó không đổi chữ, định dạng hoặc media của bản xem trước cũ. Các API `/message-templates` và `/composer/*` phục vụ giao diện web, cần phiên đăng nhập và CSRF cho POST; không phải Public API.

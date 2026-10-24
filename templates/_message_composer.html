@@ -1,0 +1,34 @@
+{% set composer_campaign = campaign if campaign is defined and campaign else none %}
+{% set composer_attachment = composer_media(composer_campaign.media_id) if composer_campaign else none %}
+<div class="message-composer" data-message-composer data-initial-html="{{ request.form.get('message_html', composer_campaign.message_html if composer_campaign else '') }}" data-initial-media='{{ composer_attachment|tojson }}' data-message-required="{{ 'false' if composer_campaign and not composer_campaign.send_message else 'true' }}">
+  <div class="composer-mode-row"><div class="composer-tabs" aria-label="Chế độ nội dung"><button type="button" class="is-active" data-composer-basic>Cơ bản</button><button type="button" data-composer-templates>Nhóm mẫu nội dung</button></div><p>Dùng một nội dung và tệp đính kèm chung cho chiến dịch.</p></div>
+  <label class="composer-label" for="campaign-message">Nội dung tin nhắn</label>
+  <div class="composer-tools">
+    {% set personal_target='message' %}{% include '_personalize_picker.html' %}
+    <button type="button" data-composer-preview>◉ Xem trước</button><button type="button" data-composer-templates>▤ Chọn mẫu</button><button type="button" data-composer-save>▣ Lưu mẫu</button><button type="button" data-composer-manage>☷ Quản lý mẫu</button>
+  </div>
+  <label class="composer-check"><input type="checkbox" data-composer-rich checked> Nội dung có định dạng (in đậm, nghiêng, danh sách…)</label>
+  <input type="hidden" name="rich_message" value="no"><input type="hidden" name="message_html" value="">
+  <div class="composer-rich-shell" data-rich-shell hidden>
+    <div class="composer-format" role="toolbar" aria-label="Định dạng nội dung">
+      {% for cmd,value,label,tip in [('bold','','B','In đậm'),('italic','','I','In nghiêng'),('underline','','U','Gạch chân'),('strikeThrough','','S','Gạch ngang'),('formatBlock','h1','H1','Tiêu đề 1'),('formatBlock','h2','H2','Tiêu đề 2'),('formatBlock','h3','H3','Tiêu đề 3'),('insertUnorderedList','','☷','Danh sách dấu đầu dòng'),('insertOrderedList','','≡','Danh sách đánh số'),('formatBlock','blockquote','❞','Trích dẫn'),('outdent','','⇤','Giảm thụt lề'),('indent','','⇥','Tăng thụt lề'),('link','','↗','Chèn liên kết'),('undo','','↶','Hoàn tác'),('redo','','↷','Làm lại'),('removeFormat','','Tx','Xóa định dạng')] %}
+      <button type="button" data-format="{{ cmd }}" data-value="{{ value }}" title="{{ tip }}" aria-label="{{ tip }}" {% if cmd in ('bold','italic','underline','strikeThrough') %}aria-pressed="false"{% endif %}>{% if cmd=='link' %}<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/></svg>{% else %}{{ label }}{% endif %}</button>
+      {% endfor %}
+    </div>
+    <div class="composer-editor" data-composer-editor contenteditable="true" role="textbox" aria-label="Nội dung tin nhắn có định dạng" aria-multiline="true" spellcheck="false" data-placeholder="Nhập nội dung tin nhắn…"></div>
+  </div>
+  <textarea id="campaign-message" name="message" rows="10" maxlength="2000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', composer_campaign.message if composer_campaign else '') }}</textarea>
+  <div class="composer-caption"><span>Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu.</span><span data-composer-count>0 / 2.000</span></div>
+  <p class="composer-status" data-composer-status role="status" aria-live="polite"></p>
+  <div class="wizard-preview composer-preview" data-composer-inline-preview hidden><b>Xem trước với tên mẫu “Lan”</b><div class="message-text" data-message-preview></div></div>
+  <section class="composer-files" aria-label="Tệp đính kèm">
+    <b>File đính kèm</b><p>JPG, PNG, WEBP, PDF hoặc MP4 · tối đa 10 MB · 1 tệp dùng chung.</p>
+    <input type="hidden" name="media_present" value="yes"><input type="hidden" name="library_media_id" value="">
+    <div class="composer-file-grid"><div>
+      <div class="composer-file-buttons"><button type="button" class="purple-button" data-composer-upload>Chọn file</button><button type="button" class="composer-outline" data-composer-library>Từ thư viện Media</button></div>
+      <input type="file" name="media" accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4" data-composer-file hidden>
+      <label class="composer-check"><input type="radio" name="media_mode" value="none" {{ 'checked' if not composer_attachment }}> Không gửi file</label>
+      <label class="composer-check"><input type="radio" name="media_mode" value="send" {{ 'checked' if composer_attachment }}> Gửi file đính kèm</label>
+    </div><div class="composer-file-table"><table><thead><tr><th>STT</th><th>File</th><th></th></tr></thead><tbody data-composer-file-rows></tbody></table></div></div>
+  </section>
+</div>

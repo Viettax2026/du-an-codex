@@ -1,0 +1,199 @@
+"""Restricted rich messages and immutable Zalo UTF-16 formatting ranges."""
+import json
+from html import escape
+from html.parser import HTMLParser
+
+from personalization import TOKEN, personalize
+
+STYLES = {'b', 'i', 'u', 's', 'f_18', 'lst_1', 'lst_2', 'ind_$'}
+TAGS = {'b':'b', 'strong':'b', 'i':'i', 'em':'i', 'u':'u', 's':'s', 'strike':'s',
+        'h1':'f_18', 'h2':'f_18', 'h3':'f_18', 'blockquote':'ind_$'}
+BLOCKS = {'p', 'div', 'h1', 'h2', 'h3', 'blockquote', 'ul', 'ol', 'li'}
+DROP = {'script', 'style', 'iframe', 'object', 'svg', 'math', 'template'}
+
+
+def utf16(text):
+    return len(text.encode('utf-16-le')) // 2
+
+
+class MessageParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.text = ''
+        self.ranges = []
+        self.stack = []
+        self.dropped = []
+
+    def newline(self):
+        if self.text and not self.text.endswith('\n'):
+            self.text += '\n'
+
+    def handle_starttag(self, tag, attrs):
+        if self.dropped:
+            if tag in DROP:
+                self.dropped.append(tag)
+            return
+        if tag in DROP:
+            self.dropped.append(tag)
+            return
+        if tag == 'br':
+            self.text += '\n'
+            return
+        if tag in BLOCKS:
+            self.newline()
+        style = TAGS.get(tag)
+        if tag == 'li':
+            style = 'lst_2' if any(t == 'ol' for t, _, _ in self.stack) else 'lst_1'
+        if tag == 'span':
+            style = dict(attrs).get('data-style')
+            if style not in STYLES:
+                style = None
+        self.stack.append((tag, len(self.text), style))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag != 'br':
+            self.handle_endtag(tag)
+
+    def close_tag(self, entry):
+        tag, start, style = entry
+        end = len(self.text.rstrip('\n'))
+        if style and end > start:
+            self.ranges.append((start, end, style))
+            if tag in ('h1','h2','h3'):
+                self.ranges.append((start, end, 'b'))
+        if tag in BLOCKS:
+            self.newline()
+
+    def handle_endtag(self, tag):
+        if self.dropped:
+            if tag == self.dropped[-1]:
+                self.dropped.pop()
+            return
+        match = next((i for i in range(len(self.stack)-1, -1, -1) if self.stack[i][0] == tag), None)
+        if match is not None:
+            while len(self.stack) > match:
+                self.close_tag(self.stack.pop())
+
+    def handle_data(self, data):
+        if not self.dropped:
+            self.text += data
+
+    def result(self):
+        while self.stack:
+            self.close_tag(self.stack.pop())
+        left = len(self.text) - len(self.text.lstrip())
+        text = self.text.strip()
+        ranges = sorted({(max(0,a-left), min(len(text),b-left), st) for a,b,st in self.ranges
+                         if min(len(text),b-left) > max(0,a-left)})
+        if len(ranges) > 400:
+            raise ValueError('Nội dung có quá nhiều vùng định dạng. Vui lòng đơn giản hóa định dạng.')
+        return text, ranges
+
+
+def parse_html(value):
+    if len(value) > 40000:
+        raise ValueError('Nội dung định dạng quá dài.')
+    parser = MessageParser()
+    parser.feed(value)
+    parser.close()
+    return parser.result()
+
+
+def markup(text, ranges):
+    """Escape every character; only emit our own tags and attributes."""
+    boundaries = sorted({0,len(text),*(a for a,_,_ in ranges),*(b for _,b,_ in ranges)})
+    result, opened = [], []
+    def opening(st):
+        tag = {'b':'strong','i':'em','u':'u','s':'s'}.get(st)
+        return f'<{tag}>' if tag else f'<span data-style="{st}">'
+    def closing(st):
+        tag = {'b':'strong','i':'em','u':'u','s':'s'}.get(st, 'span')
+        return f'</{tag}>'
+    for a,b in zip(boundaries, boundaries[1:]):
+        tags = sorted({st for start,end,st in ranges if start <= a and end >= b}, key=lambda st:(st in {'b','i','u','s'},st))
+        common = 0
+        while common < min(len(opened),len(tags)) and opened[common] == tags[common]:
+            common += 1
+        result.extend(closing(st) for st in reversed(opened[common:]))
+        result.extend(opening(st) for st in tags[common:])
+        result.append(escape(text[a:b]).replace('\n','<br>'))
+        opened = tags
+    result.extend(closing(st) for st in reversed(opened))
+    return ''.join(result)
+
+
+
+def read_message(form):
+    html = form.get('message_html','') if form.get('rich_message') == 'yes' else ''
+    if html:
+        text, ranges = parse_html(html)
+        html = markup(text, ranges)
+        parse_html(html)  # Canonical output must remain within the same complexity limits.
+    else:
+        text = form.get('message','').strip()
+    if utf16(text) > 2000:
+        raise ValueError('Tin nhắn vượt 2000 ký tự. Emoji được tính theo giới hạn của Zalo.')
+    personalize(text, {}, strict=False)
+    return text, html
+
+
+def render_message(message, html, contact, zalo=None, strict=True):
+    if html:
+        source, ranges = parse_html(html)
+        if source != message:
+            raise ValueError('Nội dung và định dạng không khớp. Vui lòng lưu lại nội dung.')
+    else:
+        source, ranges = message, []
+    # Personalize before converting offsets to Zalo's UTF-16 units. A token may span tags.
+    replacements = [(m.start(),m.end(),personalize(m.group(),contact,zalo,strict=strict)) for m in TOKEN.finditer(source)]
+    def offset(pos, end=False):
+        shift = 0
+        for a,b,value in replacements:
+            if pos <= a:
+                break
+            if pos < b:
+                return a + shift + (len(value) if end else 0)
+            shift += len(value)-(b-a)
+        return pos+shift
+    text = personalize(source,contact,zalo,strict=strict)
+    if utf16(text) > 2000:
+        raise ValueError('Tin nhắn sau cá nhân hóa vượt 2000 ký tự.')
+    styles=[]
+    for a,b,st in ranges:
+        a,b=offset(a),offset(b,True)
+        if b>a:
+            item={'start':utf16(text[:a]),'len':utf16(text[a:b]),'st':st}
+            if st=='ind_$':
+                item['indentSize']=1
+            if item not in styles:
+                styles.append(item)
+    return text,styles
+
+
+def load_styles(value, text):
+    try:
+        styles=json.loads(value or '[]')
+        positions={utf16(text[:i]):i for i in range(len(text)+1)}
+        if not isinstance(styles,list) or len(styles)>400:
+            raise ValueError()
+        for s in styles:
+            if not isinstance(s,dict) or set(s)-{'start','len','st','indentSize'} or s.get('st') not in STYLES:
+                raise ValueError()
+            if type(s.get('start')) is not int or type(s.get('len')) is not int or s['len']<=0 or s['start'] not in positions or s['start']+s['len'] not in positions:
+                raise ValueError()
+            if 'indentSize' in s and (s['st']!='ind_$' or type(s['indentSize']) is not int or not 1<=s['indentSize']<=5):
+                raise ValueError()
+        return styles
+    except (ValueError,TypeError,KeyError) as error:
+        raise ValueError('Định dạng bản xem trước không hợp lệ. Không gửi tin.') from error
+
+
+def display_message(text, styles='[]'):
+    from markupsafe import Markup
+    try:
+        spans=load_styles(styles,text)
+        positions={utf16(text[:i]):i for i in range(len(text)+1)}
+        return Markup(markup(text,[(positions[s['start']],positions[s['start']+s['len']],s['st']) for s in spans]))
+    except ValueError:
+        return text

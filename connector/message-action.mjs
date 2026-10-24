@@ -19,6 +19,16 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
         (![attachment.metadata.width, attachment.metadata.height].every(value => Number.isInteger(value) && value > 0) ||
          attachment.metadata.width * attachment.metadata.height > 25_000_000)) throw new Error('Invalid image dimensions');
   }
+  const styles = input.styles === undefined ? [] : input.styles;
+  const supported = new Set(['b','i','u','s','f_18','lst_1','lst_2','ind_$']);
+  const boundaries = new Set([0]);
+  let position = 0;
+  for (const char of input.message) { position += char.length; boundaries.add(position); }
+  if (!Array.isArray(styles) || styles.length > 400 || styles.length && input.action !== 'send' || styles.some(style =>
+      !style || !supported.has(style.st) || Object.keys(style).some(key => !['start','len','st','indentSize'].includes(key)) ||
+      !Number.isInteger(style.start) || !Number.isInteger(style.len) || style.len <= 0 ||
+      !boundaries.has(style.start) || !boundaries.has(style.start+style.len) ||
+      style.indentSize !== undefined && (style.st !== 'ind_$' || !Number.isInteger(style.indentSize) || style.indentSize < 1 || style.indentSize > 5))) throw new Error('Invalid text styles');
   onDispatch();
   if (input.action === 'alias') {
     const result = await api.changeFriendAlias(input.message, input.uid);
@@ -28,7 +38,7 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
     const result = await api.sendFriendRequest(input.message, input.uid);
     return {state: result === '' ? 'friend_requested' : 'unknown'};
   }
-  const result = await api.sendMessage(attachment ? {msg: input.message, attachments: [attachment]} : input.message, input.uid, 0); // ThreadType.User
+  const result = await api.sendMessage(attachment || styles.length ? {msg: input.message, ...(attachment ? {attachments:[attachment]} : {}), ...(styles.length ? {styles} : {})} : input.message, input.uid, 0); // ThreadType.User
   if (attachment) {
     // A caption/text acknowledgement alone does not prove that the attachment was accepted.
     if (!result.attachment?.length || !result.attachment.every(item => item.msgId)) return {state: 'unknown'};

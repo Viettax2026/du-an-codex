@@ -13,6 +13,7 @@ from data_import import read_contacts, insert_contact
 from campaign_exclusions import contact_is_excluded
 from campaign_group_picker import CAMPAIGN_CONTACT_LIMIT
 from werkzeug.utils import secure_filename
+from rich_message import read_message, display_message, parse_html, markup
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -25,11 +26,12 @@ STATE_LABELS = {'prepared': 'Chờ xác nhận', 'sending': 'Đang xử lý / c�
 
 def initialize_campaign_actions(db):
     columns = {
-        'campaigns': {'paused': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT',
+        'campaigns': {'message_html': "TEXT NOT NULL DEFAULT ''", 'paused': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT',
                       'audience_mode': "TEXT NOT NULL DEFAULT 'group'", 'media_id': 'INTEGER',
                       'message_limit': 'INTEGER NOT NULL DEFAULT 0', 'friend_limit': 'INTEGER NOT NULL DEFAULT 0',
                       'alias_limit': 'INTEGER NOT NULL DEFAULT 0', 'interval_seconds': 'INTEGER NOT NULL DEFAULT 0'},
-        'message_sends': {'media_id': 'INTEGER'},
+        'message_sends': {'media_id': 'INTEGER', 'message_styles': "TEXT NOT NULL DEFAULT '[]'"},
+        'deliveries': {'message_styles': "TEXT NOT NULL DEFAULT '[]'"},
     }
     for table, fields in columns.items():
         present = {row['name'] for row in db().execute(f'PRAGMA table_info({table})')}
@@ -115,7 +117,7 @@ class CampaignManager:
             if row is None or row[column] != 'prepared':
                 connection.rollback()
                 return False
-            snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id')
+            snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id', 'message_styles')
             if any(row[key] != expected[key] for key in snapshot_fields):
                 abort(409, 'Bản xem trước đã thay đổi trong tab khác. Tải lại để kiểm tra và xác nhận đúng nội dung.')
             if row['contact_id'] not in {p['id'] for p in self.audience(campaign)}:
@@ -162,6 +164,8 @@ class CampaignManager:
     def upload(self, uploaded):
         if not uploaded or not uploaded.filename:
             return None
+        if self.db().execute('SELECT count(*) FROM campaign_media WHERE user_id=?', (g.user['id'],)).fetchone()[0] >= 1000:
+            raise ValueError('Thư viện đã đạt giới hạn 1.000 tệp.')
         data = uploaded.read(10 * 1024 * 1024 + 1)
         if not data or len(data) > 10 * 1024 * 1024:
             raise ValueError('Media cần có dữ liệu và không vượt quá 10 MB.')
@@ -196,10 +200,39 @@ class CampaignManager:
                 stream.write(data)
             cur = self.db().execute('''INSERT INTO campaign_media(user_id,storage_name,filename,mime,size,width,height)
                 VALUES (?,?,?,?,?,?,?)''', (g.user['id'], storage_name, filename, mimes[extension], len(data), width, height))
+            g.setdefault('pending_media_files', []).append((cur.lastrowid, storage_name, path))
             return cur.lastrowid
         except BaseException:
             path.unlink(missing_ok=True)
             raise
+
+
+    def set_media(self, campaign_id):
+        campaign = self.owned(campaign_id)
+        upload = request.files.get('media')
+        library_id = request.form.get('library_media_id', '')
+        if request.form.get('media_present') == 'yes' and request.form.get('media_mode') not in ('none','send'):
+            raise ValueError('Chọn cách gửi tệp đính kèm hợp lệ.')
+        if request.form.get('media_present') == 'yes' and request.form.get('media_mode') == 'none':
+            self.db().execute('UPDATE campaigns SET media_id=NULL WHERE id=?', (campaign_id,))
+            return
+        if (upload and upload.filename or library_id) and not campaign['send_message']:
+            raise ValueError('Media chỉ dùng cho chiến dịch có nhắn tin.')
+        chosen = None
+        if library_id:
+            chosen = self.media(int(library_id)) if library_id.isdigit() else None
+            if not chosen or chosen['library_deleted_at']:
+                raise ValueError('Không tìm thấy media trong thư viện của bạn.')
+            self.attachment(chosen['id'])
+            if upload and upload.filename:
+                raise ValueError('Chọn tệp tải mới hoặc media thư viện, mỗi lần một nguồn.')
+        new_id = self.upload(upload)
+        media_id = new_id or (chosen['id'] if chosen else None) or (None if request.form.get('remove_media') == 'yes' else campaign['media_id'])
+        if request.form.get('media_present') == 'yes' and request.form.get('media_mode') == 'send' and not media_id:
+            raise ValueError('Chọn một tệp để gửi hoặc chọn Không gửi file.')
+        if not campaign['send_message']:
+            media_id = None
+        self.db().execute('UPDATE campaigns SET media_id=? WHERE id=?', (media_id, campaign_id))
 
 
 def register_campaign_actions(app, db, login_required, audience, connector, personalize):
@@ -207,6 +240,27 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
     app.extensions['campaign_manager'] = manager
     app.jinja_env.globals['campaign_media'] = manager.media
     app.jinja_env.globals['send_state_labels'] = STATE_LABELS
+    app.jinja_env.globals['display_message'] = display_message
+    def campaign_markup(campaign):
+        from markupsafe import Markup
+        if campaign['message_html']:
+            text, ranges = parse_html(campaign['message_html'])
+            if text == campaign['message']:
+                return Markup(markup(text, ranges))
+        return campaign['message']
+    app.jinja_env.globals['campaign_message'] = campaign_markup
+
+    @app.teardown_request
+    def cleanup_uncommitted_media(error):
+        pending = g.get('pending_media_files', [])
+        if not pending:
+            return
+        connection = db()
+        if connection.in_transaction:
+            connection.rollback()
+        for media_id, storage_name, path in pending:
+            if not connection.execute('SELECT 1 FROM campaign_media WHERE id=? AND storage_name=?', (media_id, storage_name)).fetchone():
+                path.unlink(missing_ok=True)
 
     @app.errorhandler(409)
     def campaign_conflict(error):
@@ -245,7 +299,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 flash('Tên chiến dịch cần từ 1 đến 120 ký tự.', 'error')
                 db().rollback()
             else:
-                columns = ['message', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
+                columns = ['message', 'message_html', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
                            'rename_enabled', 'rename_template', 'audience_mode', 'media_id',
                            'message_limit', 'friend_limit', 'alias_limit', 'interval_seconds']
                 cur = db().execute(f"INSERT INTO campaigns(user_id,name,{','.join(columns)}) VALUES ({','.join('?' for _ in range(len(columns)+2))})",
@@ -292,41 +346,22 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
     def campaign_content(campaign_id):
         campaign = manager.owned(campaign_id)
         if request.method == 'POST':
-            new_media_id = None
             try:
-                message = request.form.get('message', '').strip()
+                message, message_html = read_message(request.form)
                 invitation = request.form.get('friend_message', '').strip()
-                if len(message) > 2000 or (campaign['send_message'] and not message) or len(invitation) > 150 or (campaign['send_friend'] and not invitation):
+                if (campaign['send_message'] and not message) or len(invitation) > 150 or (campaign['send_friend'] and not invitation):
                     raise ValueError('Nhập tin nhắn tối đa 2000 ký tự và lời mời tối đa 150 ký tự cho hành động đã chọn.')
-                personalize(message, {}, strict=False)
                 personalize(invitation, {}, strict=False)
                 db().execute('BEGIN IMMEDIATE')
                 campaign = manager.owned(campaign_id)
-                if request.files.get('media') and not campaign['send_message']:
-                    raise ValueError('Media chỉ dùng cho chiến dịch có nhắn tin.')
-                library_id = request.form.get('library_media_id','')
-                chosen = None
-                if library_id:
-                    if not library_id.isdigit() or not campaign['send_message']:
-                        raise ValueError('Media thư viện không hợp lệ.')
-                    chosen = manager.media(int(library_id))
-                    if not chosen or chosen['library_deleted_at']:
-                        raise ValueError('Không tìm thấy media trong thư viện của bạn.')
-                    manager.attachment(chosen['id'])
-                    if request.files.get('media') and request.files['media'].filename:
-                        raise ValueError('Chọn tệp tải mới hoặc media thư viện, mỗi lần một nguồn.')
-                new_media_id = manager.upload(request.files.get('media'))
-                media_id = new_media_id or (chosen['id'] if chosen else None) or (None if request.form.get('remove_media')=='yes' else campaign['media_id'])
-                db().execute('UPDATE campaigns SET message=?,friend_message=?,media_id=? WHERE id=?',
-                             (message, invitation, media_id, campaign_id))
+                manager.set_media(campaign_id)
+                db().execute('UPDATE campaigns SET message=?,message_html=?,friend_message=? WHERE id=?',
+                             (message, message_html, invitation, campaign_id))
                 manager.event(campaign_id, 'content', 'Cập nhật nội dung và media cho các bản xem trước tạo sau thời điểm này.')
                 db().commit()
                 flash('Đã cập nhật nội dung và media. Bản xem trước và nhật ký cũ giữ nguyên.', 'success')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             except ValueError as error:
-                media = manager.media(new_media_id)
-                if media:
-                    (manager.media_root / media['storage_name']).unlink(missing_ok=True)
                 db().rollback()
                 flash(str(error), 'error')
         return render_template('campaign_action.html', campaign=campaign, action='content', page='campaigns', library_media=db().execute('SELECT id,filename FROM campaign_media WHERE user_id=? AND library_deleted_at IS NULL ORDER BY id DESC', (g.user['id'],)).fetchall())
