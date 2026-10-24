@@ -36,6 +36,7 @@
   <label>Mẫu đổi tên<input name="rename_template" maxlength="100" value="{{ request.form.get('rename_template', campaign.rename_template if editing else '#{FULL_NAME} - #{PHONE}') }}"></label>
   <p class="muted">Chỉ đổi tên gợi nhớ trong tài khoản gửi. Zalo có thể từ chối nếu người nhận chưa là bạn bè.</p>
   <div class="wizard-preview"><b>Tên gợi nhớ mẫu</b><p data-alias-preview></p></div>
+{% include '_campaign_exclusions.html' %}
 </div></section>
 {% set data_mode = request.form.get('data_mode', 'direct' if not editing or campaign.audience_mode=='list' else 'group') %}
 <section class="wizard-card" id="wizard-source"><h3><button class="wizard-card-toggle" type="button" aria-expanded="true" aria-controls="wizard-source-body" data-wizard-toggle><span>3</span> Cách thêm data vào chiến dịch<svg class="wizard-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button></h3><div id="wizard-source-body" class="wizard-card-body data-source-options">
@@ -63,3 +64,5 @@
 </div>
 <footer class="wizard-footer"><span>Lưu chiến dịch chưa gửi tin đến Zalo.</span>{% if editing %}<a class="ghost" href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">Hủy</a>{% else %}<button type="button" class="ghost" id="cancel-dialog">Hủy</button>{% endif %}<button class="purple-button" type="submit">Lưu chiến dịch</button></footer>
 </form>
+
+{% include '_exclusion_dialogs.html' %}

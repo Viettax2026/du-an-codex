@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import abort, flash, g, redirect, render_template, request, send_file, url_for
 from PIL import Image
 from data_import import read_contacts, insert_contact
+from campaign_exclusions import contact_is_excluded
 from werkzeug.utils import secure_filename
 
 
@@ -118,6 +119,8 @@ class CampaignManager:
                 abort(409, 'Bản xem trước đã thay đổi trong tab khác. Tải lại để kiểm tra và xác nhận đúng nội dung.')
             if row['contact_id'] not in {p['id'] for p in self.audience(campaign)}:
                 abort(400, 'Khách hàng không còn đồng ý hoặc không thuộc chiến dịch.')
+            if contact_is_excluded(self.db, g.user['id'], campaign_id, row['contact_id'], row['recipient_id']):
+                abort(400, 'Người nhận thuộc danh sách loại trừ của chiến dịch.')
             used = connection.execute('''SELECT count(*) FROM campaign_attempts
                 WHERE campaign_id=? AND action=? AND created_at>=datetime('now','-24 hours')''',
                 (campaign_id, action)).fetchone()[0]
@@ -249,6 +252,8 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 copied_id = cur.lastrowid
                 db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) SELECT ?,contact_id FROM campaign_contacts WHERE campaign_id=?',
                              (copied_id, campaign_id))
+                db().execute('INSERT INTO campaign_exclusion_rules(campaign_id,rule_group_id) SELECT ?,rule_group_id FROM campaign_exclusion_rules WHERE campaign_id=?', (copied_id,campaign_id))
+                db().execute('INSERT INTO campaign_exclusion_lists(campaign_id,list_id) SELECT ?,list_id FROM campaign_exclusion_lists WHERE campaign_id=?', (copied_id,campaign_id))
                 manager.event(campaign_id, 'duplicate', f'Nhân bản thành chiến dịch #{copied_id}.')
                 manager.event(copied_id, 'create', f'Bản nháp nhân bản từ chiến dịch #{campaign_id}. Chưa gửi hành động nào.')
                 db().commit()
@@ -343,7 +348,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     raise ValueError('Nhập số điện thoại, chọn tệp hoặc chọn nhóm để bổ sung.')
                 db().execute('BEGIN IMMEDIATE')
                 campaign = manager.owned(campaign_id)
-                existing = list(audience(campaign)) if campaign['audience_mode'] == 'group' else db().execute(
+                existing = list(audience(campaign, apply_exclusions=False)) if campaign['audience_mode'] == 'group' else db().execute(
                     'SELECT p.* FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=?', (campaign_id,)).fetchall()
                 if len({p['phone'] for p in existing} | set(incoming)) > 500:
                     raise ValueError('Tổng danh sách chiến dịch tối đa 500 số điện thoại.')
@@ -352,7 +357,6 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 added = 0
                 for phone, row in incoming.items():
                     insert_contact(db(), g.user['id'], phone, row)
-                    db().execute('UPDATE contacts SET consent=1 WHERE user_id=? AND phone=?', (g.user['id'], phone))
                     person = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
                     added += db().execute('INSERT OR IGNORE INTO campaign_contacts VALUES (?,?)', (campaign_id, person['id'])).rowcount
                 db().execute("UPDATE campaigns SET audience_mode='list' WHERE id=?", (campaign_id,))

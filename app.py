@@ -16,6 +16,7 @@ from zalo_connector import QRConnector
 from personalization import personalize
 from data_import import read_contacts, insert_contact
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
+from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
 
 
 def create_app(test_config=None):
@@ -145,11 +146,12 @@ def create_app(test_config=None):
         db().execute('UPDATE campaigns SET send_message=?,send_friend=?,friend_message=? WHERE id=?',
                      (message_enabled, friend_enabled, invitation, campaign_id))
 
-    def audience(campaign):
-        return db().execute('''SELECT p.* FROM contacts p WHERE p.user_id=? AND p.consent=1 AND
-            ((?='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?)) OR
-             (?='group' AND (?='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=?))))
-             ORDER BY p.id''', (g.user['id'], campaign['audience_mode'], campaign['id'], campaign['audience_mode'], campaign['tag'], campaign['tag'])).fetchall()
+    def audience(campaign, apply_exclusions=True):
+        return db().execute('''SELECT p.* FROM contacts p JOIN campaigns c ON c.user_id=p.user_id AND c.id=?
+            WHERE p.user_id=? AND p.consent=1 AND
+            ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
+             (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag))))
+             AND NOT '''+(exclusion_predicate() if apply_exclusions else '0')+' ORDER BY p.id', (campaign['id'],g.user['id'])).fetchall()
 
     def campaign_fields():
         if request.form.get('action', 'phone_message') not in ('phone_message', 'phone_actions'):
@@ -188,12 +190,11 @@ def create_app(test_config=None):
 
     def save_campaign_phones(campaign_id, phones):
         save_action_settings(campaign_id)
+        save_exclusion_settings(db, g.user['id'], campaign_id)
         db().execute('UPDATE campaigns SET audience_mode=? WHERE id=?', ('list' if phones else 'group', campaign_id))
         db().execute('DELETE FROM campaign_contacts WHERE campaign_id=?', (campaign_id,))
         for phone in phones:
             insert_contact(db(), g.user['id'], phone, getattr(g, 'imported_contacts', {}).get(phone, {}))
-            db().execute('''INSERT INTO contacts(user_id,name,phone,consent) VALUES (?,?,?,1)
-                ON CONFLICT(user_id,phone) DO UPDATE SET consent=1''', (g.user['id'], 'Khách hàng ' + phone, phone))
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (g.user['id'], phone)).fetchone()
             db().execute('INSERT INTO campaign_contacts(campaign_id,contact_id) VALUES (?,?)', (campaign_id, contact['id']))
 
@@ -405,7 +406,7 @@ def create_app(test_config=None):
         kind = request.args.get('kind', '')
         if kind not in ('', 'message', 'friend', 'both'):
             abort(400)
-        rows = db().execute('''SELECT c.*,a.name AS account_name,
+        rows = db().execute(f'''SELECT c.*,a.name AS account_name,
             (SELECT group_concat(DISTINCT za.name) FROM message_sends ms JOIN zalo_accounts za ON za.id=ms.account_id AND za.user_id=c.user_id WHERE ms.campaign_id=c.id) AS used_accounts,
             coalesce(r.sent_total,0) AS sent_total,coalesce(r.confirmed,0) AS confirmed,
             coalesce(r.waiting,0) AS waiting,coalesce(r.sending,0) AS sending,
@@ -413,7 +414,7 @@ def create_app(test_config=None):
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
             (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
               AND ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
-                   (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag))))) AS audience
+                   (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag)))) AND NOT {exclusion_predicate()}) AS audience
             FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
             LEFT JOIN (SELECT campaign_id,count(*) AS sent_total,
                 sum(state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
@@ -547,7 +548,7 @@ def create_app(test_config=None):
             JOIN contacts p ON p.id=s.contact_id JOIN zalo_accounts a ON a.id=s.account_id
             WHERE s.campaign_id=? ORDER BY s.id DESC''', (campaign_id,)).fetchall()
         return render_template('detail.html', campaign=campaign, recipients=recipients, logs=logs, preview=preview,
-                               connected_accounts=connected, sends=sends, page='campaigns')
+                               connected_accounts=connected, sends=sends, eligible_ids={p['id'] for p in recipients}, page='campaigns')
 
     @app.post('/campaigns/<int:campaign_id>/prepare-send')
     @login_required
@@ -578,6 +579,8 @@ def create_app(test_config=None):
         person = next((p for p in audience(campaign) if p['id'] == person['id']), None)
         if person is None:
             return 'Khách hàng không còn thuộc chiến dịch.', 400
+        if contact_is_excluded(db, g.user['id'], campaign_id, person['id'], result['uid']):
+            return 'Người nhận Zalo thuộc danh sách loại trừ của chiến dịch.', 400
         # Recheck consent after the network request, before retaining a send preview.
         allowed = db().execute('SELECT consent FROM contacts WHERE id=? AND user_id=?', (person['id'], g.user['id'])).fetchone()
         if not allowed or not allowed['consent']:
@@ -810,6 +813,8 @@ def create_app(test_config=None):
     register_data_groups(app, db, login_required, parse_phones)
     from media_library import register_media_library
     register_media_library(app, db, login_required, manager)
+    from campaign_exclusions import register_campaign_exclusions
+    register_campaign_exclusions(app, db, login_required, manager, parse_phones)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
     return app

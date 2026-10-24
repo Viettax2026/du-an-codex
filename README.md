@@ -171,6 +171,17 @@ Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng d
 
 Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.
 
+## Loại trừ gửi cho khách hàng
+
+Trong **Thêm/Sửa chiến dịch → Tùy chọn hành động**, thẻ **Loại trừ gửi cho khách hàng** cho phép chọn một nhóm điều kiện và tối đa 20 danh sách số điện thoại/Zalo ID. Dấu **+** tạo nhóm điều kiện dùng lại; **Quản lý danh sách** tạo hoặc sửa danh sách ngay trong hộp thoại, giữ nguyên nội dung chiến dịch đang điền. Có thể cập nhật lựa chọn sau khi đã tạo bản xem trước qua **Hành động → Loại trừ khách hàng**, kể cả khi chiến dịch không còn sửa được cấu hình gốc.
+
+- Khách hàng consent=false luôn bị chặn, không thể tắt. Nhập lại hoặc bổ sung số đã có vào chiến dịch giữ nguyên trạng thái đồng ý cũ; chỉ khách mới được ghi nhận theo xác nhận khi nhập. Thay đổi sự đồng ý của hồ sơ cũ thực hiện riêng trong Khách hàng.
+- Nhóm điều kiện khớp **ít nhất một** trong các điều kiện đã chọn: Zalo đã tiếp nhận tin, tiếp nhận lời mời hoặc đổi tên gợi nhớ ở **chiến dịch khác**, hoặc thuộc một nhóm data. Nhật ký mô phỏng và trạng thái chưa xác định không tính. Bỏ qua lịch sử của chính chiến dịch hiện tại để nhắn tin xong vẫn có thể xác nhận các hành động khác đã chọn. Điều kiện nhóm data theo thành viên hiện tại, kể cả khi nhóm được đổi tên.
+- Mỗi danh sách hỗ trợ tối đa 500 số Việt Nam và 500 Zalo ID dạng số; gộp trùng và chuẩn hóa +84. Đây là danh sách do người dùng nhập, chưa tự lấy danh sách bạn bè từ Zalo. Zalo ID được so với ID đã lưu/bản xem trước; nếu chưa biết ID thì kiểm tra ngay sau bước tìm người nhận. Vì vậy mô phỏng theo số điện thoại chưa biết UID có thể vẫn có dòng đó, nhưng gửi thật bị chặn sau khi tìm ra UID thuộc danh sách.
+- Lựa chọn lưu theo chiến dịch; nhân bản giữ cùng các nhóm/danh sách loại trừ. Sửa danh sách dùng chung áp dụng cho lần xác nhận tiếp theo ở mọi chiến dịch đang chọn nó. Có thể bỏ chọn để gỡ loại trừ tùy chọn; quy tắc consent mặc định vẫn giữ nguyên. Bổ sung data giữ nguyên các thành viên đang bị loại trừ trong danh sách nền, không xóa khách hàng.
+
+Bộ lọc dùng chung cho người nhận, số lượng trên trang Chiến dịch, mô phỏng và gửi thật. Mọi hành động nhắn tin/kết bạn/đổi tên kiểm tra lại điều kiện trong khóa giao dịch trước khi gửi. Nút gửi của bản xem trước không còn đủ điều kiện bị vô hiệu hóa; lịch sử cũ được giữ lại. Thay đổi không thu hồi hành động đã bắt đầu gửi. Tạo nhóm/danh sách và lưu cấu hình không gọi Zalo; dữ liệu chỉ thuộc tài khoản đăng nhập.
+
 ## API tích hợp riêng của ZaloFlow
 
 Mở menu **API tích hợp** (`/integrations`) để tạo khóa có thời hạn 1–365 ngày và chọn quyền `data:read`, `data:write`, `media:read`, `media:write`. Mặc định chỉ chọn quyền đọc; mỗi tài khoản có tối đa 10 khóa còn hiệu lực. Khóa chỉ hiện đầy đủ khi tạo, cơ sở dữ liệu chỉ lưu SHA-256; có thể thu hồi ngay tại màn hình này. Gửi `Authorization: Bearer <khóa>` cho API; cookie đăng nhập và `username` không thay thế khóa hoặc chọn chủ dữ liệu. Tệp OpenAPI 3.0.3 tại `/integrations/openapi.json` có thể nhập vào Postman. API này chạy trên chính ZaloFlow, không gọi dịch vụ akaAgent.
