@@ -524,7 +524,7 @@ def test_reimport_fills_missing_source_and_preserves_customer_information(app):
     post(client, '/data-groups/import', {'group': 'Legacy', 'consent': 'yes', 'file': (io.BytesIO(raw), 'CSKH (3).csv')})
     with database(app) as db:
         name, consent, source = db.execute('SELECT name,consent,data_source FROM contacts').fetchone()
-        assert (name, consent) == ('Existing Lan', 0)
+        assert (name, consent) == ('Existing Lan', 1)
         assert source == 'Tải file lên · CSKH (3).csv'
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (1,)
     response = client.get('/data-groups/source-history/1?group=Legacy')
@@ -595,7 +595,7 @@ def test_import_131_existing_profiles_into_new_group_with_invalid_rows(app):
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (131,)
         for group in ['Original','T100']:
             assert db.execute('SELECT count(*) FROM contact_group_memberships WHERE group_name=?',(group,)).fetchone() == (131,)
-        assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts ORDER BY id LIMIT 1').fetchone() == ('Old name 0','Original',0,'old0@example.com','Keep')
+        assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts ORDER BY id LIMIT 1').fetchone() == ('Old name 0','Original',1,'old0@example.com','Keep')
         assert db.execute("SELECT count(*) FROM contacts WHERE data_source='Tải file lên · CSKH (3).csv'").fetchone() == (131,)
     assert client.get('/data-groups/source-history/1?group=T100').json['sources'][0]['filename'] == 'CSKH (3).csv'
     response = post(client, '/data-groups/import/preview', {**fields,'file':(io.BytesIO(raw),'CSKH (3).csv')})

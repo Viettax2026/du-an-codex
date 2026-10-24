@@ -110,7 +110,7 @@ def create_app(test_config=None):
             db().commit()
 
         for table, columns in {
-            'contacts': {column: "TEXT NOT NULL DEFAULT ''" for column in ('email','info1','info2','info3','info4','info5')},
+            'contacts': {**{column: "TEXT NOT NULL DEFAULT ''" for column in ('email','info1','info2','info3','info4','info5')}, 'deleted_at':'TEXT'},
             'campaigns': {'rename_enabled': 'INTEGER NOT NULL DEFAULT 0', 'rename_template': "TEXT NOT NULL DEFAULT ''", 'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
             'message_sends': {'alias': "TEXT NOT NULL DEFAULT ''", 'alias_state': "TEXT NOT NULL DEFAULT 'not_requested'", 'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
         }.items():
@@ -118,6 +118,7 @@ def create_app(test_config=None):
             for column, declaration in columns.items():
                 if column not in present:
                     db().execute(f'ALTER TABLE {table} ADD COLUMN {column} {declaration}')
+        db().execute('CREATE INDEX IF NOT EXISTS contacts_active_user ON contacts(user_id,deleted_at)')
         db().commit()
         initialize_campaign_actions(db)
 
@@ -149,7 +150,7 @@ def create_app(test_config=None):
 
     def audience(campaign, apply_exclusions=True):
         return db().execute('''SELECT p.* FROM contacts p JOIN campaigns c ON c.user_id=p.user_id AND c.id=?
-            WHERE p.user_id=? AND p.consent=1 AND
+            WHERE p.user_id=? AND p.deleted_at IS NULL AND p.consent=1 AND
             ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
              (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag))))
              AND NOT '''+(exclusion_predicate() if apply_exclusions else '0')+' ORDER BY p.id', (campaign['id'],g.user['id'])).fetchall()
@@ -291,8 +292,8 @@ def create_app(test_config=None):
     def dashboard():
         uid = g.user['id']
         stats = {
-            'contacts': db().execute('SELECT count(*) FROM contacts WHERE user_id=?', (uid,)).fetchone()[0],
-            'consent': db().execute('SELECT count(*) FROM contacts WHERE user_id=? AND consent=1', (uid,)).fetchone()[0],
+            'contacts': db().execute('SELECT count(*) FROM contacts WHERE user_id=? AND deleted_at IS NULL', (uid,)).fetchone()[0],
+            'consent': db().execute('SELECT count(*) FROM contacts WHERE user_id=? AND deleted_at IS NULL AND consent=1', (uid,)).fetchone()[0],
             'campaigns': db().execute('SELECT count(*) FROM campaigns WHERE user_id=?', (uid,)).fetchone()[0],
             'deliveries': db().execute('SELECT count(*) FROM deliveries d JOIN campaigns c ON c.id=d.campaign_id WHERE c.user_id=?', (uid,)).fetchone()[0],
         }
@@ -307,18 +308,18 @@ def create_app(test_config=None):
                 name, phone = field('name', 100), field('phone', 30)
                 if not name or not phone:
                     raise ValueError('Vui lòng nhập tên và số điện thoại.')
-                db().execute('INSERT INTO contacts(user_id,name,phone,zalo_id,tag,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                inserted = db().execute('INSERT INTO contacts(user_id,name,phone,zalo_id,tag,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO UPDATE SET deleted_at=NULL,consent=excluded.consent WHERE contacts.deleted_at IS NOT NULL',
                              (g.user['id'], name, phone, field('zalo_id', 100), field('tag', 80) or 'Khách hàng', default_contact_consent(request.form, 'on'),
                               field('email',254), *(field(f'info{i}',500) for i in range(1,6))))
                 db().commit()
-                flash('Đã thêm khách hàng.', 'success')
+                flash('Đã thêm khách hàng.' if inserted.rowcount else 'Số điện thoại đã có trong danh sách.', 'success' if inserted.rowcount else 'error')
             except ValueError as error:
                 flash(str(error), 'error')
             except sqlite3.IntegrityError:
                 flash('Số điện thoại đã có trong danh sách.', 'error')
             return redirect(url_for('contacts'))
         query = request.args.get('q', '').strip()
-        rows = db().execute('SELECT * FROM contacts WHERE user_id=? AND (name LIKE ? OR phone LIKE ? OR tag LIKE ?) ORDER BY id DESC',
+        rows = db().execute('SELECT * FROM contacts WHERE user_id=? AND deleted_at IS NULL AND (name LIKE ? OR phone LIKE ? OR tag LIKE ?) ORDER BY id DESC',
                             (g.user['id'], *(['%' + query + '%'] * 3))).fetchall()
         return render_template('contacts.html', contacts=rows, query=query, page='contacts')
 
@@ -346,7 +347,7 @@ def create_app(test_config=None):
                 extra = [(row.get(key) or '').strip() for key in ('email','info1','info2','info3','info4','info5')]
                 if len(extra[0]) > 254 or any(len(value) > 500 for value in extra[1:]):
                     raise ValueError(f'Thông tin bổ sung quá dài tại dòng {index + 2}.')
-                cur = db().execute('INSERT OR IGNORE INTO contacts(user_id,name,phone,tag,zalo_id,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                cur = db().execute('INSERT INTO contacts(user_id,name,phone,tag,zalo_id,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO UPDATE SET deleted_at=NULL,consent=excluded.consent WHERE contacts.deleted_at IS NOT NULL',
                                    (g.user['id'], name, phone, tag or 'Khách hàng', zalo_id, int(not (row.get('consent') or '').strip() or (row.get('consent') or '').strip().lower() in ('1', 'true', 'yes')), *extra))
                 count += cur.rowcount
                 skipped += 1 - cur.rowcount
@@ -360,7 +361,7 @@ def create_app(test_config=None):
     @app.route('/contacts/<int:contact_id>/edit', methods=['GET','POST'])
     @login_required
     def edit_contact(contact_id):
-        person = db().execute('SELECT * FROM contacts WHERE id=? AND user_id=?', (contact_id,g.user['id'])).fetchone()
+        person = db().execute('SELECT * FROM contacts WHERE id=? AND user_id=? AND deleted_at IS NULL', (contact_id,g.user['id'])).fetchone()
         if person is None:
             return 'Không tìm thấy khách hàng.', 404
         if request.method == 'POST':
@@ -380,7 +381,7 @@ def create_app(test_config=None):
     @app.post('/contacts/<int:contact_id>/consent')
     @login_required
     def consent(contact_id):
-        db().execute('UPDATE contacts SET consent=1-consent WHERE id=? AND user_id=?', (contact_id, g.user['id']))
+        db().execute('UPDATE contacts SET consent=1-consent WHERE id=? AND user_id=? AND deleted_at IS NULL', (contact_id, g.user['id']))
         db().commit()
         flash('Đã cập nhật trạng thái đồng ý nhận tin.', 'success')
         return redirect(url_for('contacts'))
@@ -422,7 +423,7 @@ def create_app(test_config=None):
             coalesce(r.waiting,0) AS waiting,coalesce(r.sending,0) AS sending,
             coalesce(r.uncertain,0) AS uncertain,coalesce(r.failed,0) AS failed,
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
-            (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.consent=1
+            (SELECT count(*) FROM contacts p WHERE p.user_id=c.user_id AND p.deleted_at IS NULL AND p.consent=1
               AND ((c.audience_mode='list' AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=c.id)) OR
                    (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag)))) AND NOT {exclusion_predicate()}) AS audience
             FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
@@ -512,7 +513,7 @@ def create_app(test_config=None):
             except ValueError as error:
                 db().rollback()
                 flash(str(error), 'error')
-        members = db().execute('SELECT p.id,p.name,p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? AND p.user_id=? ORDER BY p.id', (campaign_id,g.user['id'])).fetchall()
+        members = db().execute('SELECT p.id,p.name,p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? AND p.user_id=? AND p.deleted_at IS NULL ORDER BY p.id', (campaign_id,g.user['id'])).fetchall()
         snapshot = [dict(row) for row in members] if len(members)>500 else []
         return render_template('campaign_edit.html', campaign=campaign, phones='' if snapshot else '\n'.join(p['phone'] for p in members), snapshot_contacts=snapshot,
             accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall(),
@@ -828,6 +829,8 @@ def create_app(test_config=None):
     register_campaign_exclusions(app, db, login_required, manager, parse_phones)
     from campaign_group_picker import register_campaign_group_picker
     register_campaign_group_picker(app, db, login_required)
+    from contact_management import register_contact_management
+    register_contact_management(app, db, login_required)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
     return app

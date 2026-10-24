@@ -7,6 +7,7 @@
   const status = dialog.querySelector('[data-campaign-group-status]');
   const choose = dialog.querySelector('[data-choose-campaign-group]');
   const refresh = dialog.querySelector('[data-reload-campaign-groups]');
+  const confirmConsent = dialog.querySelector('[data-confirm-group-consent]');
   const preview = form.querySelector('[data-group-snapshot-preview]');
   const ids = form.querySelector('[data-group-snapshot-ids]');
   const selected = new Map(JSON.parse(preview.dataset.initialGroupSnapshot).map(row => [row.id,row]));
@@ -43,12 +44,12 @@
     container.querySelectorAll('[data-group-name]').forEach(row => {
       row.hidden = !row.dataset.groupName.includes(query);
       if (!row.hidden) visible+=1;
-      else if (row.querySelector('input').checked) {row.querySelector('input').checked=false;choose.disabled=true;}
+      else if (row.querySelector('input').checked) {row.querySelector('input').checked=false;choose.disabled=true;confirmConsent.hidden=true;}
     });
     if (groups.length) message(visible ? 'Chỉ thêm khách hàng đã đồng ý nhận tin; số trùng sẽ được gộp.' : 'Không có nhóm khớp từ khóa.');
   }
-  function renderGroups() {
-    container.replaceChildren();choose.disabled=true;
+  function renderGroups(selectedId=null) {
+    container.replaceChildren();choose.disabled=true;confirmConsent.hidden=true;
     if (!groups.length) {
       const empty=document.createElement('p');empty.className='group-picker-empty';empty.textContent='Chưa có nhóm data. Tạo nhóm và thêm data trong mục Nhóm data.';container.append(empty);return;
     }
@@ -57,7 +58,9 @@
       const input=document.createElement('input');input.type='radio';input.name='campaign-group-choice';input.value=String(group.id);
       input.addEventListener('change',()=>{
         choose.disabled=group.eligible===0 || group.eligible>limit;
-        message(group.eligible===0 ? 'Nhóm chưa có khách hàng đồng ý nhận tin. Kiểm tra trạng thái đồng ý trong Khách hàng.' : group.eligible>limit ? `Nhóm vượt ${number(limit)} khách hàng đồng ý nhận tin. Chia nhóm nhỏ hơn để thêm.` : `Sẽ thêm ${number(group.eligible)} khách hàng đã đồng ý nhận tin.`,choose.disabled);
+        confirmConsent.hidden=group.eligible>=group.total;
+        confirmConsent.textContent=`Xác nhận đồng ý nhận tin cho ${number(group.total-group.eligible)} khách trong nhóm`;
+        message(group.eligible===0 ? 'Trạng thái đồng ý của nhóm chưa được cập nhật. Bạn có thể xác nhận ngay bên dưới.' : group.eligible>limit ? `Nhóm vượt ${number(limit)} khách hàng đồng ý nhận tin. Chia nhóm nhỏ hơn để thêm.` : `Sẽ thêm ${number(group.eligible)} khách hàng đã đồng ý nhận tin.`,choose.disabled);
       });
       const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');icon.setAttribute('aria-hidden','true');
       const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v1M3 8h18l-3 12H3a1 1 0 0 1-1-1Z');icon.append(path);
@@ -66,15 +69,17 @@
       text.append(title,details);label.append(input,icon,text);container.append(label);
     });
     filterGroups();
+    const restored=[...container.querySelectorAll('input')].find(input=>input.value===String(selectedId));
+    if(restored){restored.checked=true;restored.dispatchEvent(new Event('change'));}
   }
-  async function load() {
-    const request = ++epoch;choose.disabled=true;refresh.disabled=true;container.replaceChildren();message('Đang tải nhóm data…');
+  async function load(selectedId=null) {
+    const request = ++epoch;choose.disabled=true;refresh.disabled=true;container.replaceChildren();confirmConsent.hidden=true;message('Đang tải nhóm data…');
     try {
       const response=await fetch(dialog.dataset.groupOptionsUrl,{headers:{Accept:'application/json'}});
       const result=await response.json();
       if (!response.ok) throw new Error(result.error || 'Không tải được nhóm data.');
       if (request!==epoch || !dialog.open) return;
-      groups=result.groups;limit=result.limit;renderGroups();
+      groups=result.groups;limit=result.limit;renderGroups(selectedId);
       if (!groups.length) message('Chưa có nhóm data để chọn.');
     } catch(error) {
       if (request===epoch && dialog.open) message(error instanceof SyntaxError ? 'Phiên làm việc hết hạn. Lưu nội dung đang nhập rồi đăng nhập lại.' : error.message,true);
@@ -83,7 +88,18 @@
   form.querySelector('[data-show-groups]').addEventListener('click',()=>{dialog.showModal();load();});
   dialog.querySelectorAll('[data-close-campaign-group]').forEach(button=>button.addEventListener('click',()=>dialog.close()));
   dialog.addEventListener('close',()=>{epoch+=1;refresh.disabled=false;choose.disabled=true;});
-  refresh.addEventListener('click',load);search.addEventListener('input',filterGroups);
+  refresh.addEventListener('click',()=>load());search.addEventListener('input',filterGroups);
+  confirmConsent.addEventListener('click',async()=>{
+    const group=container.querySelector('input:checked');if(!group)return;
+    const groupId=group.value, request=++epoch;confirmConsent.disabled=true;choose.disabled=true;refresh.disabled=true;
+    const data=new FormData();data.set('csrf',form.elements.csrf.value);data.set('group_id',groupId);data.set('confirm_consent','yes');
+    try{
+      const response=await fetch(dialog.dataset.groupConsentUrl,{method:'POST',body:data,headers:{Accept:'application/json'}});
+      const result=await response.json();if(!response.ok)throw new Error(result.error || 'Chưa cập nhật được trạng thái đồng ý.');
+      if(request===epoch && dialog.open)await load(groupId);
+    }catch(error){if(request===epoch && dialog.open)message(error instanceof SyntaxError ? 'Phiên làm việc hết hạn. Tải lại trang và đăng nhập lại.' : error.message,true);}
+    finally{confirmConsent.disabled=false;if(request===epoch)refresh.disabled=false;}
+  });
   choose.addEventListener('click',async()=>{
     const group=container.querySelector('input:checked');if(!group)return;
     const request=++epoch;choose.disabled=true;refresh.disabled=true;message('Đang thêm data từ nhóm…');

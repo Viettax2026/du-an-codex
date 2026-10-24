@@ -270,7 +270,7 @@ def register_public_api(app, db, login_required, manager, parse_phones):
         if dry:
             db().rollback()
         else:
-            saved=save_group_members(db,g.user['id'],group['name'],incoming,int(consent),source,'api')
+            saved=save_group_members(db,g.user['id'],group['name'],incoming,int(consent),source,'api',confirm_existing=data.get('consent') is True)
             response['added_count']=saved['added']
             if request_key:
                 db().execute('INSERT INTO api_idempotency(key_id,request_key,request_hash,response_json) VALUES (?,?,?,?)',

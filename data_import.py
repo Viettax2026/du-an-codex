@@ -62,7 +62,7 @@ def default_contact_consent(form, checked_value):
 
 def insert_contact(connection, user_id, phone, row, tag='Khách hàng', consent=1):
     connection.execute('''INSERT INTO contacts(user_id,name,phone,tag,consent,zalo_id,email,info1,info2,info3,info4,info5)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO NOTHING''',
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO UPDATE SET deleted_at=NULL,consent=excluded.consent WHERE contacts.deleted_at IS NOT NULL''',
         (user_id, row.get('name') or 'Khách hàng ' + phone, phone, tag, consent,
          *[row.get(key, '') for key in ('zalo_id','email','info1','info2','info3','info4','info5')]))
 

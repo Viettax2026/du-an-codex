@@ -1,0 +1,14 @@
+.contacts-selection-toolbar{display:flex;align-items:center;gap:10px;padding:14px 24px;border-top:1px solid #edf1f6;background:#fafcff;flex-wrap:wrap}
+.contacts-selection-toolbar>span{color:#7d90aa;font-size:13px;flex:1;min-width:200px}
+.contacts-selection-toolbar>button{font-size:12px;padding:9px 14px}
+input[data-contact-choice],input[data-select-all-contacts]{width:16px;height:16px;margin:0;accent-color:#1769ed}
+tr.is-selected>td{background:#eef5ff}
+.contact-row-actions{white-space:nowrap}
+.contact-row-actions a{font-size:12px;margin-right:12px}
+.contact-row-actions .contact-delete-link{color:#bc454f}
+.contact-selection-review{margin-top:18px}
+.contact-selection-review form{margin-top:24px}
+.contact-selection-review form>label{max-width:620px}
+.contact-selection-review .table-scroll{max-height:360px;overflow:auto}
+.contact-selection-review th{position:sticky;top:0}
+@media(max-width:700px){.contacts-selection-toolbar{padding:12px 16px;gap:8px}.contacts-selection-toolbar>span{flex-basis:100%}.contact-selection-review h1{font-size:22px}.contact-selection-review td,.contact-selection-review th{padding:12px;font-size:12px}}

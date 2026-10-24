@@ -101,14 +101,14 @@ def test_api_group_members_dry_run_partial_import_sources_and_idempotency(app):
     assert client.get('/data-groups/source-history/1?group=API+group').json['sources'][0]['label']=='API · CRM test'
 
 
-def test_existing_profiles_link_to_new_group_without_overwriting_info_or_consent(app):
+def test_existing_profiles_keep_info_and_honor_explicit_consent_confirmation(app):
     client=app.test_client();register(client);headers=key(client)
     first=create_group(client,headers,'First');second=create_group(client,headers,'Second')
     client.post(f'/api/v1/data-groups/{first}/members',json={'data':[{'name':'Original','phone':'0901234567'}],'source_name':'CRM / Viettax','consent':False},headers=headers)
     assert query(app,'SELECT data_source FROM contacts')==[('API · CRM / Viettax',)]
     response=client.post(f'/api/v1/data-groups/{second}/members',json={'data':[{'name':'Changed','phone':'0901234567'}],'consent':True},headers=headers)
     assert response.json['data']['added_count']==1
-    assert query(app,'SELECT name,tag,consent FROM contacts')==[('Original','First',0)]
+    assert query(app,'SELECT name,tag,consent FROM contacts')==[('Original','First',1)]
     assert client.get(f'/api/v1/data-groups/{second}/members',headers=headers).json['data']['total']==1
     again=client.post(f'/api/v1/data-groups/{second}/members',json={'data':[{'phone':'0901234567'}]},headers=headers)
     assert again.json['data']['added_count']==0 and again.json['data']['existing_count']==1

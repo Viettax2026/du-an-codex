@@ -35,3 +35,5 @@
 .group-snapshot-pages{display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:6px 12px;font-size:11px;color:#8295b0;border-top:1px solid #dce5ef}
 .group-snapshot-pages button{padding:2px 8px;background:transparent;color:#637b9b;font-size:19px}
 @media(max-width:600px){.campaign-group-dialog>header{padding:18px}.campaign-group-dialog h2{font-size:18px}.campaign-group-dialog-body{padding:16px}.campaign-group-dialog-body>p:first-child{font-size:13px}.campaign-group-search{gap:8px}.campaign-group-search>button{padding:8px 12px;font-size:12px}.campaign-group-choice{padding:14px 12px;gap:10px}.campaign-group-choice b{font-size:13px}.campaign-group-choice small{font-size:11px}.group-snapshot-heading{flex-wrap:wrap;gap:5px}.campaign-group-dialog>footer{padding:14px 18px}}
+
+.campaign-group-consent{margin-top:12px;padding:11px 15px;background:#eeeaff;color:#6558ea;border:1px solid #d6cfff;border-radius:8px;font-size:13px;white-space:normal;text-align:left}

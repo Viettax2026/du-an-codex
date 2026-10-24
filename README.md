@@ -171,11 +171,17 @@ Script cài thêm Pillow, sao lưu toàn bộ instance khi tạm dừng riêng d
 
 Nếu đang dùng đường dẫn triển khai hoặc Nginx khác, dùng hướng dẫn deployment/DEPLOY.md để điều chỉnh thủ công. Không sao chép cấu hình HTTP mẫu đè lên cấu hình HTTPS đang hoạt động.
 
+## Chọn, sửa và xóa khách hàng
+
+Trang **Khách hàng** có ô chọn từng dòng hoặc chọn toàn bộ kết quả đang hiển thị sau khi tìm kiếm. Thanh công cụ hiển thị số đã chọn, nút **Sửa đã chọn** và **Xóa đã chọn**; mỗi dòng cũng có **Sửa/Xóa** riêng. Tối đa 10.000 khách hàng mỗi thao tác, danh sách ID được kiểm tra quyền sở hữu và CSRF phía máy chủ.
+
+**Sửa đã chọn** mở màn hình xem lại và cho đổi nhóm gốc hoặc đặt đồng ý/tắt nhận tin cho các hồ sơ đã chọn; bỏ trống trường để giữ nguyên. Sửa từng người vẫn có thông tin tên, email và Info1…Info5. **Xóa đã chọn** mở màn hình xem lại và cần đánh dấu xác nhận trước khi xóa. Xóa dùng lưu trữ hồ sơ: ẩn khỏi Khách hàng, mọi nhóm data và người nhận chiến dịch, đồng thời tắt nhận tin; các lần gửi, nguồn data và lịch sử cũ được giữ lại. Bản xem trước chưa gửi của khách đã xóa bị chặn. Nhập/thêm lại rõ ràng cùng số điện thoại khôi phục hồ sơ cũ thay vì tạo trùng; thông tin và lịch sử được giữ lại.
+
 ## Loại trừ gửi cho khách hàng
 
 Trong **Thêm/Sửa chiến dịch → Tùy chọn hành động**, thẻ **Loại trừ gửi cho khách hàng** cho phép chọn một nhóm điều kiện và tối đa 20 danh sách số điện thoại/Zalo ID. Dấu **+** tạo nhóm điều kiện dùng lại; **Quản lý danh sách** tạo hoặc sửa danh sách ngay trong hộp thoại, giữ nguyên nội dung chiến dịch đang điền. Có thể cập nhật lựa chọn sau khi đã tạo bản xem trước qua **Hành động → Loại trừ khách hàng**, kể cả khi chiến dịch không còn sửa được cấu hình gốc.
 
-- Khách hàng consent=false luôn bị chặn, không thể tắt. Nhập lại hoặc bổ sung số đã có vào chiến dịch giữ nguyên trạng thái đồng ý cũ; chỉ khách mới được ghi nhận theo xác nhận khi nhập. Thay đổi sự đồng ý của hồ sơ cũ thực hiện riêng trong Khách hàng.
+- Khách hàng consent=false luôn bị chặn, không thể tắt. Nhập lại hoặc bổ sung số đã có vào chiến dịch giữ nguyên trạng thái đồng ý cũ; chỉ khách mới được ghi nhận theo xác nhận khi nhập. Có thể xác nhận lại cho hồ sơ cũ bằng cách chọn đồng ý khi nhập vào nhóm, xác nhận nhóm trong hộp Thêm bằng nhóm hoặc sửa trạng thái trong Khách hàng.
 - Nhóm điều kiện khớp **ít nhất một** trong các điều kiện đã chọn: Zalo đã tiếp nhận tin, tiếp nhận lời mời hoặc đổi tên gợi nhớ ở **chiến dịch khác**, hoặc thuộc một nhóm data. Nhật ký mô phỏng và trạng thái chưa xác định không tính. Bỏ qua lịch sử của chính chiến dịch hiện tại để nhắn tin xong vẫn có thể xác nhận các hành động khác đã chọn. Điều kiện nhóm data theo thành viên hiện tại, kể cả khi nhóm được đổi tên.
 - Mỗi danh sách hỗ trợ tối đa 500 số Việt Nam và 500 Zalo ID dạng số; gộp trùng và chuẩn hóa +84. Đây là danh sách do người dùng nhập, chưa tự lấy danh sách bạn bè từ Zalo. Zalo ID được so với ID đã lưu/bản xem trước; nếu chưa biết ID thì kiểm tra ngay sau bước tìm người nhận. Vì vậy mô phỏng theo số điện thoại chưa biết UID có thể vẫn có dòng đó, nhưng gửi thật bị chặn sau khi tìm ra UID thuộc danh sách.
 - Lựa chọn lưu theo chiến dịch; nhân bản giữ cùng các nhóm/danh sách loại trừ. Sửa danh sách dùng chung áp dụng cho lần xác nhận tiếp theo ở mọi chiến dịch đang chọn nó. Có thể bỏ chọn để gỡ loại trừ tùy chọn; quy tắc consent mặc định vẫn giữ nguyên. Bổ sung data giữ nguyên các thành viên đang bị loại trừ trong danh sách nền, không xóa khách hàng.
@@ -208,7 +214,7 @@ Thêm data bằng JSON như sau, thay ID trong đường dẫn bằng ID nhóm l
 }
 ```
 
-Tối đa 500 dòng/yêu cầu, dùng cùng quy tắc chuẩn hóa số Việt Nam như nhập Excel. Mỗi dòng cần một SĐT; API chưa hỗ trợ nhập chỉ email hoặc nhóm UID. Các trường tùy chọn gồm `name`, `zalo_id`, `email`, `info1`…`info5`. Dòng sai được bỏ qua, trả lý do (tối đa 100 lỗi chi tiết), các số trùng giữ dòng đầu. Kết quả có `received_count`, `added_count`, `existing_count`, `invalid_count`; `added_count` tính số mới thuộc nhóm, kể cả hồ sơ đã có ở nhóm khác. Hồ sơ cũ giữ nguyên tên/thông tin, nhóm gốc và consent. Khách mới mặc định consent=true; gửi false nếu không bật nhận tin. Nhập thật (`dry_run:false`) ghi nguồn **Nhập qua API** và tên nguồn, xuất hiện ngay trong nhóm và lịch sử nguồn trên web.
+Tối đa 500 dòng/yêu cầu, dùng cùng quy tắc chuẩn hóa số Việt Nam như nhập Excel. Mỗi dòng cần một SĐT; API chưa hỗ trợ nhập chỉ email hoặc nhóm UID. Các trường tùy chọn gồm `name`, `zalo_id`, `email`, `info1`…`info5`. Dòng sai được bỏ qua, trả lý do (tối đa 100 lỗi chi tiết), các số trùng giữ dòng đầu. Kết quả có `received_count`, `added_count`, `existing_count`, `invalid_count`; `added_count` tính số mới thuộc nhóm, kể cả hồ sơ đã có ở nhóm khác. Hồ sơ cũ giữ nguyên tên/thông tin và nhóm gốc. Bỏ trường consent giữ trạng thái cũ; gửi rõ `consent:true` cập nhật cả khách đã có sang đồng ý. Khách mới mặc định consent=true; gửi false nếu không bật nhận tin. Nhập thật (`dry_run:false`) ghi nguồn **Nhập qua API** và tên nguồn, xuất hiện ngay trong nhóm và lịch sử nguồn trên web.
 
 Header tùy chọn `Idempotency-Key` (1–128 ký tự chữ/số hoặc `_.:-`) giúp thử lại lần nhập thật với cùng khóa API, nhóm và nội dung mà không ghi thêm lô/nguồn. Tái sử dụng mã với nội dung khác trả 409. Chạy thử không lưu mã và không thay đổi khách hàng, nhóm hoặc nguồn. Mỗi lần nhập khác dùng mã mới. Dữ liệu và kết quả mã nhập được lưu cùng transaction, gồm cả khi có yêu cầu đồng thời.
 
@@ -220,11 +226,11 @@ Menu **Media** quản lý ảnh JPG/JPEG, PNG, WEBP, video MP4 và tài liệu P
 
 Tệp lưu trong bộ lưu trữ riêng trên máy chủ (mặc định `instance/media`), chỉ chủ tài khoản truy cập; chưa kết nối Cloudflare R2. Chọn tệp đã tải tại **Hành động → Cập nhật nội dung + media** để dùng cho chiến dịch. Xóa tệp chưa dùng sẽ xóa khỏi ổ đĩa sau xác nhận; tệp đã gắn chiến dịch hoặc lịch sử gửi chỉ được ẩn khỏi thư viện và được giữ lại để bảo toàn nội dung đã chốt. Các tệp được giữ lại vẫn tính vào dung lượng và hạn mức.
 
-Data mới thêm qua biểu mẫu Khách hàng, nhập nhóm TXT/CSV/Excel hoặc API mặc định bật nhận tin. Các ô chọn đồng ý trong biểu mẫu được tích sẵn. Bỏ tích để tạo khách chưa đồng ý; CSV ở mục Khách hàng có thể đặt `consent=0`, API gửi `consent:false`. Nhập lại số đã tồn tại luôn giữ trạng thái cũ, kể cả đã từ chối; bản cập nhật không thay đổi data lịch sử và không tự gửi tin.
+Data mới thêm qua biểu mẫu Khách hàng, nhập nhóm TXT/CSV/Excel hoặc API mặc định bật nhận tin. Các ô chọn đồng ý trong biểu mẫu được tích sẵn. Bỏ tích để tạo khách chưa đồng ý; CSV ở mục Khách hàng có thể đặt `consent=0`, API gửi `consent:false`. Nếu không xác nhận thêm thì hồ sơ cũ giữ trạng thái nhận tin. Tích đồng ý khi nhập vào nhóm sẽ cập nhật cả những số đã có trong lần nhập đó; việc cập nhật không gửi tin.
 
 ## Nhóm data và nguồn data chiến dịch
 
-Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ liên kết hồ sơ vào nhóm đích nếu chưa thuộc nhóm; giữ nguyên thông tin, trạng thái đồng ý và nhóm gốc. Số đã thuộc nhóm đích không được thêm trùng. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
+Mục **Nhóm data** (`/data-groups`) quản lý các nhóm khách hàng hiện có và cho phép tạo nhóm mới, tìm theo tên/UID/SĐT, nhập trực tiếp hoặc tải TXT, CSV UTF-8 và Excel `.xlsx`/`.xls`. Mỗi khách hàng có một nhóm gốc theo trường nhóm hiện tại và có thể xuất hiện trong các nhóm nhân bản thông qua liên kết danh sách. Nhập số đã có sẽ liên kết hồ sơ vào nhóm đích nếu chưa thuộc nhóm; giữ nguyên thông tin và nhóm gốc. Tích đồng ý sẽ xác nhận lại trạng thái nhận tin của các hồ sơ trong lần nhập; bỏ tích không tự thu hồi trạng thái của hồ sơ đã có. Số đã thuộc nhóm đích không được thêm trùng. Có thể lưu khách hàng chưa đồng ý nhận tin; chiến dịch chỉ lấy người đã đồng ý.
 
 Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có hai lựa chọn:
 
@@ -233,7 +239,7 @@ Trong tạo/sửa chiến dịch, **Cách thêm data vào chiến dịch** có h
 
 Menu Hành động → **Thêm data** cũng hỗ trợ TXT/CSV/Excel và thêm bằng nhóm. Việc bổ sung chuyển danh sách hiện tại thành danh sách riêng, giữ lịch sử và chống gửi trùng như trước. Lưu data không gọi Zalo.
 
-Nhóm không có khách đã đồng ý vẫn hiển thị trong hộp thoại để biết lý do, nhưng không thể chọn thêm. Nhóm vượt 10.000 khách đã đồng ý được báo rõ, không tự cắt bớt. Dữ liệu từ nhóm dùng trạng thái đồng ý đã ghi nhận, không tự bật lại consent; nhập tay/tệp vẫn cần xác nhận. Mọi lựa chọn ID được kiểm tra lại quyền sở hữu khi lưu. **Chọn nhóm data để chạy** vẫn là chế độ riêng theo nhóm động, không bị đổi thành bản sao.
+Nhóm chưa ghi nhận đồng ý vẫn hiển thị trong hộp thoại. Chọn nhóm rồi bấm **Xác nhận đồng ý nhận tin cho … khách trong nhóm** để cập nhật ngay những hồ sơ đang có consent=0; số lượng được tải lại và nút Chọn nhóm được mở khi đủ điều kiện. Thao tác này chỉ thay đổi trạng thái của nhóm thuộc tài khoản đăng nhập, không gửi tin và không khôi phục khách đã xóa. Nhóm vượt 10.000 khách đã đồng ý được báo rõ, không tự cắt bớt. Dữ liệu từ nhóm dùng trạng thái đồng ý đã ghi nhận, không tự bật lại consent; nhập tay/tệp vẫn cần xác nhận. Mọi lựa chọn ID được kiểm tra lại quyền sở hữu khi lưu. **Chọn nhóm data để chạy** vẫn là chế độ riêng theo nhóm động, không bị đổi thành bản sao.
 
 Tệp tối đa 2 MB và 500 dòng mỗi lần nhập. TXT mỗi dòng một số. CSV/Excel cần cột `phone`, tùy chọn `name,zalo_id,email,info1,info2,info3,info4,info5`. Có tệp mẫu ở `static/data-template.csv`. Excel dùng định dạng văn bản cho cột số điện thoại; hỗ trợ cả `.xlsx` và `.xls`. Chưa có nguồn dữ liệu quét để nhập.
 

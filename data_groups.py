@@ -11,24 +11,27 @@ from flask import Response, abort, flash, g, jsonify, redirect, render_template,
 from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts, default_contact_consent
 
 
-def save_group_members(db, user_id, group, incoming, consent=1, filename='', source_type=None):
+def save_group_members(db, user_id, group, incoming, consent=1, filename='', source_type=None, confirm_existing=False):
     """Persist validated members and provenance in the caller's transaction."""
-    added = created_profiles = 0
+    added = created_profiles = confirmed = 0
     db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (user_id,group))
     destination_id = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,group)).fetchone()['id']
     batch_id = create_source_batch(db, user_id, group, filename, source_type)
     recorded = 0
     for phone, row in incoming.items():
-        contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (user_id,phone)).fetchone()
-        if not contact:
+        contact = db().execute('SELECT id,deleted_at FROM contacts WHERE user_id=? AND phone=?', (user_id,phone)).fetchone()
+        was_member = contact and db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
+                                              (user_id,group,contact['id'])).fetchone()
+        if not contact or contact['deleted_at']:
+            created_profiles += int(contact is None)
             insert_contact(db(), user_id, phone, row, tag=group, consent=consent)
             contact = db().execute('SELECT id FROM contacts WHERE user_id=? AND phone=?', (user_id,phone)).fetchone()
-            created_profiles += 1
+        if not was_member:
+            if not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?', (user_id,group,contact['id'])).fetchone():
+                db().execute('INSERT OR IGNORE INTO data_group_contacts(group_id,contact_id) VALUES (?,?)', (destination_id,contact['id']))
             added += 1
-        elif not db().execute('SELECT 1 FROM contact_group_memberships WHERE user_id=? AND group_name=? AND contact_id=?',
-                              (user_id,group,contact['id'])).fetchone():
-            db().execute('INSERT OR IGNORE INTO data_group_contacts(group_id,contact_id) VALUES (?,?)', (destination_id,contact['id']))
-            added += 1
+        if consent and confirm_existing:
+            confirmed += db().execute('UPDATE contacts SET consent=1 WHERE user_id=? AND id=? AND consent=0', (user_id,contact['id'])).rowcount
         record_contact_source(db, user_id,contact['id'],batch_id)
         recorded += 1
     if recorded:
@@ -36,7 +39,7 @@ def save_group_members(db, user_id, group, incoming, consent=1, filename='', sou
             WHERE user_id=? AND name=?''', (added,user_id,group))
     else:
         db().execute('DELETE FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,user_id))
-    return {'added': added, 'created_profiles': created_profiles, 'recorded': recorded}
+    return {'added': added, 'created_profiles': created_profiles, 'recorded': recorded, 'confirmed': confirmed}
 
 
 def register_data_groups(app, db, login_required, parse_phones):
@@ -56,10 +59,11 @@ def register_data_groups(app, db, login_required, parse_phones):
             contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
             PRIMARY KEY(group_id,contact_id));
             CREATE INDEX IF NOT EXISTS data_group_contacts_contact ON data_group_contacts(contact_id);
-            CREATE VIEW IF NOT EXISTS contact_group_memberships AS
-            SELECT user_id,tag AS group_name,id AS contact_id FROM contacts
+            DROP VIEW IF EXISTS contact_group_memberships;
+            CREATE VIEW contact_group_memberships AS
+            SELECT user_id,tag AS group_name,id AS contact_id FROM contacts WHERE deleted_at IS NULL
             UNION SELECT d.user_id,d.name,m.contact_id FROM data_group_contacts m
-                JOIN data_groups d ON d.id=m.group_id JOIN contacts p ON p.id=m.contact_id AND p.user_id=d.user_id;''')
+                JOIN data_groups d ON d.id=m.group_id JOIN contacts p ON p.id=m.contact_id AND p.user_id=d.user_id AND p.deleted_at IS NULL;''')
         initialize_data_sources(db)
         db().commit()
 
@@ -338,10 +342,10 @@ def register_data_groups(app, db, login_required, parse_phones):
             require_group(group)
             upload = request.files.get('file')
             result = save_group_members(db, g.user['id'], group, incoming, consent,
-                                        upload.filename if upload else '')
+                                        upload.filename if upload else '', confirm_existing=request.form.get('consent')=='yes')
             added, created_profiles, recorded = (result[key] for key in ('added','created_profiles','recorded'))
             db().commit()
-            flash(f'Đã thêm {added} số vào nhóm ({created_profiles} hồ sơ mới, {added-created_profiles} hồ sơ đã có). {len(incoming)-added} số đã thuộc nhóm. Ghi nguồn cho {recorded} khách hàng, bỏ qua {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên thông tin và nhóm gốc.', 'success')
+            flash(f"Đã thêm {added} số vào nhóm ({created_profiles} hồ sơ mới, {added-created_profiles} hồ sơ đã có). {len(incoming)-added} số đã thuộc nhóm. Đã ghi nhận đồng ý cho {result['confirmed']} hồ sơ đã có. Ghi nguồn cho {recorded} khách hàng, bỏ qua {len(invalid)} dòng lỗi đã xác nhận. Giữ nguyên thông tin và nhóm gốc.", 'success')
         except ValueError as error:
             db().rollback()
             flash(str(error), 'error')
