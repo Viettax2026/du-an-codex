@@ -203,12 +203,12 @@ Thêm data bằng JSON như sau, thay ID trong đường dẫn bằng ID nhóm l
 {
   "data": [{"name": "Khách hàng mẫu", "phone": "0901234567", "info1": "CRM"}],
   "source_name": "CRM nội bộ",
-  "consent": false,
+  "consent": true,
   "dry_run": true
 }
 ```
 
-Tối đa 500 dòng/yêu cầu, dùng cùng quy tắc chuẩn hóa số Việt Nam như nhập Excel. Mỗi dòng cần một SĐT; API chưa hỗ trợ nhập chỉ email hoặc nhóm UID. Các trường tùy chọn gồm `name`, `zalo_id`, `email`, `info1`…`info5`. Dòng sai được bỏ qua, trả lý do (tối đa 100 lỗi chi tiết), các số trùng giữ dòng đầu. Kết quả có `received_count`, `added_count`, `existing_count`, `invalid_count`; `added_count` tính số mới thuộc nhóm, kể cả hồ sơ đã có ở nhóm khác. Hồ sơ cũ giữ nguyên tên/thông tin, nhóm gốc và consent. Khách mới mặc định consent=false; chỉ đặt true khi đã có sự đồng ý. Nhập thật (`dry_run:false`) ghi nguồn **Nhập qua API** và tên nguồn, xuất hiện ngay trong nhóm và lịch sử nguồn trên web.
+Tối đa 500 dòng/yêu cầu, dùng cùng quy tắc chuẩn hóa số Việt Nam như nhập Excel. Mỗi dòng cần một SĐT; API chưa hỗ trợ nhập chỉ email hoặc nhóm UID. Các trường tùy chọn gồm `name`, `zalo_id`, `email`, `info1`…`info5`. Dòng sai được bỏ qua, trả lý do (tối đa 100 lỗi chi tiết), các số trùng giữ dòng đầu. Kết quả có `received_count`, `added_count`, `existing_count`, `invalid_count`; `added_count` tính số mới thuộc nhóm, kể cả hồ sơ đã có ở nhóm khác. Hồ sơ cũ giữ nguyên tên/thông tin, nhóm gốc và consent. Khách mới mặc định consent=true; gửi false nếu không bật nhận tin. Nhập thật (`dry_run:false`) ghi nguồn **Nhập qua API** và tên nguồn, xuất hiện ngay trong nhóm và lịch sử nguồn trên web.
 
 Header tùy chọn `Idempotency-Key` (1–128 ký tự chữ/số hoặc `_.:-`) giúp thử lại lần nhập thật với cùng khóa API, nhóm và nội dung mà không ghi thêm lô/nguồn. Tái sử dụng mã với nội dung khác trả 409. Chạy thử không lưu mã và không thay đổi khách hàng, nhóm hoặc nguồn. Mỗi lần nhập khác dùng mã mới. Dữ liệu và kết quả mã nhập được lưu cùng transaction, gồm cả khi có yêu cầu đồng thời.
 
@@ -219,6 +219,8 @@ Media dùng multipart `file`, tùy chọn `group_id`; giữ giới hạn/kiểm 
 Menu **Media** quản lý ảnh JPG/JPEG, PNG, WEBP, video MP4 và tài liệu PDF, tối đa 10 MB/tệp và 1.000 tệp/tài khoản. Có nhóm riêng, tải nhiều tệp lần lượt, kéo thả, dán ảnh bằng Ctrl+V, lọc tên/đuôi/ngày, sắp xếp, xem dạng lưới/danh sách và xem trước. Nút Dán ảnh dùng quyền clipboard của trình duyệt; khi không được cấp quyền có thể dùng Ctrl+V hoặc chọn tệp.
 
 Tệp lưu trong bộ lưu trữ riêng trên máy chủ (mặc định `instance/media`), chỉ chủ tài khoản truy cập; chưa kết nối Cloudflare R2. Chọn tệp đã tải tại **Hành động → Cập nhật nội dung + media** để dùng cho chiến dịch. Xóa tệp chưa dùng sẽ xóa khỏi ổ đĩa sau xác nhận; tệp đã gắn chiến dịch hoặc lịch sử gửi chỉ được ẩn khỏi thư viện và được giữ lại để bảo toàn nội dung đã chốt. Các tệp được giữ lại vẫn tính vào dung lượng và hạn mức.
+
+Data mới thêm qua biểu mẫu Khách hàng, nhập nhóm TXT/CSV/Excel hoặc API mặc định bật nhận tin. Các ô chọn đồng ý trong biểu mẫu được tích sẵn. Bỏ tích để tạo khách chưa đồng ý; CSV ở mục Khách hàng có thể đặt `consent=0`, API gửi `consent:false`. Nhập lại số đã tồn tại luôn giữ trạng thái cũ, kể cả đã từ chối; bản cập nhật không thay đổi data lịch sử và không tự gửi tin.
 
 ## Nhóm data và nguồn data chiến dịch
 

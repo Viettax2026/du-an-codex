@@ -55,7 +55,7 @@
   <div class="group-snapshot-table"><table><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th><th></th></tr></thead><tbody data-group-snapshot-rows></tbody></table></div>
   <nav class="group-snapshot-pages"><button type="button" data-group-snapshot-prev aria-label="Trang trước">‹</button><span data-group-snapshot-page></span><button type="button" data-group-snapshot-next aria-label="Trang sau">›</button></nav>
 </div>
-<label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes"> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
+<label class="send-confirm"><input type="checkbox" name="phones_consent" value="yes" checked> Tôi xác nhận các số trong danh sách đã đồng ý nhận nội dung này.</label>
 <p class="muted">Nhập tay/tệp tối đa 500 số mỗi lần. Danh sách chiến dịch tối đa 10.000 khách hàng khi thêm từ nhóm; số trùng được gộp, thông tin và trạng thái đồng ý cũ được giữ nguyên.</p>
 </div>
 <div data-group-data><label>Nhóm data<select name="tag"><option value="">Chọn nhóm data</option>{% for t in tags %}<option value="{{ t.tag }}" {% if editing and campaign.tag==t.tag %}selected{% endif %}>{{ t.tag }}</option>{% endfor %}</select></label><p class="muted">Chỉ khách hàng đồng ý nhận tin được sử dụng. <a href="{{ url_for('data_groups') }}">Quản lý nhóm data →</a></p></div>

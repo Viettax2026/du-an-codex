@@ -14,7 +14,7 @@ from flask import Flask, abort, flash, g, jsonify, redirect, render_template, re
 from werkzeug.security import check_password_hash, generate_password_hash
 from zalo_connector import QRConnector
 from personalization import personalize
-from data_import import read_contacts, insert_contact
+from data_import import read_contacts, insert_contact, default_contact_consent
 from campaign_actions import initialize_campaign_actions, register_campaign_actions, parse_phones
 from campaign_exclusions import exclusion_predicate, contact_is_excluded, save_exclusion_settings
 from campaign_group_picker import read_snapshot_contacts, CAMPAIGN_CONTACT_LIMIT
@@ -308,7 +308,7 @@ def create_app(test_config=None):
                 if not name or not phone:
                     raise ValueError('Vui lòng nhập tên và số điện thoại.')
                 db().execute('INSERT INTO contacts(user_id,name,phone,zalo_id,tag,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                             (g.user['id'], name, phone, field('zalo_id', 100), field('tag', 80) or 'Khách hàng', int(request.form.get('consent') == 'on'),
+                             (g.user['id'], name, phone, field('zalo_id', 100), field('tag', 80) or 'Khách hàng', default_contact_consent(request.form, 'on'),
                               field('email',254), *(field(f'info{i}',500) for i in range(1,6))))
                 db().commit()
                 flash('Đã thêm khách hàng.', 'success')
@@ -347,7 +347,7 @@ def create_app(test_config=None):
                 if len(extra[0]) > 254 or any(len(value) > 500 for value in extra[1:]):
                     raise ValueError(f'Thông tin bổ sung quá dài tại dòng {index + 2}.')
                 cur = db().execute('INSERT OR IGNORE INTO contacts(user_id,name,phone,tag,zalo_id,consent,email,info1,info2,info3,info4,info5) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                                   (g.user['id'], name, phone, tag or 'Khách hàng', zalo_id, int((row.get('consent') or '').lower() in ('1', 'true', 'yes')), *extra))
+                                   (g.user['id'], name, phone, tag or 'Khách hàng', zalo_id, int(not (row.get('consent') or '').strip() or (row.get('consent') or '').strip().lower() in ('1', 'true', 'yes')), *extra))
                 count += cur.rowcount
                 skipped += 1 - cur.rowcount
             db().commit()

@@ -42,7 +42,7 @@ def build_schema():
     import_result=object_schema({'group_id':integer,**{name:{'type':'integer','minimum':0} for name in ['received_count','added_count','existing_count','invalid_count']},
         'invalid_rows':array(object_schema({'row':integer,'reason':string})), 'invalid_rows_truncated':{'type':'boolean'},'dry_run':{'type':'boolean'}})
     rows_input=object_schema({'data':{'type':'array','minItems':1,'maxItems':500,'items':{}},
-        'consent':{'type':'boolean','default':False,'description':'Chỉ xác nhận true khi khách hàng mới đã đồng ý nhận tin. Không thay đổi hồ sơ cũ.'},
+        'consent':{'type':'boolean','default':True,'description':'Trạng thái nhận tin của khách mới; mặc định true. Gửi false để không bật nhận tin. Không thay đổi hồ sơ cũ.'},
         'source_name':dict(string,maxLength=150,default=''),'dry_run':{'type':'boolean','default':False}},['data'],True)
     rows_input['properties']['data']['description']='Mỗi dòng hợp lệ theo ContactInput; dòng sai được đếm invalid_count, các dòng hợp lệ khác vẫn được thêm.'
     paths={

@@ -17,7 +17,7 @@ def test_group_import_metadata_duplicates_and_consent(app):
         'file': (io.BytesIO('phone,name,email,info1\n+84901234567,Lan,lan@example.com,A\n'.encode()), 'contacts.csv')})
     assert 'Lan' in result.text
     post(client, '/data-groups', {'name': 'Other'})
-    post(client, '/data-groups/import', {'group': 'Other', 'phones': '0901234567\n0912345678'})
+    post(client, '/data-groups/import', {'group': 'Other', 'phones': '0901234567\n0912345678', 'consent': ''})
     with database(app) as db:
         assert db.execute('SELECT name,tag,consent,email,info1 FROM contacts WHERE phone=?', ('0901234567',)).fetchone() == ('Lan', 'VIP', 1, 'lan@example.com', 'A')
         assert db.execute('SELECT consent FROM contacts WHERE phone=?', ('0912345678',)).fetchone() == (0,)
@@ -516,7 +516,7 @@ def test_duplicate_group_validates_name_authentication_and_ownership(app):
 
 def test_reimport_fills_missing_source_and_preserves_customer_information(app):
     client = app.test_client(); register(client)
-    post(client, '/contacts', {'name': 'Existing Lan', 'phone': '0901234567', 'tag': 'Legacy'})
+    post(client, '/contacts', {'name': 'Existing Lan', 'phone': '0901234567', 'tag': 'Legacy', 'consent': ''})
     response = client.get('/data-groups?group=Legacy')
     assert 'Chưa ghi nhận nguồn' in response.text
     assert client.get('/data-groups/source-history/1?group=Legacy').json['sources'] == []

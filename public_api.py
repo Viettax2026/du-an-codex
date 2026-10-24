@@ -207,7 +207,7 @@ def register_public_api(app, db, login_required, manager, parse_phones):
     @scope('data:write')
     def add_members(group_id):
         data=body(('data','consent','source_name','dry_run'),('data',))
-        rows=data['data'];consent=data.get('consent',False);dry=data.get('dry_run',False);source=data.get('source_name','')
+        rows=data['data'];consent=data.get('consent',True);dry=data.get('dry_run',False);source=data.get('source_name','')
         if not isinstance(rows,list) or not 1<=len(rows)<=500:
             raise ValueError('Mỗi yêu cầu cần từ 1 đến 500 dòng data.')
         if type(consent) is not bool or type(dry) is not bool or not isinstance(source,str) or len(source)>150:

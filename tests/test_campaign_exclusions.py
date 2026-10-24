@@ -152,7 +152,7 @@ def test_cross_owner_ids_and_invalid_edits_do_not_change_settings(app):
 
 def test_importing_or_appending_does_not_reenable_previously_revoked_consent(app):
     client=app.test_client();register(client)
-    post(client,'/contacts',{'name':'Opted out','phone':'0901234567','tag':'VIP'})
+    post(client,'/contacts',{'name':'Opted out','phone':'0901234567','tag':'VIP','consent':''})
     post(client,'/campaigns',{'name':'Direct list','message':'Hello','phones':'0901234567\n0912345678','phones_consent':'yes'})
     assert query(app,'SELECT phone,consent FROM contacts ORDER BY id')==[('0901234567',0),('0912345678',1)]
     post(client,'/campaigns/1/data',{'phones':'0901234567','consent':'yes'})

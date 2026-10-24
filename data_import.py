@@ -54,6 +54,12 @@ def read_contacts(upload, parse_phones):
         raise ValueError('Tệp không hợp lệ. Dùng TXT/CSV UTF-8 hoặc Excel .xlsx có cột phone.') from error
 
 
+def default_contact_consent(form, checked_value):
+    """Default new records to enabled while honoring an explicitly unchecked form."""
+    default = '' if form.get('consent_present') == 'yes' else checked_value
+    return int(form.get('consent', default) == checked_value)
+
+
 def insert_contact(connection, user_id, phone, row, tag='Khách hàng', consent=1):
     connection.execute('''INSERT INTO contacts(user_id,name,phone,tag,consent,zalo_id,email,info1,info2,info3,info4,info5)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,phone) DO NOTHING''',

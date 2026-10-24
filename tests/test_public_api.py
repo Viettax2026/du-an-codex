@@ -104,7 +104,7 @@ def test_api_group_members_dry_run_partial_import_sources_and_idempotency(app):
 def test_existing_profiles_link_to_new_group_without_overwriting_info_or_consent(app):
     client=app.test_client();register(client);headers=key(client)
     first=create_group(client,headers,'First');second=create_group(client,headers,'Second')
-    client.post(f'/api/v1/data-groups/{first}/members',json={'data':[{'name':'Original','phone':'0901234567'}],'source_name':'CRM / Viettax'},headers=headers)
+    client.post(f'/api/v1/data-groups/{first}/members',json={'data':[{'name':'Original','phone':'0901234567'}],'source_name':'CRM / Viettax','consent':False},headers=headers)
     assert query(app,'SELECT data_source FROM contacts')==[('API · CRM / Viettax',)]
     response=client.post(f'/api/v1/data-groups/{second}/members',json={'data':[{'name':'Changed','phone':'0901234567'}],'consent':True},headers=headers)
     assert response.json['data']['added_count']==1

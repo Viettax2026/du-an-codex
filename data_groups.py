@@ -8,10 +8,10 @@ from zoneinfo import ZoneInfo
 from data_sources import initialize_data_sources, create_source_batch, record_contact_source
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
-from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts
+from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts, default_contact_consent
 
 
-def save_group_members(db, user_id, group, incoming, consent=0, filename='', source_type=None):
+def save_group_members(db, user_id, group, incoming, consent=1, filename='', source_type=None):
     """Persist validated members and provenance in the caller's transaction."""
     added = created_profiles = 0
     db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (user_id,group))
@@ -333,7 +333,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         group = request.form.get('group', '')
         try:
             group, incoming, invalid = group_import_input()
-            consent = int(request.form.get('consent') == 'yes')
+            consent = default_contact_consent(request.form, 'yes')
             db().execute('BEGIN IMMEDIATE')
             require_group(group)
             upload = request.files.get('file')

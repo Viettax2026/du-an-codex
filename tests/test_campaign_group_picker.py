@@ -45,7 +45,7 @@ def test_large_group_is_copied_once_and_can_be_reopened_and_edited(app):
 
 def test_empty_archived_and_foreign_groups_cannot_be_copied(app):
     owner=app.test_client();register(owner)
-    post(owner,'/contacts',{'name':'No consent','phone':'0901234567','tag':'Not eligible'})
+    post(owner,'/contacts',{'name':'No consent','phone':'0901234567','tag':'Not eligible','consent':''})
     group=owner.get('/campaigns/group-options').json['groups'][0]
     assert group['total']==1 and group['eligible']==0
     assert snapshot(owner,group['id']).status_code==400

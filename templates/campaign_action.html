@@ -27,7 +27,7 @@
   {% include '_data_upload.html' %}
   <label>Hoặc thêm bằng nhóm data<select name="source_tag"><option value="">Không chọn nhóm</option>{% for t in data_tags %}<option value="{{ t.tag }}">{{ t.tag }}</option>{% endfor %}</select></label>
   <p class="muted">Chỉ bổ sung khách hàng đã đồng ý trong nhóm được chọn; chốt danh sách tại thời điểm lưu.</p>
-  <label class="send-confirm"><input type="checkbox" name="consent" value="yes" required> Tôi xác nhận các khách hàng bổ sung đã đồng ý nhận nội dung này.</label>
+  <label class="send-confirm"><input type="checkbox" name="consent" value="yes" required checked> Tôi xác nhận các khách hàng bổ sung đã đồng ý nhận nội dung này.</label>
   <p>Khi đang dùng nhóm, danh sách khách hàng đồng ý hiện tại được giữ lại thành danh sách riêng rồi bổ sung số mới. Nhật ký và các lần gửi cũ giữ nguyên.</p>
 {% elif action=='delete' %}
   <p>Xóa <b>{{ campaign.name }}</b> khỏi danh sách hoạt động và chặn mọi lần gửi tiếp theo. Báo cáo, media và lịch sử được giữ trong bộ lọc <b>Đã xóa</b>. Không xóa khách hàng hoặc phiên đăng nhập Zalo.</p>
