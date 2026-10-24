@@ -98,3 +98,106 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
   });
   updateDataSource();
 });
+
+// Summarize the fields in each step without changing submission requirements.
+document.querySelectorAll('.campaign-wizard').forEach(form => {
+  const sections = form.querySelector('.wizard-sections');
+  const steps = [...form.querySelectorAll('[data-wizard-step]')];
+  const cards = [...sections.querySelectorAll('.wizard-card')];
+  function activate(target) {
+    steps.forEach(step => {
+      const active = step.dataset.wizardStep === target;
+      step.classList.toggle('is-active', active);
+      if (active) step.setAttribute('aria-current', 'step');
+      else step.removeAttribute('aria-current');
+    });
+  }
+  function openCard(card) {
+    card.querySelector('[data-wizard-toggle]').setAttribute('aria-expanded', 'true');
+    card.querySelector('.wizard-card-body').hidden = false;
+  }
+  function goToCard(card) {
+    openCard(card);
+    const top = card.getBoundingClientRect().top - sections.getBoundingClientRect().top + sections.scrollTop - 8;
+    sections.scrollTo({top:Math.max(0,top),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+    activate(card.id.replace('wizard-', ''));
+  }
+  steps.forEach(step => step.addEventListener('click', event => {
+    event.preventDefault();
+    goToCard(form.querySelector(step.getAttribute('href')));
+  }));
+  form.querySelectorAll('[data-wizard-toggle]').forEach(button => button.addEventListener('click', () => {
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    button.setAttribute('aria-expanded', String(!expanded));
+    form.querySelector('#' + button.getAttribute('aria-controls')).hidden = expanded;
+  }));
+  let scrollFrame = null;
+  sections.addEventListener('scroll', () => {
+    if (scrollFrame !== null) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      const top = sections.getBoundingClientRect().top + 40;
+      let active = cards[0];
+      cards.forEach(card => { if (card.getBoundingClientRect().top <= top) active = card; });
+      activate(active.id.replace('wizard-', ''));
+    });
+  }, {passive:true});
+  function hasValidPhones() {
+    const raw = form.elements.phones.value.trim();
+    if (!raw) return false;
+    const phones = raw.split(/[\n,;]+/).map(value => {
+      let phone = value.replace(/[\s().+-]/g, '');
+      if (phone.startsWith('84')) phone = '0' + phone.slice(2);
+      return phone;
+    }).filter(Boolean);
+    return phones.length>0 && new Set(phones).size<=500 && phones.every(phone => /^0[0-9]{9}$/.test(phone));
+  }
+  function completion() {
+    const fields = form.elements;
+    const direct = fields.data_mode.value === 'direct';
+    const validPhones = hasValidPhones();
+    const hasData = (!fields.phones.value.trim() || validPhones) && (validPhones || fields.data_file.files.length>0 || [...fields.source_tags.selectedOptions].length>0);
+    const actionsValid = (fields.send_message.checked || fields.send_friend.checked) &&
+      (!fields.send_friend.checked || (fields.friend_message.value.trim().length>0 && fields.friend_message.validity.valid)) &&
+      (!fields.rename_enabled.checked || (fields.rename_template.value.trim().length>0 && fields.rename_template.validity.valid));
+    const states = {
+      action:Boolean(fields.action.value), account:Boolean(fields.account_id.value),
+      name:Boolean(fields.name.value.trim()) && fields.name.validity.valid, actions:actionsValid,
+      source:['direct','group'].includes(fields.data_mode.value),
+      phones:direct ? hasData && fields.phones_consent.checked : Boolean(fields.tag.value),
+      message:!fields.send_message.checked || (Boolean(fields.message.value.trim()) && fields.message.validity.valid)
+    };
+    steps.forEach(step => {
+      const items = [...step.querySelectorAll('[data-wizard-check]')];
+      let count = 0;
+      items.forEach(item => {
+        const done = Boolean(states[item.dataset.wizardCheck]);
+        item.classList.toggle('is-done', done);
+        if (done) count += 1;
+      });
+      const complete = count===items.length;
+      step.classList.toggle('is-complete', complete);
+      const marker = step.querySelector('[data-step-number]');
+      marker.textContent = complete ? '✓' : marker.dataset.stepNumber;
+      const badge = step.querySelector('[data-step-count]');
+      badge.textContent = `${count} / ${items.length}`;
+      badge.setAttribute('aria-label', `Đã điền ${count} trên ${items.length} mục`);
+    });
+  }
+  form.addEventListener('input', completion);
+  form.addEventListener('change', completion);
+  form.querySelector('[data-clear-data]')?.addEventListener('click', completion);
+  // Required fields remain reachable even when their section is collapsed.
+  let invalidFrame = null;
+  form.addEventListener('invalid', event => {
+    const card = event.target.closest('.wizard-card');
+    if (!card) return;
+    openCard(card);
+    if (invalidFrame === null) invalidFrame = requestAnimationFrame(() => {
+      invalidFrame = null;
+      goToCard(card);
+      event.target.focus({preventScroll:true});
+    });
+  }, true);
+  completion();
+});
