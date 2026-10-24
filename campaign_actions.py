@@ -26,7 +26,7 @@ STATE_LABELS = {'prepared': 'Chờ xác nhận', 'sending': 'Đang xử lý / c�
 
 def initialize_campaign_actions(db):
     columns = {
-        'campaigns': {'message_html': "TEXT NOT NULL DEFAULT ''", 'paused': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT',
+        'campaigns': {'next_message_variant': 'INTEGER NOT NULL DEFAULT 0', 'message_html': "TEXT NOT NULL DEFAULT ''", 'paused': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT',
                       'audience_mode': "TEXT NOT NULL DEFAULT 'group'", 'media_id': 'INTEGER',
                       'message_limit': 'INTEGER NOT NULL DEFAULT 0', 'friend_limit': 'INTEGER NOT NULL DEFAULT 0',
                       'alias_limit': 'INTEGER NOT NULL DEFAULT 0', 'interval_seconds': 'INTEGER NOT NULL DEFAULT 0'},
@@ -355,8 +355,9 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 db().execute('BEGIN IMMEDIATE')
                 campaign = manager.owned(campaign_id)
                 manager.set_media(campaign_id)
-                db().execute('UPDATE campaigns SET message=?,message_html=?,friend_message=? WHERE id=?',
-                             (message, message_html, invitation, campaign_id))
+                db().execute('''UPDATE campaigns SET next_message_variant=CASE WHEN message<>? OR message_html<>? THEN 0 ELSE next_message_variant END,
+                    message=?,message_html=?,friend_message=? WHERE id=?''',
+                             (message, message_html, message, message_html, invitation, campaign_id))
                 manager.event(campaign_id, 'content', 'Cập nhật nội dung và media cho các bản xem trước tạo sau thời điểm này.')
                 db().commit()
                 flash('Đã cập nhật nội dung và media. Bản xem trước và nhật ký cũ giữ nguyên.', 'success')

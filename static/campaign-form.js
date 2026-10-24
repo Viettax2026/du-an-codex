@@ -27,7 +27,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
     alias.required = rename.checked;
     alias.disabled = !rename.checked;
     form.querySelector('[data-alias-preview]').textContent = samplePersonalization(alias.value);
-    preview.textContent = samplePersonalization(content.value) || 'Nhập nội dung để xem trước.';
+    if (!form.querySelector('[data-message-composer].is-enhanced')) preview.textContent = samplePersonalization(content.value) || 'Nhập nội dung để xem trước.';
     consent.required = form.elements.data_mode.value === 'direct' && Boolean(phones.value.trim() || form.elements.data_file.files.length);
     content.required = messageEnabled.checked && !form.querySelector('[data-message-composer].is-enhanced');
     invitation.required = friendEnabled.checked;
@@ -171,7 +171,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       source:['direct','group'].includes(fields.data_mode.value),
       phones:direct ? hasData && (!needsConsent || fields.phones_consent.checked) : Boolean(fields.tag.value),
       media:fields.media_mode?.value === 'none' || Boolean(fields.media.files.length || fields.library_media_id.value || form.querySelector('[data-message-composer]').dataset.initialMedia !== 'null'),
-      message:!fields.send_message.checked || (Boolean(fields.message.value.trim()) && fields.message.validity.valid)
+      message:!fields.send_message.checked || (Boolean(fields.message.value.trim()) && fields.message.validity.valid && form.querySelector('[data-message-composer]').dataset.messageValid !== 'false')
     };
     steps.forEach(step => {
       const items = [...step.querySelectorAll('[data-wizard-check]')];

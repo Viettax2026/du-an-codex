@@ -42,3 +42,4 @@
 .message-composer .composer-file-name{display:flex;gap:12px;align-items:center}.composer-file-name svg{flex-shrink:0;color:#8297b3}.composer-file-table .composer-delete{display:grid;place-items:center}
 .composer-editor,.message-text,.preview-message{counter-reset:composer-list}[data-style=lst_2]:before{counter-increment:composer-list;content:counter(composer-list) '. '}
 .campaign-wizard .message-composer .composer-check{margin:8px 0}.campaign-wizard .message-composer .composer-label{margin:0 0 8px}
+.composer-variant-preview{padding:12px 0;border-bottom:1px solid #d8e2ee}.composer-variant-preview:last-child{border-bottom:0}.composer-variant-preview>b{display:block;font-size:12px;color:#7d91ab;font-weight:500;margin-bottom:7px}

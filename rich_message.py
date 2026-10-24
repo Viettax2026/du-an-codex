@@ -1,5 +1,6 @@
 """Restricted rich messages and immutable Zalo UTF-16 formatting ranges."""
 import json
+from bisect import bisect_left
 from html import escape
 from html.parser import HTMLParser
 
@@ -92,7 +93,7 @@ class MessageParser(HTMLParser):
 
 
 def parse_html(value):
-    if len(value) > 40000:
+    if len(value) > 200000:
         raise ValueError('Nội dung định dạng quá dài.')
     parser = MessageParser()
     parser.feed(value)
@@ -124,6 +125,55 @@ def markup(text, ranges):
 
 
 
+def variant_spans(text):
+    """Split outer pipes before personalization; braces and escaped pipes stay literal."""
+    spans, start, depth, i = [], 0, 0, 0
+    while i < len(text):
+        char = text[i]
+        if char == '\\' and i+1 < len(text) and text[i+1] in '\\|':
+            i += 2
+            continue
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth = max(0,depth-1)
+        elif char == '|' and depth == 0:
+            spans.append((start,i))
+            start = i+1
+        i += 1
+    spans.append((start,len(text)))
+    if len(spans) > 20 or utf16(text) > 40000:
+        raise ValueError('Tối đa 20 biến thể, mỗi biến thể tối đa 2.000 ký tự.')
+    trimmed = []
+    for a,b in spans:
+        while a < b and text[a].isspace():
+            a += 1
+        while b > a and text[b-1].isspace():
+            b -= 1
+        if a == b and len(spans) > 1:
+            raise ValueError('Biến thể đang trống. Nhập nội dung ở hai bên dấu |.')
+        trimmed.append((a,b))
+    return trimmed
+
+
+def select_variant(text, ranges, index=0):
+    spans = variant_spans(text)
+    a,b = spans[index % len(spans)]
+    chars, positions, i = [], [], a
+    while i < b:
+        if text[i] == '\\' and i+1 < b and text[i+1] in '\\|':
+            i += 1
+        chars.append(text[i])
+        positions.append(i)
+        i += 1
+    clipped = []
+    for start,end,style in ranges:
+        start,end = bisect_left(positions,start),bisect_left(positions,end)
+        if end > start:
+            clipped.append((start,end,style))
+    return ''.join(chars), clipped
+
+
 def read_message(form):
     html = form.get('message_html','') if form.get('rich_message') == 'yes' else ''
     if html:
@@ -132,19 +182,22 @@ def read_message(form):
         parse_html(html)  # Canonical output must remain within the same complexity limits.
     else:
         text = form.get('message','').strip()
-    if utf16(text) > 2000:
-        raise ValueError('Tin nhắn vượt 2000 ký tự. Emoji được tính theo giới hạn của Zalo.')
+    for index in range(len(variant_spans(text))):
+        variant, _ = select_variant(text, [], index)
+        if utf16(variant) > 2000:
+            raise ValueError(f'Biến thể {index+1} vượt 2000 ký tự. Emoji được tính theo giới hạn của Zalo.')
     personalize(text, {}, strict=False)
     return text, html
 
 
-def render_message(message, html, contact, zalo=None, strict=True):
+def render_message(message, html, contact, zalo=None, strict=True, variant_index=0):
     if html:
         source, ranges = parse_html(html)
         if source != message:
             raise ValueError('Nội dung và định dạng không khớp. Vui lòng lưu lại nội dung.')
     else:
         source, ranges = message, []
+    source, ranges = select_variant(source, ranges, variant_index)
     # Personalize before converting offsets to Zalo's UTF-16 units. A token may span tags.
     replacements = [(m.start(),m.end(),personalize(m.group(),contact,zalo,strict=strict)) for m in TOKEN.finditer(source)]
     def offset(pos, end=False):

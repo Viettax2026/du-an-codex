@@ -1,7 +1,7 @@
 """Private reusable message templates and the campaign composer's media picker."""
 import json
 from flask import abort, g, jsonify, request, url_for
-from rich_message import read_message, render_message, display_message
+from rich_message import read_message, render_message, display_message, variant_spans
 
 
 def register_message_composer(app, db, login_required, manager):
@@ -35,8 +35,11 @@ def register_message_composer(app, db, login_required, manager):
         try:
             message, html=read_message(request.form)
             sample=dict(name='Lan', phone='0901234567', email='lan@example.com', **{f'info{i}':f'Thông tin mẫu {i}' for i in range(1,6)})
-            text,styles=render_message(message,html,sample,dict(name='Lan',original_name='Lan'),strict=False)
-            return jsonify(html=str(display_message(text,json.dumps(styles))), length=len(text.encode('utf-16-le'))//2)
+            variants=[]
+            for index in range(len(variant_spans(message))):
+                text,styles=render_message(message,html,sample,dict(name='Lan',original_name='Lan'),strict=False,variant_index=index)
+                variants.append(dict(html=str(display_message(text,json.dumps(styles))),length=len(text.encode('utf-16-le'))//2))
+            return jsonify(**variants[0],variants=variants)
         except ValueError as error:
             return jsonify(error=str(error)),400
 

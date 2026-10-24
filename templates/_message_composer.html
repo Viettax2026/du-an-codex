@@ -1,7 +1,7 @@
 {% set composer_campaign = campaign if campaign is defined and campaign else none %}
 {% set composer_attachment = composer_media(composer_campaign.media_id) if composer_campaign else none %}
 <div class="message-composer" data-message-composer data-initial-html="{{ request.form.get('message_html', composer_campaign.message_html if composer_campaign else '') }}" data-initial-media='{{ composer_attachment|tojson }}' data-message-required="{{ 'false' if composer_campaign and not composer_campaign.send_message else 'true' }}">
-  <div class="composer-mode-row"><div class="composer-tabs" aria-label="Chế độ nội dung"><button type="button" class="is-active" data-composer-basic>Cơ bản</button><button type="button" data-composer-templates>Nhóm mẫu nội dung</button></div><p>Dùng một nội dung và tệp đính kèm chung cho chiến dịch.</p></div>
+  <div class="composer-mode-row"><div class="composer-tabs" aria-label="Chế độ nội dung"><button type="button" class="is-active" data-composer-basic>Cơ bản</button><button type="button" data-composer-templates>Nhóm mẫu nội dung</button></div><p>Có thể nhập nhiều biến thể bằng dấu |. Mỗi lượt chạy sẽ xoay vòng qua các biến thể. Tệp đính kèm dùng chung.</p></div>
   <label class="composer-label" for="campaign-message">Nội dung tin nhắn</label>
   <div class="composer-tools">
     {% set personal_target='message' %}{% include '_personalize_picker.html' %}
@@ -17,8 +17,8 @@
     </div>
     <div class="composer-editor" data-composer-editor contenteditable="true" role="textbox" aria-label="Nội dung tin nhắn có định dạng" aria-multiline="true" spellcheck="false" data-placeholder="Nhập nội dung tin nhắn…"></div>
   </div>
-  <textarea id="campaign-message" name="message" rows="10" maxlength="2000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', composer_campaign.message if composer_campaign else '') }}</textarea>
-  <div class="composer-caption"><span>Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu.</span><span data-composer-count>0 / 2.000</span></div>
+  <textarea id="campaign-message" name="message" rows="10" maxlength="40000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', composer_campaign.message if composer_campaign else '') }}</textarea>
+  <div class="composer-caption"><span>Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu. Viết <code>\|</code> nếu cần giữ dấu | trong tin nhắn.</span><span data-composer-count>1 biến thể · 0 / 2.000</span></div>
   <p class="composer-status" data-composer-status role="status" aria-live="polite"></p>
   <div class="wizard-preview composer-preview" data-composer-inline-preview hidden><b>Xem trước với tên mẫu “Lan”</b><div class="message-text" data-message-preview></div></div>
   <section class="composer-files" aria-label="Tệp đính kèm">

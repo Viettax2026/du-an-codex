@@ -546,8 +546,8 @@ def create_app(test_config=None):
                 flash('Cần có người đồng ý nhận tin và chiến dịch chưa gửi thử.', 'error')
             else:
                 try:
-                    for person in recipients:
-                        message, styles = render_message(campaign['message'], campaign['message_html'], person, strict=False)
+                    for variant_index, person in enumerate(recipients):
+                        message, styles = render_message(campaign['message'], campaign['message_html'], person, strict=False, variant_index=variant_index)
                         db().execute('INSERT INTO deliveries(campaign_id,contact_id,message,message_styles) VALUES (?,?,?,?)', (campaign_id, person['id'], message, json.dumps(styles)))
                     manager.event(campaign_id, 'simulate', f'Mô phỏng {len(recipients)} tin nhắn; chưa gửi Zalo.')
                     db().commit()
@@ -558,7 +558,7 @@ def create_app(test_config=None):
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         logs = db().execute('SELECT d.*, c.name FROM deliveries d JOIN contacts c ON c.id=d.contact_id WHERE campaign_id=? ORDER BY d.id DESC', (campaign_id,)).fetchall()
         try:
-            preview_text, preview_styles = render_message(campaign['message'], campaign['message_html'], recipients[0] if recipients else {'name':'Nguyễn An'}, strict=False)
+            preview_text, preview_styles = render_message(campaign['message'], campaign['message_html'], recipients[0] if recipients else {'name':'Nguyễn An'}, strict=False, variant_index=campaign['next_message_variant'])
             preview = display_message(preview_text, json.dumps(preview_styles))
         except ValueError as error:
             preview = str(error)
@@ -611,7 +611,7 @@ def create_app(test_config=None):
                 if campaign['rename_enabled'] and (not alias or len(alias) > 100):
                     raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
                 invitation = personalize(campaign['friend_message'], person, result) if campaign['send_friend'] else ''
-                rendered_message, message_styles = render_message(campaign['message'], campaign['message_html'], person, result) if campaign['send_message'] else ('', [])
+                rendered_message, message_styles = render_message(campaign['message'], campaign['message_html'], person, result, variant_index=campaign['next_message_variant']) if campaign['send_message'] else ('', [])
             except ValueError as error:
                 flash(str(error), 'error')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
@@ -627,6 +627,8 @@ def create_app(test_config=None):
                 'prepared' if campaign['send_message'] else 'not_requested', invitation,
                 'prepared' if campaign['send_friend'] else 'not_requested', alias,
                 'prepared' if campaign['rename_enabled'] else 'not_requested', campaign['media_id'], json.dumps(message_styles)))
+            if campaign['send_message']:
+                db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?', (campaign_id,))
             manager.event(campaign_id, 'preview', f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
             db().commit()
             flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')

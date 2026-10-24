@@ -77,13 +77,32 @@
     data.set('csrf',csrf); data.set('message',textarea.value); data.set('rich_message',richField.value); data.set('message_html',htmlField.value);
     return data;
   }
+  function variantInfo() {
+    const text=textarea.value, parts=[];
+    let start=0,depth=0;
+    for(let i=0;i<text.length;i++) {
+      if(text[i]==='\\' && ['\\','|'].includes(text[i+1])) {i++;continue;}
+      if(text[i]==='{') depth++;
+      else if(text[i]==='}') depth=Math.max(0,depth-1);
+      else if(text[i]==='|' && depth===0) {parts.push(text.slice(start,i).trim());start=i+1;}
+    }
+    parts.push(text.slice(start).trim());
+    const lengths=parts.map(part=>{let length=0;for(let i=0;i<part.length;i++){if(part.charCodeAt(i)===92 && [92,124].includes(part.charCodeAt(i+1))) i++;length++;}return length;});
+    let error='';
+    if(parts.length>20 || text.length>40000) error='Tối đa 20 biến thể, mỗi biến thể tối đa 2.000 ký tự.';
+    else if(parts.length>1 && parts.some(part=>!part)) error='Biến thể đang trống. Nhập nội dung ở hai bên dấu |.';
+    else if(lengths.some(length=>length>2000)) error=`Biến thể ${lengths.findIndex(length=>length>2000)+1} vượt 2.000 ký tự.`;
+    return {count:parts.length,max:Math.max(...lengths),error};
+  }
   function sync() {
     if (rich.checked) { textarea.value = plainText(editor); htmlField.value = editor.innerHTML; richField.value = 'yes'; }
     else { htmlField.value = ''; richField.value = 'no'; }
     textarea.required = false;
-    counter.textContent = `${textarea.value.length.toLocaleString('vi-VN')} / 2.000`;
-    counter.classList.toggle('is-invalid', textarea.value.length>2000);
-    status.textContent = textarea.value.length>2000 ? 'Nội dung vượt 2.000 ký tự. Vui lòng rút ngắn trước khi lưu.' : '';
+    const info=variantInfo();
+    counter.textContent = `${info.count} biến thể · ${info.max.toLocaleString('vi-VN')} / 2.000 ký tự tối đa`;
+    counter.classList.toggle('is-invalid', Boolean(info.error));
+    root.dataset.messageValid=String(!info.error);
+    status.textContent = info.error;
     textarea.dispatchEvent(new Event('composer-sync', {bubbles:true}));
     form.dispatchEvent(new Event('input', {bubbles:true}));
     queuePreview();
@@ -148,9 +167,10 @@
     if (root.querySelector('[name=media_mode][value=send]').checked && !attachment) {
       event.preventDefault(); status.textContent='Chọn một tệp để gửi hoặc chọn Không gửi file.'; root.querySelector('[data-composer-upload]').focus(); return;
     }
-    if (textarea.value.length>2000 || required && !textarea.value.trim()) {
+    const info=variantInfo();
+    if (info.error || required && !textarea.value.trim()) {
       event.preventDefault();
-      status.textContent = textarea.value.length>2000 ? 'Nội dung vượt 2.000 ký tự.' : 'Vui lòng nhập nội dung tin nhắn.';
+      status.textContent = info.error || 'Vui lòng nhập nội dung tin nhắn.';
       const card = root.closest('.wizard-card');
       if (card) { card.querySelector('.wizard-card-body').hidden=false; card.querySelector('[data-wizard-toggle]').setAttribute('aria-expanded','true'); }
       (rich.checked ? editor : textarea).focus();
@@ -173,7 +193,15 @@
     try {
       const result = await api('/composer/preview',messageData());
       if (epoch !== previewEpoch) return null;
-      root.querySelector('[data-message-preview]').innerHTML = result.html || 'Nhập nội dung để xem trước.';
+      const preview=root.querySelector('[data-message-preview]');
+      preview.replaceChildren();
+      result.variants.forEach((variant,index)=>{
+        const section=document.createElement('section'),label=document.createElement('b'),content=document.createElement('div');
+        section.className='composer-variant-preview';
+        label.textContent=`Biến thể ${index+1} / ${result.variants.length} · ${variant.length} ký tự`;
+        content.innerHTML=variant.html || 'Nhập nội dung để xem trước.';
+        section.append(label,content);preview.append(section);
+      });
       return result;
     } catch (error) { if (epoch===previewEpoch) status.textContent=error.message; return null; }
   }

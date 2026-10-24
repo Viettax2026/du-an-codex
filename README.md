@@ -257,7 +257,9 @@ Bấm cột **Nguồn data** để xem tệp nguồn, thời điểm ghi nhận 
 
 ## Soạn nội dung chiến dịch
 
-Mục **Nội dung tin nhắn** dùng một nội dung chung, có chế độ văn bản thường hoặc định dạng: đậm, nghiêng, gạch chân/gạch ngang, tiêu đề, danh sách, trích dẫn, thụt lề, chèn đường dẫn và hoàn tác. **Cá nhân hóa** chèn thông tin khách hàng; **Xem trước** dùng dữ liệu mẫu Lan. Giới hạn 2.000 đơn vị ký tự UTF-16 theo Zalo; emoji có thể tính hai đơn vị. Không sinh nội dung hoặc tự xoay biến thể.
+Mục **Nội dung tin nhắn** dùng chung cho các tài khoản trong chiến dịch, có chế độ văn bản thường hoặc định dạng: đậm, nghiêng, gạch chân/gạch ngang, tiêu đề, danh sách, trích dẫn, thụt lề, chèn đường dẫn và hoàn tác. **Cá nhân hóa** chèn thông tin khách hàng; **Xem trước** dùng dữ liệu mẫu Lan. Nhập các biến thể thủ công bằng dấu `|` ngoài cùng; dùng `\|` để giữ dấu gạch đứng trong tin nhắn. Tối đa 20 biến thể, mỗi biến thể tối đa 2.000 đơn vị ký tự UTF-16 theo Zalo; emoji có thể tính hai đơn vị. Không tự sinh nội dung. Xem trước trong ô soạn hiển thị tất cả biến thể.
+
+Mỗi lần tạo bản xem trước cho người nhận mới chọn biến thể tiếp theo theo thứ tự 1 → 2 → … → 1. Bộ đếm riêng của chiến dịch được lưu trong SQLite cùng bản xem trước, dùng chung giữa các tài khoản gửi; tải lại trang, gửi lại biểu mẫu trùng hoặc lỗi tạo bản xem trước không làm nhảy lượt. Gửi dùng đúng nội dung đã chốt; hủy bản xem trước không hoàn lại lượt để tránh đổi nội dung các bản còn lại. Mô phỏng xoay lần lượt từ biến thể 1, không tăng bộ đếm gửi thật. Sửa nội dung/định dạng đặt lượt mới về 1; đổi riêng tệp hoặc lời mời giữ lượt. Bản sao chiến dịch bắt đầu ở biến thể 1. Dấu `|` bên trong dấu ngoặc nhọn và dữ liệu cá nhân hóa được giữ nguyên; không xử lý spin ngẫu nhiên `{a|b}`.
 
 **Lưu mẫu** lưu nội dung và định dạng theo tên/nhóm riêng của tài khoản. **Chọn mẫu / Nhóm mẫu nội dung** thay nội dung đang soạn sau xác nhận; **Quản lý mẫu** cho chọn để sửa rồi lưu đè hoặc xóa. Mẫu không chứa tệp đính kèm. Chọn một tệp bằng **Chọn file** hoặc **Từ thư viện Media**, xem trước bằng tên tệp và gỡ bằng biểu tượng thùng rác. Gỡ chỉ bỏ tệp khỏi chiến dịch; không xóa thư viện.
 
