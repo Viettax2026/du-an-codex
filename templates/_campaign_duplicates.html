@@ -1,0 +1,10 @@
+{% set has_campaign=campaign is defined and campaign %}
+{% set duplicate_on=request.form.get('duplicate_enabled')=='yes' if request.method=='POST' and request.form.get('duplicate_present')=='yes' else (campaign.duplicate_enabled if has_campaign else true) %}
+{% set all_accounts=request.form.get('duplicate_all_accounts')=='yes' if request.method=='POST' and request.form.get('duplicate_present')=='yes' else (campaign.duplicate_all_accounts if has_campaign else false) %}
+<div class="campaign-duplicates" data-duplicate-settings>
+<input type="hidden" name="duplicate_present" value="yes">
+<label class="duplicate-check-label"><input type="checkbox" name="duplicate_enabled" value="yes" {{ 'checked' if duplicate_on }}> Không gửi tin cho những người có tin gửi trước đó cách số ngày là:</label>
+<div class="duplicate-day-field"><input type="number" name="duplicate_days" min="1" max="3650" step="1" value="{{ request.form.get('duplicate_days',campaign.duplicate_days if has_campaign else 10) }}" aria-label="Số ngày không gửi lại"><span>ngày</span></div>
+<label class="duplicate-check-label duplicate-account-scope"><input type="checkbox" name="duplicate_all_accounts" value="yes" {{ 'checked' if all_accounts }}> Kiểm tra trên toàn bộ tài khoản</label>
+<p class="duplicate-note">Kiểm tra lịch sử nhắn tin trong các chiến dịch của bạn. Tính cả tin đang gửi hoặc chưa xác định kết quả.</p>
+</div>

@@ -289,3 +289,13 @@ Hạn mức tính theo chiến dịch, cộng chung tài khoản gửi, áp dụ
 Bật **Chiến dịch sẽ tiếp tục chạy khi 1 trong các hành động đạt giới hạn**: bộ chạy bỏ qua hành động đang hết hạn mức, tiếp tục các hành động còn hạn mức ở những khách tiếp theo. Hành động chờ vẫn giữ nguyên nội dung đã chốt và được xử lý khi hạn mức còn lại. Bỏ chọn: toàn chiến dịch chờ khi một hành động đã chọn hết hạn mức. Khoảng nghỉ luôn áp dụng giữa các hành động của chiến dịch.
 
 Các kiểm tra hạn mức và ghi lượt thực hiện trong cùng khóa ghi SQLite, chống vượt mức khi mở nhiều tab hoặc gửi thủ công cùng lúc với bộ lịch. Giao diện tải số lượt hiện tại qua `/campaigns/<id>/limits/usage` (chỉ chủ chiến dịch, không thay đổi dữ liệu), tự cập nhật sau khi đổi cách tính ngày/khung phút và định kỳ khi đang mở. Biểu mẫu POST vẫn yêu cầu CSRF.
+
+## Kiểm tra trùng lặp tin nhắn
+
+Mục **8. Kiểm tra trùng lặp** có trong Thêm/Sửa/Nhân bản chiến dịch. Biểu mẫu tạo mới mặc định bật, 10 ngày, kiểm tra trên tài khoản gửi đang chọn. **Kiểm tra trên toàn bộ tài khoản** mở rộng sang mọi tài khoản thuộc cùng người dùng; không đọc lịch sử người dùng khác. Khoảng kiểm tra từ 1 đến 3.650 ngày, tính lùi từ thời điểm kiểm tra. Chiến dịch cũ mặc định tắt; nhân bản giữ lựa chọn của chiến dịch gốc. Có thể sửa sau khi có bản xem trước tại **Hành động → Kiểm tra trùng lặp**.
+
+Kiểm tra lịch sử nhắn tin trong mọi chiến dịch của người dùng, kể cả đã xóa, theo số điện thoại hoặc Zalo ID. Dùng thời điểm chốt gửi thực tế trong `campaign_attempts`; dữ liệu cũ thiếu thời điểm này dùng thời gian bản ghi đã có. Ghi lại số điện thoại trong bản xem trước để việc sửa hồ sơ không thay đổi danh tính trong lịch sử. Chỉ tính tin Zalo đã tiếp nhận, đang gửi hoặc chưa xác định kết quả; tin gửi lỗi, xem trước, mô phỏng, lời mời kết bạn và đổi tên không được tính là tin nhắn trước đó.
+
+Gửi thủ công hiển thị lý do và khóa nút gửi khi phát hiện trùng; máy chủ kiểm tra lại trong khóa ghi SQLite ngay trước khi tạo lượt gửi. Hai tab/chiến dịch chốt đồng thời không thể vượt kiểm tra; lượt đang gửi ở chiến dịch kia cũng được tính. Bị chặn không tăng hạn mức hoặc ghi thêm lượt gọi Zalo.
+
+Bộ chạy lịch bỏ qua riêng tin nhắn trùng, ghi lý do trong lịch sử và tiếp tục các hành động kết bạn/đổi tên đã chọn. Tin đã chuẩn bị từ trước vẫn được kiểm tra lại khi chốt gửi. Người trùng số đã biết và chỉ có hành động nhắn tin được bỏ qua trước bước tìm Zalo. Bỏ qua không làm tăng lượt biến thể mới. Lượt đã bỏ qua không tự được gửi lại khi tắt kiểm tra hoặc hết số ngày; quy tắc mỗi người chỉ có một bản gửi trong chiến dịch vẫn giữ nguyên. Tạo chiến dịch mới khi cần một đợt liên hệ tiếp theo.

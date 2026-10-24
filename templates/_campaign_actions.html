@@ -8,6 +8,7 @@
   <a href="{{ url_for('duplicate_campaign',campaign_id=c.id) }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5') }}Nhân bản</a>
   <button type="button" data-copy-campaign="{{ c.id }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5') }}Lấy ID chiến dịch</button>
   <a href="{{ url_for('campaign_schedule',campaign_id=c.id) }}">{{ action_icon('M4 5h16v16H4zM8 2v6m8-6v6M4 10h16M8 14h3m2 0h3') }}Lịch chạy</a>
+  <a href="{{ url_for('campaign_duplicate_check',campaign_id=c.id) }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5M11 14l2 2 4-4') }}Kiểm tra trùng lặp</a>
   <a href="{{ url_for('campaign_limits',campaign_id=c.id) }}">{{ action_icon('M3 6h5m4 0h9M3 12h11m4 0h3M3 18h3m4 0h11M8 3v6m6 0v6M6 15v6') }}Cập nhật giới hạn gửi</a>
   <a href="{{ url_for('campaign_exclusions',campaign_id=c.id) }}">{{ action_icon('M4 4l16 16M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18') }}Loại trừ khách hàng</a>
   <a href="{{ url_for('campaign_content',campaign_id=c.id) }}">{{ action_icon('M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6') }}Cập nhật nội dung + media</a>

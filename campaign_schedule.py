@@ -15,6 +15,7 @@ from werkzeug.exceptions import HTTPException
 from campaign_exclusions import contact_is_excluded
 from rich_message import load_styles
 from campaign_limits import usage, available_actions
+from campaign_duplicates import recent_message, DuplicateMessageBlocked
 
 TZ = ZoneInfo('Asia/Ho_Chi_Minh')
 CONFIG_COLUMNS = ('schedule_kind','schedule_date','schedule_time','schedule_weekdays',
@@ -173,6 +174,27 @@ class CampaignScheduler:
         if state=='unknown':
             raise ValueError('Kết quả hành động chưa xác định. Kiểm tra hội thoại Zalo rồi lưu lại lịch để tiếp tục; không tự gửi lại lần đó.')
 
+    def skip_known_duplicate(self,campaign,person,account,guard,now):
+        self.db().execute('BEGIN IMMEDIATE')
+        try:
+            campaign=self.manager.owned(campaign['id']);guard(campaign)
+            current=next((p for p in self.audience(campaign) if p['id']==person['id']),None)
+            if current is None or self.db().execute('SELECT 1 FROM message_sends WHERE campaign_id=? AND contact_id=?',(campaign['id'],person['id'])).fetchone():
+                self.db().rollback();return True
+            # Recheck changed action settings and the date window after acquiring the write lock.
+            if not campaign['send_message'] or campaign['send_friend'] or campaign['rename_enabled']:
+                self.db().rollback();return False
+            recent=recent_message(self.db,campaign,account['id'],current['phone'])
+            if recent is None:
+                self.db().rollback();return False
+            reason=DuplicateMessageBlocked(recent,campaign['duplicate_days']).description
+            self.manager.store_preview(campaign,current,account,dict(uid=recent['recipient_id'],name=recent['recipient_name']),scheduled=True,skip_message=True,skip_reason=reason)
+            self.manager.event(campaign['id'],'duplicate_skip',f'Bỏ qua khách hàng #{current["id"]}: {reason}')
+            self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign['id']))
+            self.db().commit();return True
+        except BaseException:
+            self.db().rollback();raise
+
     def tick_campaign(self,campaign_id,now):
         campaign=self.manager.owned(campaign_id)
         if not active_window(campaign,now()):
@@ -198,7 +220,10 @@ class CampaignScheduler:
                 self.db().commit();return
             for action,column in (('send','state'),('friend','friend_state'),('alias','alias_state')):
                 if record[column]=='prepared' and action in allowed_actions:
-                    self.dispatch(campaign,record,action,guard)
+                    try:
+                        self.dispatch(campaign,record,action,guard)
+                    except DuplicateMessageBlocked:
+                        self.manager.skip_duplicate_message(campaign_id,record['id'])
                     self.status(campaign_id,'Đang chạy theo lịch')
                     return  # At most one external action per campaign per tick.
         existing={r['contact_id'] for r in self.db().execute('SELECT contact_id FROM message_sends WHERE campaign_id=?',(campaign_id,))}
@@ -208,6 +233,9 @@ class CampaignScheduler:
         if not allowed_actions or person is None:
             self.status(campaign_id,'Đang chờ giới hạn gửi / khoảng nghỉ')
             return
+        if campaign['send_message'] and not campaign['send_friend'] and not campaign['rename_enabled'] and recent_message(self.db,campaign,account['id'],person['phone']):
+            if self.skip_known_duplicate(campaign,person,account,guard,now):
+                return
         # The lookup is read-only. Revalidate window/settings/consent afterwards in a write transaction.
         try:
             resolved=self.connector.message_action(g.user['id'],account['id'],'resolve',phone=person['phone'])
@@ -229,7 +257,11 @@ class CampaignScheduler:
                 self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign_id))
                 self.manager.event(campaign_id,'schedule_skip',f'Bỏ qua khách hàng #{person["id"]}: Zalo thuộc danh sách loại trừ.')
                 self.db().commit();return
-            self.manager.store_preview(campaign,person,account,resolved,scheduled=True)
+            recent=recent_message(self.db,campaign,account['id'],person['phone'],resolved['uid']) if campaign['send_message'] else None
+            reason=DuplicateMessageBlocked(recent,campaign['duplicate_days']).description if recent else ''
+            self.manager.store_preview(campaign,person,account,resolved,scheduled=True,skip_message=bool(recent),skip_reason=reason)
+            if recent is not None:
+                self.manager.event(campaign_id,'duplicate_skip',f'Bỏ qua tin nhắn cho khách hàng #{person["id"]}: {reason}')
             self.db().execute("UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1,schedule_status='Đang chạy theo lịch' WHERE id=?",(now().astimezone(TZ).date().isoformat(),campaign_id))
             self.db().commit()
         except BaseException:

@@ -167,6 +167,7 @@ document.querySelectorAll('.campaign-wizard').forEach(form => {
       (!fields.send_friend.checked || (fields.friend_message.value.trim().length>0 && fields.friend_message.validity.valid)) &&
       (!fields.rename_enabled.checked || (fields.rename_template.value.trim().length>0 && fields.rename_template.validity.valid));
     const states = {
+      duplicates:!fields.duplicate_enabled.checked || fields.duplicate_days.validity.valid,
       limits_interval:fields.interval_seconds.validity.valid,
       limits_day:[fields.message_limit,fields.friend_limit,fields.alias_limit].every(input=>input.validity.valid),
       limits_hour:[fields.message_hour_limit,fields.friend_hour_limit,fields.message_window_minutes,fields.friend_window_minutes].every(input=>input.validity.valid),

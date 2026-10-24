@@ -17,6 +17,7 @@ from werkzeug.utils import secure_filename
 from rich_message import read_message, display_message, parse_html, markup, render_message, utf16
 from personalization import personalize
 from campaign_limits import enforce_limits, save_limits, LIMIT_COLUMNS
+from campaign_duplicates import DuplicateMessageBlocked, recent_for_record, DUPLICATE_COLUMNS
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -122,13 +123,17 @@ class CampaignManager:
                 return False
             if guard is not None:
                 guard(campaign,row)
-            snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id', 'message_styles')
+            snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id', 'message_styles', 'recipient_phone')
             if any(row[key] != expected[key] for key in snapshot_fields):
                 abort(409, 'Bản xem trước đã thay đổi trong tab khác. Tải lại để kiểm tra và xác nhận đúng nội dung.')
             if row['contact_id'] not in {p['id'] for p in self.audience(campaign)}:
                 abort(400, 'Khách hàng không còn đồng ý hoặc không thuộc chiến dịch.')
             if contact_is_excluded(self.db, g.user['id'], campaign_id, row['contact_id'], row['recipient_id']):
                 abort(400, 'Người nhận thuộc danh sách loại trừ của chiến dịch.')
+            if action=='send':
+                recent=recent_for_record(self.db,campaign,row)
+                if recent is not None:
+                    raise DuplicateMessageBlocked(recent,campaign['duplicate_days'])
             enforce_limits(self.db,campaign,action)
             connection.execute(f"UPDATE message_sends SET {column}='sending' WHERE id=?", (send_id,))
             connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action) VALUES (?,?,?)',
@@ -141,7 +146,7 @@ class CampaignManager:
             connection.rollback()
             raise
 
-    def store_preview(self, campaign, person, account, resolved, scheduled=False):
+    def store_preview(self, campaign, person, account, resolved, scheduled=False, skip_message=False, skip_reason=''):
         """Store one immutable personalized payload inside the caller's write transaction."""
         alias=personalize(campaign['rename_template'],person,resolved).strip() if campaign['rename_enabled'] else ''
         if campaign['rename_enabled'] and (not alias or utf16(alias)>100):
@@ -149,15 +154,33 @@ class CampaignManager:
         invitation=personalize(campaign['friend_message'],person,resolved) if campaign['send_friend'] else ''
         if utf16(invitation)>150:
             raise ValueError('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.')
-        message,styles=render_message(campaign['message'],campaign['message_html'],person,resolved,variant_index=campaign['next_message_variant']) if campaign['send_message'] else ('',[])
-        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles,scheduled)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
-            'prepared' if campaign['send_message'] else 'not_requested',invitation,'prepared' if campaign['send_friend'] else 'not_requested',
-            alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'],json.dumps(styles),int(scheduled)))
-        if campaign['send_message']:
+        send_message=campaign['send_message'] and not skip_message
+        message,styles=render_message(campaign['message'],campaign['message_html'],person,resolved,variant_index=campaign['next_message_variant']) if send_message else ('',[])
+        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles,scheduled,recipient_phone,message_skip_reason)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
+            'prepared' if send_message else 'not_requested',invitation,'prepared' if campaign['send_friend'] else 'not_requested',
+            alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'] if send_message else None,json.dumps(styles),int(scheduled),person['phone'],skip_reason))
+        if send_message:
             self.db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?',(campaign['id'],))
         self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
         return row.lastrowid
+
+    def skip_duplicate_message(self,campaign_id,send_id):
+        self.db().execute('BEGIN IMMEDIATE')
+        try:
+            campaign=self.owned(campaign_id)
+            row=self.db().execute('SELECT * FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
+            if not row or row['state']!='prepared':
+                self.db().rollback();return False
+            recent=recent_for_record(self.db,campaign,row)
+            if recent is None:
+                self.db().rollback();return False
+            reason=DuplicateMessageBlocked(recent,campaign['duplicate_days']).description
+            self.db().execute("UPDATE message_sends SET state='not_requested',message_skip_reason=? WHERE id=?",(reason,send_id))
+            self.event(campaign_id,'duplicate_skip',f'Bỏ qua tin nhắn #{send_id}: {reason}')
+            self.db().commit();return True
+        except BaseException:
+            self.db().rollback();raise
 
     def result(self, campaign_id, action, send_id, state):
         label = {'send': 'Tin nhắn', 'friend': 'Lời mời kết bạn', 'alias': 'Đổi tên gợi nhớ'}[action]
@@ -317,7 +340,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     from campaign_schedule import CONFIG_COLUMNS
                     columns = ['message', 'message_html', 'tag', 'account_id', 'send_message', 'send_friend', 'friend_message',
                                'rename_enabled', 'rename_template', 'audience_mode', 'media_id',
-                               *LIMIT_COLUMNS, *CONFIG_COLUMNS]
+                               *LIMIT_COLUMNS, *CONFIG_COLUMNS, *DUPLICATE_COLUMNS]
                     cur = db().execute(f"INSERT INTO campaigns(user_id,name,{','.join(columns)}) VALUES ({','.join('?' for _ in range(len(columns)+2))})",
                                        (g.user['id'], name, *(campaign[column] for column in columns)))
                     copied_id = cur.lastrowid
