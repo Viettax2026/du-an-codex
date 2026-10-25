@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% set titles={'pause':('Tiếp tục chiến dịch' if campaign.paused else 'Dừng chiến dịch'),'duplicate':'Nhân bản chiến dịch','limits':'Cập nhật giới hạn gửi','content':'Cập nhật nội dung + media','data':'Thêm data','delete':'Xóa chiến dịch'} %}
+{% set titles={'pause':('Tiếp tục chiến dịch' if campaign.paused else 'Tạm ngưng chiến dịch'),'duplicate':'Nhân bản chiến dịch','limits':'Cập nhật giới hạn gửi','content':'Cập nhật nội dung + media','data':'Thêm data','delete':'Xóa chiến dịch'} %}
 {% block content %}
 <a href="{{ url_for('campaign_detail',campaign_id=campaign.id) }}">← {{ campaign.name }}</a>
 <section class="panel form-panel action-form"><span class="eyebrow">CHIẾN DỊCH #{{ campaign.id }}</span><h1>{{ titles[action] }}</h1>
@@ -7,7 +7,7 @@
 <input type="hidden" name="csrf" value="{{ session.csrf }}">
 {% if action=='pause' %}
   <input type="hidden" name="paused" value="{{ 0 if campaign.paused else 1 }}">
-  <p>{{ 'Mở lại các thao tác xác nhận thủ công. Không tự gửi lại những lần đã xử lý.' if campaign.paused else 'Dừng tạo bản xem trước, gửi tin, lời mời kết bạn và đổi tên gợi nhớ tiếp theo. Các thao tác đã bắt đầu xử lý có thể vẫn hoàn tất.' }}</p>
+  <p>{{ 'Tiếp tục theo lịch đã bật hoặc xác nhận thủ công. Không gửi lại những lần đã xử lý.' if campaign.paused else 'Tạm ngưng tạo bản xem trước, gửi tin, lời mời kết bạn và đổi tên gợi nhớ tiếp theo. Các thao tác đã bắt đầu xử lý có thể vẫn hoàn tất.' }}</p>
 {% elif action=='duplicate' %}
   <label>Tên bản sao<input name="name" maxlength="120" required value="{{ request.form.get('name', (campaign.name[:105] ~ ' (Bản sao)')) }}"></label>
   <p>Sao chép cấu hình, tài khoản, danh sách riêng, media và giới hạn. Bản sao là bản nháp mới, chưa có lần gửi hoặc nhật ký. Nếu dùng nhóm, danh sách vẫn theo nhóm đó.</p>

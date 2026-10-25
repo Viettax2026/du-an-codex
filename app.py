@@ -425,7 +425,7 @@ def create_app(test_config=None):
                 return redirect(url_for('campaigns'))
         query = request.args.get('q', '').strip()[:120]
         status = request.args.get('status', '')
-        status = status if status in ('draft', 'simulated', 'paused', 'deleted') else ''
+        status = status if status in ('draft', 'simulated', 'paused', 'deleted', 'running', 'complete', 'pending', 'review', 'error') else ''
         days = request.args.get('days', '')
         days = days if days in ('7', '30', '90') else ''
         tag = request.args.get('tag', '').strip()[:80]
@@ -458,38 +458,44 @@ def create_app(test_config=None):
                 FROM message_sends GROUP BY campaign_id) r ON r.campaign_id=c.id
             WHERE c.user_id=? AND c.name LIKE ?
               AND ((?='deleted' AND c.deleted_at IS NOT NULL) OR (?!='deleted' AND c.deleted_at IS NULL))
-              AND (?='' OR ?='deleted' OR (?='paused' AND c.paused=1) OR (c.status=? AND c.paused=0)) AND (?='' OR c.tag=?)
+              AND (?='' OR c.tag=?)
               AND (?='' OR c.created_at >= datetime('now', ?)) AND (?='' OR c.account_id=?)
               AND (?='' OR (?='message' AND c.send_message=1 AND c.send_friend=0)
                   OR (?='friend' AND c.send_message=0 AND c.send_friend=1) OR (?='both' AND c.send_message=1 AND c.send_friend=1))
               ORDER BY c.id DESC''',
-            (g.user['id'], '%' + query + '%', status, status, status, status, status, status, tag, tag,
+            (g.user['id'], '%' + query + '%', status, status, tag, tag,
              days, '-' + (days or '0') + ' days', account_id, account_id, kind, kind, kind, kind)).fetchall()
         rows = [dict(row) for row in rows]
         for row in rows:
             if row['deleted_at']:
-                label, tone = 'Đã xóa', 'muted'
+                state, label, tone = 'deleted', 'Đã xóa', 'muted'
             elif row['paused']:
-                label, tone = 'Đã dừng', 'paused'
+                state, label, tone = 'paused', 'Tạm ngưng', 'paused'
             elif row['sending']:
-                label, tone = 'Đang xử lý', 'draft'
+                state, label, tone = 'running', 'Đang xử lý', 'draft'
             elif row['uncertain']:
-                label, tone = 'Cần kiểm tra', 'warning'
-            elif row['failed']:
-                label, tone = 'Có lỗi', 'warning'
+                state, label, tone = 'review', 'Cần kiểm tra', 'warning'
+            elif row['failed'] or row['schedule_error']:
+                state, label, tone = 'error', 'Có lỗi', 'warning'
+            elif row['sent_total'] and row['confirmed']+row['skipped']>=max(row['audience'],row['sent_total']):
+                state, label, tone = 'complete', 'Đã xử lý', 'complete'
+            elif row['schedule_enabled']:
+                state, label, tone = 'running', 'Đang xử lý', 'draft'
             elif row['waiting']:
-                label, tone = 'Chờ xác nhận', 'draft'
+                state, label, tone = 'pending', 'Chờ xác nhận', 'draft'
             elif row['sent_total']:
-                label, tone = ('Đã xử lý', 'complete') if row['confirmed']+row['skipped']>=max(row['audience'],row['sent_total']) else ('Đang thực hiện', 'draft')
+                state, label, tone = 'running', 'Đang xử lý', 'draft'
             elif row['status']=='simulated':
-                label, tone = 'Đã mô phỏng', 'complete'
+                state, label, tone = 'simulated', 'Đã mô phỏng', 'complete'
             else:
-                label, tone = 'Bản nháp', 'draft'
-            row.update(display_status=label, status_tone=tone,
+                state, label, tone = 'draft', 'Bản nháp', 'draft'
+            row.update(display_state=state, display_status=label, status_tone=tone,
                        progress_done=row['confirmed']+row['skipped'] if row['sent_total'] else row['total'],
                        progress_total=max(row['audience'],row['sent_total'] or row['total']),
                        progress_basis='Đã xử lý (gửi / bỏ qua)' if row['skipped'] else 'Gửi qua Zalo' if row['sent_total'] else 'Mô phỏng')
             row['progress_percent'] = min(100,round(100*row['progress_done']/row['progress_total'])) if row['progress_total'] else 0
+        if status:
+            rows=[row for row in rows if row['display_state']==status]
         tags = db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
         selected = next((row for row in rows if row['id'] == selected_id), None)

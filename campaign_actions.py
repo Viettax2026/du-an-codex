@@ -348,9 +348,9 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 abort(400)
             paused = int(request.form['paused'])
             db().execute('UPDATE campaigns SET paused=? WHERE id=?', (paused, campaign_id))
-            manager.event(campaign_id, 'pause' if paused else 'resume', 'Dừng chiến dịch.' if paused else 'Tiếp tục chiến dịch.')
+            manager.event(campaign_id, 'pause' if paused else 'resume', 'Tạm ngưng chiến dịch.' if paused else 'Tiếp tục chiến dịch.')
             db().commit()
-            flash('Đã dừng các hành động tiếp theo.' if paused else 'Đã mở lại chiến dịch. Các lần đã xử lý không tự chạy lại.', 'success')
+            flash('Đã tạm ngưng các hành động tiếp theo.' if paused else 'Đã mở lại chiến dịch. Các lần đã xử lý không tự chạy lại.', 'success')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         return render_template('campaign_action.html', campaign=campaign, action='pause', page='campaigns')
 

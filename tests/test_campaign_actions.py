@@ -38,7 +38,7 @@ def image_file(color='red'):
 def test_menu_and_every_management_page_are_available(app):
     client, _ = setup_send(app)
     page = client.get('/campaigns').text
-    for text in ['Dừng chiến dịch', 'Sửa', 'Nhân bản', 'Lấy ID chiến dịch', 'Cập nhật giới hạn gửi',
+    for text in ['Tạm ngưng chiến dịch', 'Sửa', 'Nhân bản', 'Lấy ID chiến dịch', 'Cập nhật giới hạn gửi',
                  'Cập nhật nội dung + media', 'Thêm data', 'Xem báo cáo chi tiết', 'Đăng nhập lại Zalo',
                  'Thông tin tài khoản', 'Lịch sử chạy', 'Xóa']:
         assert text in page

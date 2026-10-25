@@ -2,7 +2,7 @@
 <button class="row-action campaign-action-trigger" type="button" popovertarget="actions-{{ c.id }}" aria-label="Hành động cho {{ c.name }}">{{ action_icon('M9 5h12M9 12h12M9 19h12M3 4h2v2H3zM3 11h2v2H3zM3 18h2v2H3z') }} Hành động</button>
 <div class="campaign-action-menu" id="actions-{{ c.id }}" popover aria-label="Hành động chiến dịch {{ c.name }}">
 {% if not c.deleted_at %}
-  <a href="{{ url_for('pause_campaign',campaign_id=c.id) }}">{{ action_icon('M6 4h4v16H6zM14 4h4v16h-4z') }}{{ 'Tiếp tục chiến dịch' if c.paused else 'Dừng chiến dịch' }}</a>
+  <a href="{{ url_for('pause_campaign',campaign_id=c.id) }}">{{ action_icon('M6 4h4v16H6zM14 4h4v16h-4z') }}{{ 'Tiếp tục chiến dịch' if c.paused else 'Tạm ngưng chiến dịch' }}</a>
   <hr>
   <a href="{{ url_for('edit_campaign',campaign_id=c.id) }}">{{ action_icon('m15 4 5 5M3 21l5-1L21 7l-5-5L3 15z') }}Sửa</a>
   <a href="{{ url_for('duplicate_campaign',campaign_id=c.id) }}">{{ action_icon('M8 8h12v13H8zM16 8V3H3v13h5') }}Nhân bản</a>
