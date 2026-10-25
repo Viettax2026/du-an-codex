@@ -65,7 +65,7 @@ def test_templates_private_csrf_update_delete_and_literal_content(app):
     items=owner.get('/message-templates').json['items'];assert len(items)==1 and items[0]['message_html']=='<u>Nội dung sửa</u>'
     result=post(owner,'/composer/preview',rich('<b>Chào {{name}}</b> | {a|b}'))
     assert result.json['html']=='<strong>Chào Lan</strong>'
-    assert result.json['variants'][1]['html']=='{a|b}'
+    assert result.json['variants'][1]['html'] in ('a','b')
     assert post(owner,f'/message-templates/{template_id}/delete').json=={'deleted':True}
     assert owner.get('/message-templates').json['items']==[]
 

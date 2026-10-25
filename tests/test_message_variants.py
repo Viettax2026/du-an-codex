@@ -16,7 +16,7 @@ def test_outer_pipes_escaping_personalized_pipes_and_rich_offsets():
     contact={'name':'Lan | Thu'}
     assert render_message(message,html,contact,variant_index=0)==('😊 Chào Lan | Thu',[{'start':0,'len':17,'st':'b'}])
     assert render_message(message,html,contact,variant_index=1)==('Dịch vụ | kế toán',[{'start':0,'len':17,'st':'i'}])
-    assert render_message(message,html,contact,variant_index=2)==('{a|b}',[])
+    assert render_message(message,html,contact,variant_index=2) in [('a',[]),('b',[])]
     assert render_message(message,html,contact,variant_index=3)==render_message(message,html,contact)
     message,html=read_message(rich(r'<b>A \| B | C</b>'))
     assert render_message(message,html,{},variant_index=0)==('A | B',[{'start':0,'len':5,'st':'b'}])

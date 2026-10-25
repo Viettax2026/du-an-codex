@@ -1,5 +1,6 @@
 """Restricted rich messages and immutable Zalo UTF-16 formatting ranges."""
 import json
+import secrets
 from bisect import bisect_left
 from html import escape
 from html.parser import HTMLParser
@@ -126,11 +127,11 @@ def markup(text, ranges):
 
 
 def variant_spans(text):
-    """Split outer pipes before personalization; braces and escaped pipes stay literal."""
+    """Split only outer pipes, before interpreting spins or personalization."""
     spans, start, depth, i = [], 0, 0, 0
     while i < len(text):
         char = text[i]
-        if char == '\\' and i+1 < len(text) and text[i+1] in '\\|':
+        if char == '\\' and i+1 < len(text) and text[i+1] in '\\|{}':
             i += 2
             continue
         if char == '{':
@@ -156,22 +157,88 @@ def variant_spans(text):
     return trimmed
 
 
-def select_variant(text, ranges, index=0):
+def spin_nodes(text, a, b):
+    """Parse bounded choices while retaining original character positions.
+
+    Personalization tokens are atomic, so their braces and any pipes inside
+    them never become random choices. Inserted customer data is handled later.
+    """
+    count = 0
+
+    def length(nodes):
+        return sum(utf16(text[node]) if isinstance(node,int) else max(node[1]) for node in nodes)
+
+    def sequence(i, depth=0):
+        nonlocal count
+        options = [[]]
+        while i < b:
+            char = text[i]
+            if char == '\\' and i+1 < b and text[i+1] in '\\|{}':
+                options[-1].append(i+1)
+                i += 2
+                continue
+            token = TOKEN.match(text,i,b)
+            if token:
+                options[-1].extend(range(i,token.end()))
+                i = token.end()
+                continue
+            if text.startswith('#{',i):
+                # Preserve malformed/unknown personalization for the existing
+                # validator; never turn it into a different valid expression.
+                end, balance = i+2, 1
+                while end < b and balance:
+                    balance += (text[end]=='{') - (text[end]=='}')
+                    end += 1
+                options[-1].extend(range(i,end))
+                i = end
+                continue
+            if char == '{':
+                if depth >= 10:
+                    raise ValueError('Cú pháp biến thể lồng nhau tối đa 10 cấp.')
+                start = i
+                children, i = sequence(i+1,depth+1)
+                if len(children) > 1:
+                    count += 1
+                    if count > 100:
+                        raise ValueError('Tối đa 100 nhóm lựa chọn {a|b|c} trong một biến thể.')
+                    options[-1].append((children,[length(child) for child in children]))
+                else:
+                    options[-1].extend([start,*children[0],i-1])
+                continue
+            if char == '}' and depth:
+                return options,i+1
+            if char == '|' and depth:
+                options.append([])
+                if len(options) > 20:
+                    raise ValueError('Mỗi nhóm {a|b|c} có tối đa 20 lựa chọn.')
+            else:
+                options[-1].append(i)
+            i += 1
+        if depth:
+            raise ValueError('Thiếu dấu } đóng nhóm lựa chọn. Dùng \\{ nếu muốn giữ dấu ngoặc trong tin nhắn.')
+        return options,i
+
+    return sequence(a)[0][0]
+
+
+def select_variant(text, ranges, index=0, *, max_length=False):
     spans = variant_spans(text)
     a,b = spans[index % len(spans)]
-    chars, positions, i = [], [], a
-    while i < b:
-        if text[i] == '\\' and i+1 < b and text[i+1] in '\\|':
-            i += 1
-        chars.append(text[i])
-        positions.append(i)
-        i += 1
+    positions = []
+    def select(nodes):
+        for node in nodes:
+            if isinstance(node,int):
+                positions.append(node)
+            else:
+                options,lengths = node
+                select(options[lengths.index(max(lengths))] if max_length else secrets.choice(options))
+    select(spin_nodes(text,a,b))
     clipped = []
     for start,end,style in ranges:
         start,end = bisect_left(positions,start),bisect_left(positions,end)
         if end > start:
             clipped.append((start,end,style))
-    return ''.join(chars), clipped
+    return ''.join(text[i] for i in positions), clipped
 
 
 def read_message(form):
@@ -183,7 +250,9 @@ def read_message(form):
     else:
         text = form.get('message','').strip()
     for index in range(len(variant_spans(text))):
-        variant, _ = select_variant(text, [], index)
+        variant, _ = select_variant(text, [], index, max_length=True)
+        if text and not variant.strip():
+            raise ValueError(f'Biến thể {index+1} không có nội dung.')
         if utf16(variant) > 2000:
             raise ValueError(f'Biến thể {index+1} vượt 2000 ký tự. Emoji được tính theo giới hạn của Zalo.')
     personalize(text, {}, strict=False)
@@ -210,6 +279,8 @@ def render_message(message, html, contact, zalo=None, strict=True, variant_index
             shift += len(value)-(b-a)
         return pos+shift
     text = personalize(source,contact,zalo,strict=strict)
+    if message and not text.strip():
+        raise ValueError('Nội dung sau khi chọn biến thể đang trống. Bổ sung nội dung ngoài nhóm lựa chọn.')
     if utf16(text) > 2000:
         raise ValueError('Tin nhắn sau cá nhân hóa vượt 2000 ký tự.')
     styles=[]

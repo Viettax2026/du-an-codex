@@ -81,16 +81,54 @@
     const text=textarea.value, parts=[];
     let start=0,depth=0;
     for(let i=0;i<text.length;i++) {
-      if(text[i]==='\\' && ['\\','|'].includes(text[i+1])) {i++;continue;}
+      if(text[i]==='\\' && ['\\','|','{','}'].includes(text[i+1])) {i++;continue;}
       if(text[i]==='{') depth++;
       else if(text[i]==='}') depth=Math.max(0,depth-1);
       else if(text[i]==='|' && depth===0) {parts.push(text.slice(start,i).trim());start=i+1;}
     }
     parts.push(text.slice(start).trim());
-    const lengths=parts.map(part=>{let length=0;for(let i=0;i<part.length;i++){if(part.charCodeAt(i)===92 && [92,124].includes(part.charCodeAt(i+1))) i++;length++;}return length;});
+    function measure(part) {
+      let choices=0;
+      const token=/^(?:\{\{name\}\}|#\{(?:SEX\{[^{}]*\}|TODAY\([^()]*\)|[A-Z][A-Z0-9_]*)\})/;
+      function sequence(start,depth=0) {
+        const lengths=[0]; let i=start;
+        while(i<part.length) {
+          const char=part[i];
+          if(char==='\\' && ['\\','|','{','}'].includes(part[i+1])) {lengths[lengths.length-1]++;i+=2;continue;}
+          const match=part.slice(i).match(token);
+          if(match) {lengths[lengths.length-1]+=match[0].length;i+=match[0].length;continue;}
+          if(part.startsWith('#{',i)) {
+            let end=i+2,balance=1;
+            while(end<part.length && balance) {balance+=(part[end]==='{')-(part[end]==='}');end++;}
+            lengths[lengths.length-1]+=end-i;i=end;continue;
+          }
+          if(char==='{') {
+            if(depth>=10) throw new Error('Cú pháp biến thể lồng nhau tối đa 10 cấp.');
+            const child=sequence(i+1,depth+1);i=child.end;
+            if(child.lengths.length>1) {
+              if(++choices>100) throw new Error('Tối đa 100 nhóm lựa chọn {a|b|c} trong một biến thể.');
+              lengths[lengths.length-1]+=Math.max(...child.lengths);
+            } else lengths[lengths.length-1]+=child.lengths[0]+2;
+            continue;
+          }
+          if(char==='}' && depth) return {lengths,end:i+1};
+          if(char==='|' && depth) {
+            lengths.push(0);
+            if(lengths.length>20) throw new Error('Mỗi nhóm {a|b|c} có tối đa 20 lựa chọn.');
+          } else lengths[lengths.length-1]++;
+          i++;
+        }
+        if(depth) throw new Error('Thiếu dấu } đóng nhóm lựa chọn. Dùng \\{ nếu muốn giữ dấu ngoặc trong tin nhắn.');
+        return {lengths,end:i};
+      }
+      return sequence(0).lengths[0];
+    }
+    let lengths=[];
+    try {lengths=parts.map(measure);} catch(error) {return {count:parts.length,max:0,error:error.message};}
     let error='';
     if(parts.length>20 || text.length>40000) error='Tối đa 20 biến thể, mỗi biến thể tối đa 2.000 ký tự.';
     else if(parts.length>1 && parts.some(part=>!part)) error='Biến thể đang trống. Nhập nội dung ở hai bên dấu |.';
+    else if(parts.some((part,index)=>part && lengths[index]===0)) error='Biến thể không có nội dung.';
     else if(lengths.some(length=>length>2000)) error=`Biến thể ${lengths.findIndex(length=>length>2000)+1} vượt 2.000 ký tự.`;
     return {count:parts.length,max:Math.max(...lengths),error};
   }

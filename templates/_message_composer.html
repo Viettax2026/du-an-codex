@@ -18,7 +18,7 @@
     <div class="composer-editor" data-composer-editor contenteditable="true" role="textbox" aria-label="Nội dung tin nhắn có định dạng" aria-multiline="true" spellcheck="false" data-placeholder="Nhập nội dung tin nhắn…"></div>
   </div>
   <textarea id="campaign-message" name="message" rows="10" maxlength="40000" placeholder="Xin chào {{ '{{name}}' }}, cảm ơn bạn đã quan tâm.">{{ request.form.get('message', composer_campaign.message if composer_campaign else '') }}</textarea>
-  <div class="composer-caption"><span>Dùng <code>{{ '{{name}}' }}</code> để chèn tên khách hàng đã lưu. Viết <code>\|</code> nếu cần giữ dấu | trong tin nhắn.</span><span data-composer-count>1 biến thể · 0 / 2.000</span></div>
+  <div class="composer-caption"><span>Mẹo: dấu <code>|</code> ngoài cùng tách nhiều nội dung; dùng <code>{a|b|c}</code> để chọn ngẫu nhiên trong một câu. Viết <code>\|</code>, <code>\{</code>, <code>\}</code> để giữ nguyên dấu.</span><span data-composer-count>1 biến thể · 0 / 2.000</span></div>
   <p class="composer-status" data-composer-status role="status" aria-live="polite"></p>
   <div class="wizard-preview composer-preview" data-composer-inline-preview hidden><b>Xem trước với tên mẫu “Lan”</b><div class="message-text" data-message-preview></div></div>
   <section class="composer-files" aria-label="Tệp đính kèm">
