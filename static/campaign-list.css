@@ -83,8 +83,16 @@
 .campaign-detail-panel .inline-detail-table th{font-size:11px;background:#e9f0f8;position:sticky;top:0;z-index:1;font-weight:600}
 .campaign-detail-panel .inline-detail-table td,.campaign-detail-panel .inline-detail-table th{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left;line-height:1.5}
 .inline-history-table td:first-child{width:27%;min-width:165px;white-space:nowrap}
-.inline-data-table,.inline-results-table{min-width:1050px}
-.inline-results-table td:nth-child(6){min-width:250px;max-width:420px}
+.inline-data-table{min-width:1050px}
+.inline-results-table{min-width:1040px;table-layout:fixed}
+.inline-results-table th:nth-child(1){width:166px}.inline-results-table th:nth-child(2){width:160px}.inline-results-table th:nth-child(3){width:112px}.inline-results-table th:nth-child(4){width:140px}.inline-results-table th:nth-child(5){width:165px}
+.campaign-detail-panel .inline-results-table td{padding:8px 12px;vertical-align:middle}
+.inline-results-table td:first-child,.inline-results-table td:nth-child(3){white-space:nowrap}
+.result-ellipsis,.result-description summary{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result-description summary{cursor:pointer;list-style:none}.result-description summary::-webkit-details-marker{display:none}
+.result-description summary:focus-visible{outline:2px solid #6a60ff;outline-offset:2px}
+.result-description[open] summary{white-space:normal}.result-description>div{padding-top:6px;color:#687e9b;overflow-wrap:anywhere}
+.result-state{font-weight:500}.result-state-success{color:#009c79}.result-state-warning{color:#bd7000}.result-state-error{color:#d63646}.result-state-neutral{color:#7185a0}
 .campaign-detail-panel .message-text,.campaign-detail-panel p{font-size:12px;line-height:1.6;margin:0;overflow-wrap:anywhere}
 .campaign-detail-panel p+p{margin-top:6px}
 .campaign-detail-panel .inline-detail-note{padding:8px 12px;color:#7d91ad;font-size:11px}

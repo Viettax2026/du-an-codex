@@ -220,7 +220,7 @@ class CampaignScheduler:
                 self.rest(campaign,now,labels[reason]+code+f'. Tự thử lại sau {delay} giây.',seconds=delay)
                 self.db().commit();return
             detail=f'Bỏ qua {person["phone"]}: tra cứu không tìm được người nhận Zalo'+code+'.'
-            self.manager.store_lookup_skip(campaign,person,account,scheduled=True,reason=detail)
+            self.manager.store_lookup_skip(campaign,person,account,scheduled=True,reason=detail,lookup_state='unavailable')
             self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign['id']))
             self.manager.event(campaign['id'],'schedule_complete',f'Hoàn thành xử lý {person["phone"]}: đã ghi nhận bỏ qua, chưa gửi tin.')
             self.rest(campaign,now)
@@ -293,7 +293,7 @@ class CampaignScheduler:
             if recent is None:
                 self.db().rollback();return False
             reason=DuplicateMessageBlocked(recent,campaign['duplicate_days']).description
-            self.manager.store_preview(campaign,current,account,dict(uid=recent['recipient_id'],name=recent['recipient_name']),scheduled=True,skip_message=True,skip_reason=reason)
+            self.manager.store_preview(campaign,current,account,dict(uid=recent['recipient_id'],name=recent['recipient_name']),scheduled=True,skip_message=True,skip_reason=reason,lookup_state='cached')
             self.manager.event(campaign['id'],'duplicate_skip',f'Bỏ qua khách hàng #{current["id"]}: {reason}')
             self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign['id']))
             self.db().commit();return True

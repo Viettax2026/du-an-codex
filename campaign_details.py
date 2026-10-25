@@ -5,6 +5,7 @@ from flask import abort, g
 from markupsafe import Markup
 
 from rich_message import parse_html, markup, variant_spans
+from campaign_results import result_count,result_rows
 
 TABS=('info','accounts','data','results','preview','history')
 
@@ -25,7 +26,7 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
     account_args=(user_id,campaign['account_id'],campaign_id)
     totals=dict(data=db().execute('SELECT count(*) FROM contacts p WHERE '+data_where,data_args).fetchone()[0],
                 accounts=db().execute('SELECT count(*) FROM zalo_accounts a WHERE '+account_where,account_args).fetchone()[0],
-                results=db().execute('SELECT count(*) FROM message_sends WHERE campaign_id=?',(campaign_id,)).fetchone()[0],
+                results=result_count(db,user_id,campaign_id),
                 history=db().execute('SELECT count(*) FROM campaign_events WHERE campaign_id=?',(campaign_id,)).fetchone()[0])
     message=campaign['message'];ranges=[]
     try:
@@ -51,9 +52,7 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
     if tab=='data':
         detail['rows']=db().execute('SELECT p.* FROM contacts p WHERE '+data_where+' ORDER BY p.id LIMIT ? OFFSET ?',(*data_args,per_page,offset)).fetchall()
     elif tab=='results':
-        detail['rows']=db().execute('''SELECT s.*,p.name,p.phone,a.name AS account_name FROM message_sends s
-            JOIN contacts p ON p.id=s.contact_id AND p.user_id=? JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=p.user_id
-            WHERE s.campaign_id=? ORDER BY s.id DESC LIMIT ? OFFSET ?''',(user_id,campaign_id,per_page,offset)).fetchall()
+        detail['rows']=result_rows(db,user_id,campaign_id,per_page,offset)
     elif tab=='history':
         detail['rows']=db().execute('SELECT * FROM campaign_events WHERE campaign_id=? ORDER BY id DESC LIMIT ? OFFSET ?',
                                   (campaign_id,per_page,offset)).fetchall()

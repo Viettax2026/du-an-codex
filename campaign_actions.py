@@ -34,7 +34,7 @@ def initialize_campaign_actions(db):
                       'audience_mode': "TEXT NOT NULL DEFAULT 'group'", 'media_id': 'INTEGER',
                       'message_limit': 'INTEGER NOT NULL DEFAULT 0', 'friend_limit': 'INTEGER NOT NULL DEFAULT 0',
                       'alias_limit': 'INTEGER NOT NULL DEFAULT 0', 'interval_seconds': 'INTEGER NOT NULL DEFAULT 0'},
-        'message_sends': {'media_id': 'INTEGER', 'message_styles': "TEXT NOT NULL DEFAULT '[]'"},
+        'message_sends': {'media_id': 'INTEGER', 'message_styles': "TEXT NOT NULL DEFAULT '[]'", 'lookup_state': "TEXT NOT NULL DEFAULT ''"},
         'deliveries': {'message_styles': "TEXT NOT NULL DEFAULT '[]'"},
     }
     for table, fields in columns.items():
@@ -66,6 +66,14 @@ def initialize_campaign_actions(db):
         db().execute(f'''INSERT OR IGNORE INTO campaign_attempts(campaign_id,send_id,action,created_at)
             SELECT campaign_id,id,?,created_at FROM message_sends
             WHERE {column} NOT IN ('prepared','not_requested')''', (action,))
+    if 'completed_at' not in {row['name'] for row in db().execute('PRAGMA table_info(campaign_attempts)')}:
+        db().execute('ALTER TABLE campaign_attempts ADD COLUMN completed_at TEXT')
+        # Recover completion times from existing result events where available.
+        for action,label in [('send','Tin nhắn'),('friend','Lời mời kết bạn'),('alias','Đổi tên gợi nhớ')]:
+            db().execute('''UPDATE campaign_attempts SET completed_at=(
+                SELECT e.created_at FROM campaign_events e WHERE e.campaign_id=campaign_attempts.campaign_id
+                AND e.kind=? AND e.detail LIKE ? || campaign_attempts.send_id || ': %'
+                ORDER BY e.id DESC LIMIT 1) WHERE action=?''',(action+'_result',label+' · Bản gửi #',action))
     db().commit()
 
 
@@ -152,7 +160,7 @@ class CampaignManager:
             connection.rollback()
             raise
 
-    def store_preview(self, campaign, person, account, resolved, scheduled=False, skip_message=False, skip_reason=''):
+    def store_preview(self, campaign, person, account, resolved, scheduled=False, skip_message=False, skip_reason='',lookup_state='resolved'):
         """Store one immutable personalized payload inside the caller's write transaction."""
         alias=personalize(campaign['rename_template'],person,resolved).strip() if campaign['rename_enabled'] else ''
         if campaign['rename_enabled'] and (not alias or utf16(alias)>100):
@@ -166,19 +174,21 @@ class CampaignManager:
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
             'prepared' if send_message else 'not_requested',invitation,'prepared' if campaign['send_friend'] else 'not_requested',
             alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'] if send_message else None,json.dumps(styles),int(scheduled),person['phone'],skip_reason))
+        self.db().execute('UPDATE message_sends SET lookup_state=? WHERE id=?',(lookup_state,row.lastrowid))
         if send_message:
             self.db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?',(campaign['id'],))
         origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
         self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}. Nguồn: {origin}.')
         return row.lastrowid
 
-    def store_lookup_skip(self,campaign,person,account,scheduled=False,reason=''):
-        """Record a confirmed empty lookup without fabricating a Zalo identity."""
+    def store_lookup_skip(self,campaign,person,account,scheduled=False,reason='',lookup_state='not_found'):
+        """Record a skipped lookup and its classification without fabricating a Zalo identity."""
         reason=reason or f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
         row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,
             recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,message_skip_reason)
             VALUES (?,?,?,'','','','not_requested','not_requested','not_requested',?,?,?)''',
             (campaign['id'],person['id'],account['id'],int(scheduled),person['phone'],reason))
+        self.db().execute('UPDATE message_sends SET lookup_state=? WHERE id=?',(lookup_state,row.lastrowid))
         origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
         self.event(campaign['id'],'lookup_skip',reason+f' Nguồn: {origin}. Tiếp tục số điện thoại kế tiếp.')
         return row.lastrowid
@@ -201,6 +211,8 @@ class CampaignManager:
             self.db().rollback();raise
 
     def result(self, campaign_id, action, send_id, state):
+        self.db().execute('''UPDATE campaign_attempts SET completed_at=CURRENT_TIMESTAMP
+            WHERE campaign_id=? AND send_id=? AND action=?''',(campaign_id,send_id,action))
         label = {'send': 'Tin nhắn', 'friend': 'Lời mời kết bạn', 'alias': 'Đổi tên gợi nhớ'}[action]
         self.event(campaign_id, action + '_result', f'{label} · Bản gửi #{send_id}: {STATE_LABELS[state]}.')
 
