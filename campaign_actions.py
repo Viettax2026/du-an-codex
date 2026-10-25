@@ -69,11 +69,11 @@ def initialize_campaign_actions(db):
     if 'completed_at' not in {row['name'] for row in db().execute('PRAGMA table_info(campaign_attempts)')}:
         db().execute('ALTER TABLE campaign_attempts ADD COLUMN completed_at TEXT')
         # Recover completion times from existing result events where available.
-        for action,label in [('send','Tin nhắn'),('friend','Lời mời kết bạn'),('alias','Đổi tên gợi nhớ')]:
+        for action in ('send','friend','alias'):
             db().execute('''UPDATE campaign_attempts SET completed_at=(
                 SELECT e.created_at FROM campaign_events e WHERE e.campaign_id=campaign_attempts.campaign_id
-                AND e.kind=? AND e.detail LIKE ? || campaign_attempts.send_id || ': %'
-                ORDER BY e.id DESC LIMIT 1) WHERE action=?''',(action+'_result',label+' · Bản gửi #',action))
+                AND e.kind=? AND e.detail LIKE '% · Bản gửi #' || campaign_attempts.send_id || ': %'
+                ORDER BY e.id DESC LIMIT 1) WHERE action=?''',(action+'_result',action))
     db().commit()
 
 
@@ -147,8 +147,14 @@ class CampaignManager:
                 recent=recent_for_record(self.db,campaign,row)
                 if recent is not None:
                     raise DuplicateMessageBlocked(recent,campaign['duplicate_days'])
-            enforce_limits(self.db,campaign,action)
+            # Automatic spacing is persisted between recipients, while manual
+            # confirmations retain the shared interval between actions.
+            enforce_limits(self.db,campaign,action,check_interval=guard is None)
             connection.execute(f"UPDATE message_sends SET {column}='sending' WHERE id=?", (send_id,))
+            if guard is not None:
+                connection.execute('UPDATE message_sends SET schedule_turn_finished=0 WHERE id=?',(send_id,))
+                if row['schedule_turn_finished']:
+                    self.event(campaign_id,'schedule_recipient_resume',f'Tiếp tục xử lý {row["recipient_phone"]}: thực hiện hành động còn thiếu, dùng Zalo đã tìm thấy trước đó.')
             connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action) VALUES (?,?,?)',
                                (campaign_id, send_id, action))
             label = {'send': 'tin nhắn', 'friend': 'lời mời kết bạn', 'alias': 'đổi tên gợi nhớ'}[action]
@@ -213,8 +219,15 @@ class CampaignManager:
     def result(self, campaign_id, action, send_id, state):
         self.db().execute('''UPDATE campaign_attempts SET completed_at=CURRENT_TIMESTAMP
             WHERE campaign_id=? AND send_id=? AND action=?''',(campaign_id,send_id,action))
-        label = {'send': 'Tin nhắn', 'friend': 'Lời mời kết bạn', 'alias': 'Đổi tên gợi nhớ'}[action]
-        self.event(campaign_id, action + '_result', f'{label} · Bản gửi #{send_id}: {STATE_LABELS[state]}.')
+        row=self.db().execute('''SELECT s.*,a.name AS account_name,c.name AS campaign_name FROM message_sends s
+            JOIN campaigns c ON c.id=s.campaign_id JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=c.user_id
+            WHERE s.id=? AND s.campaign_id=?''',(send_id,campaign_id)).fetchone()
+        name=row['recipient_name'] or row['recipient_phone'] or row['recipient_id']
+        label = {'send': 'Nhắn tin người lạ', 'friend': 'Kết bạn', 'alias': 'Đổi tên Zalo'}[action]
+        description={'sent':f'Zalo đã tiếp nhận tin nhắn đến {name}',
+            'friend_requested':f'Zalo đã tiếp nhận lời mời kết bạn đến {name}',
+            'renamed':f'Đã đổi tên {name} thành "{row["alias"]}"'}.get(state,STATE_LABELS[state])
+        self.event(campaign_id, action + '_result', f'{row["account_name"]} – {row["campaign_name"]} – {label}: {description}. · Bản gửi #{send_id}: {STATE_LABELS[state]}.')
 
     def media(self, media_id):
         return self.db().execute('SELECT * FROM campaign_media WHERE id=? AND user_id=?',

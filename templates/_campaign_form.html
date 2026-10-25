@@ -10,7 +10,7 @@
     ('phones','Danh sách SĐT',[('phones','SĐT')]),
     ('message','Nội dung tin nhắn',[('message','Nội dung tin nhắn'),('media','Media')]),
     ('schedule','Lịch chạy',[('schedule_kind','Loại lịch'),('schedule_date','Ngày chạy'),('schedule_stop','Giờ dừng')]),
-    ('limits','Giới hạn hành động',[('limits_interval','Nghỉ giữa 2 lần'),('limits_day','Giới hạn trong ngày (đến 24h)'),('limits_hour','Giới hạn trong giờ')]),
+    ('limits','Giới hạn hành động',[('limits_interval','Nghỉ giữa 2 số'),('limits_day','Giới hạn trong ngày (đến 24h)'),('limits_hour','Giới hạn trong giờ')]),
     ('duplicates','Kiểm tra trùng lặp',[('duplicates','Thời gian không gửi lại')])
   ] %}
   <a href="#wizard-{{ target }}" data-wizard-step="{{ target }}" class="{{ 'is-active' if loop.first }}" {% if loop.first %}aria-current="step"{% endif %}>

@@ -2,7 +2,8 @@
 {% set settings=limit_data.settings %}
 <div class="campaign-limits" data-campaign-limits data-usage='{{ limit_data.usage|tojson }}' data-usage-url="{{ limit_data.url }}">
 <input type="hidden" name="limits_present" value="yes">
-<div class="limits-top-row"><label>Thời gian nghỉ giữa 2 lần gửi<div class="limit-input"><input type="number" name="interval_seconds" min="0" max="86400" step="1" required value="{{ request.form.get('interval_seconds',settings.interval_seconds) }}"><span>giây</span></div></label><label class="limit-day-mode">Cách tính giới hạn ngày<select name="limits_day_mode"><option value="calendar" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='calendar' }}>Trong ngày · đến 24h (UTC+7)</option><option value="rolling" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='rolling' }}>24 giờ gần nhất</option></select></label></div>
+<p class="muted">Chạy tự động: xử lý các hành động của một số rồi nghỉ theo cài đặt trước khi chuyển sang số tiếp theo.</p>
+<div class="limits-top-row"><label>Thời gian nghỉ giữa 2 số điện thoại<div class="limit-input"><input type="number" name="interval_seconds" min="0" max="86400" step="1" required value="{{ request.form.get('interval_seconds',settings.interval_seconds) }}"><span>giây</span></div></label><label class="limit-day-mode">Cách tính giới hạn ngày<select name="limits_day_mode"><option value="calendar" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='calendar' }}>Trong ngày · đến 24h (UTC+7)</option><option value="rolling" {{ 'selected' if request.form.get('limits_day_mode',settings.limits_day_mode)=='rolling' }}>24 giờ gần nhất</option></select></label></div>
 {% for action,title,prefix,unit in [('send','Nhắn tin','message','tin nhắn'),('friend','Kết bạn','friend','lời mời')] %}
 {% set used=limit_data.usage[action] %}
 <section class="limit-card" data-limit-card="{{ action }}" data-limit-unit="{{ unit }}">

@@ -82,21 +82,21 @@ def usage(db,campaign,now=None):
     return result
 
 
-def available_actions(campaign,budgets):
+def available_actions(campaign,budgets,check_interval=True):
     selected={action for action,(_,_,_,enabled) in ACTIONS.items() if campaign[enabled]}
     blocked={action for action in selected if budgets[action]['blocked']}
-    if budgets['interval_wait'] or blocked and not campaign['limits_continue']:
+    if (check_interval and budgets['interval_wait']) or blocked and not campaign['limits_continue']:
         return set()
     return selected-blocked
 
 
-def enforce_limits(db,campaign,action,now=None):
+def enforce_limits(db,campaign,action,now=None,check_interval=True):
     budgets=usage(db,campaign,now)
     selected={a for a,(_,_,_,enabled) in ACTIONS.items() if campaign[enabled]}
     if budgets[action]['blocked'] or not campaign['limits_continue'] and any(budgets[a]['blocked'] for a in selected):
         label='trong ngày (đến 24h, UTC+7)' if campaign['limits_day_mode']=='calendar' else 'trong 24 giờ gần nhất'
         raise ActionLimitReached(f'Đã đạt giới hạn hành động {label} hoặc khung giờ. Chờ hạn mức còn lại hoặc cập nhật giới hạn.')
-    if budgets['interval_wait']:
+    if check_interval and budgets['interval_wait']:
         raise ActionLimitReached('Chưa đủ khoảng cách giữa hai hành động. Vui lòng chờ rồi xác nhận lại.','spacing')
 
 
