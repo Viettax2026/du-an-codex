@@ -143,3 +143,77 @@ setInterval(()=>{
   const active=document.querySelector('[data-detail-current]')?.dataset.detailCurrent;
   if(['history','results'].includes(active))loadDetail(location.href,true);
 },15000);
+
+// Keep the user's pane size through tab refreshes and page navigation.
+const detailResizer=document.querySelector('[data-detail-resizer]');
+const detailSection=document.querySelector('.campaign-inline-detail');
+const campaignMain=document.querySelector('.campaign-main');
+if(detailResizer && detailSection && campaignMain) {
+  let preferredRatio=null,drag=null;
+  try {
+    const saved=localStorage.getItem(detailResizer.dataset.storageKey);
+    const ratio=Number(saved);
+    if(saved!==null && Number.isFinite(ratio) && ratio>0 && ratio<1)preferredRatio=ratio;
+  } catch { /* Resizing also works when browser storage is disabled. */ }
+  function limits() {
+    const fixed=[...campaignMain.children].filter(node=>node!==detailSection && !node.classList.contains('campaign-table-scroll'))
+      .reduce((total,node)=>total+node.getBoundingClientRect().height,0);
+    const list=campaignMain.querySelector('.campaign-table-scroll');
+    const listMinimum=parseFloat(getComputedStyle(list).minHeight)||170;
+    const maximum=Math.max(0,campaignMain.clientHeight-fixed-listMinimum);
+    return {minimum:Math.min(170,maximum),maximum};
+  }
+  function updateAria(height,bounds) {
+    detailResizer.setAttribute('aria-valuemin',Math.round(bounds.minimum));
+    detailResizer.setAttribute('aria-valuemax',Math.round(bounds.maximum));
+    detailResizer.setAttribute('aria-valuenow',Math.round(height));
+    detailResizer.setAttribute('aria-valuetext',`Chiều cao chi tiết chiến dịch: ${Math.round(height)} pixel`);
+  }
+  function setHeight(height,remember=false) {
+    const bounds=limits();
+    height=Math.max(bounds.minimum,Math.min(bounds.maximum,height));
+    detailSection.classList.add('has-detail-height');
+    detailSection.style.setProperty('--campaign-detail-height',`${height}px`);
+    updateAria(height,bounds);
+    if(remember) {
+      preferredRatio=height/campaignMain.clientHeight;
+      try {localStorage.setItem(detailResizer.dataset.storageKey,String(preferredRatio));} catch {}
+    }
+  }
+  function syncHeight() {
+    if(detailSection.classList.contains('is-collapsed'))return;
+    if(preferredRatio!==null)setHeight(preferredRatio*campaignMain.clientHeight);
+    else updateAria(detailSection.getBoundingClientRect().height,limits());
+  }
+  detailResizer.addEventListener('pointerdown',event=>{
+    if(event.button!==0 || detailSection.classList.contains('is-collapsed'))return;
+    event.preventDefault();detailResizer.focus({preventScroll:true});
+    drag={id:event.pointerId,y:event.clientY,height:detailSection.getBoundingClientRect().height};
+    detailResizer.setPointerCapture(event.pointerId);
+    detailResizer.classList.add('is-dragging');document.body.classList.add('campaign-detail-resizing');
+  });
+  detailResizer.addEventListener('pointermove',event=>{
+    if(drag?.id!==event.pointerId)return;
+    setHeight(drag.height+drag.y-event.clientY,true);
+  });
+  function finishResize(event) {
+    if(!drag || (event.pointerId!==undefined && drag.id!==event.pointerId))return;
+    const id=drag.id;drag=null;
+    detailResizer.classList.remove('is-dragging');document.body.classList.remove('campaign-detail-resizing');
+    if(detailResizer.hasPointerCapture(id))detailResizer.releasePointerCapture(id);
+  }
+  ['pointerup','pointercancel','lostpointercapture'].forEach(name=>detailResizer.addEventListener(name,finishResize));
+  window.addEventListener('blur',finishResize);
+  detailResizer.addEventListener('keydown',event=>{
+    if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    const bounds=limits(),step=event.shiftKey?50:20;
+    const height=event.key==='Home'?bounds.minimum:event.key==='End'?bounds.maximum:
+      detailSection.getBoundingClientRect().height+(event.key==='ArrowUp'?step:-step);
+    setHeight(height,true);
+  });
+  const paneObserver=new ResizeObserver(syncHeight);
+  paneObserver.observe(campaignMain);paneObserver.observe(detailSection);
+  document.querySelector('[data-toggle-campaign-detail]')?.addEventListener('click',syncHeight);
+  syncHeight();
+}
