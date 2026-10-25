@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block content %}
+<a href="{{ url_for('campaigns',selected=campaign.id) }}">← Danh sách chiến dịch</a>
+{% include '_campaign_data_dialogs.html' %}
+{% endblock %}

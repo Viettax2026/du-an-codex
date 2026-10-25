@@ -1,7 +1,10 @@
 (() => {
-  const dialog = document.querySelector('#campaign-group-dialog');
-  const form = document.querySelector('.campaign-wizard');
-  if (!dialog || !form) return;
+  for(const [dialog,form] of [
+    [document.querySelector('#campaign-group-dialog'),document.querySelector('.campaign-wizard')],
+    [document.querySelector('#campaign-data-group-dialog'),document.querySelector('[data-campaign-data-form]')]
+  ]) {
+  if (!dialog || !form || dialog.dataset.pickerReady) continue;
+  dialog.dataset.pickerReady='yes';
   const container = dialog.querySelector('[data-campaign-group-options]');
   const search = dialog.querySelector('[data-campaign-group-search]');
   const status = dialog.querySelector('[data-campaign-group-status]');
@@ -35,10 +38,12 @@
     preview.querySelector('[data-group-snapshot-next]').disabled = page*50>=rows.length;
     preview.querySelector('[data-group-snapshot-next]').dataset.snapshotDisabled = String(page*50>=rows.length);
     ids.dispatchEvent(new Event('change',{bubbles:true}));
+    form.dispatchEvent(new CustomEvent('campaign-group-snapshot-change',{detail:{rows}}));
   }
   preview.querySelector('[data-group-snapshot-prev]').addEventListener('click',()=>{page-=1;updateSnapshot();});
   preview.querySelector('[data-group-snapshot-next]').addEventListener('click',()=>{page+=1;updateSnapshot();});
   form.addEventListener('campaign-clear-snapshot',()=>{selected.clear();page=1;updateSnapshot();});
+  form.addEventListener('campaign-remove-snapshot',event=>{selected.delete(event.detail.id);updateSnapshot();});
   function filterGroups() {
     const query = search.value.trim().toLocaleLowerCase('vi'); let visible=0;
     container.querySelectorAll('[data-group-name]').forEach(row => {
@@ -117,4 +122,5 @@
     finally{if(request===epoch){refresh.disabled=false;choose.disabled=false;}}
   });
   updateSnapshot();
+  }
 })();

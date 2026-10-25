@@ -503,6 +503,8 @@ def create_app(test_config=None):
         if detail_tab not in DETAIL_TABS:
             abort(400)
         detail=inline_detail(db,selected,detail_tab,request.args.get('detail_page',1,type=int),connector) if selected else None
+        adding_id=request.args.get('add_data',type=int)
+        adding_campaign=manager.owned(adding_id) if adding_id is not None else None
         logs = []
         if selected:
             if not log_account_id:
@@ -522,7 +524,7 @@ def create_app(test_config=None):
         return render_template('campaigns.html', campaigns=rows, tags=tags,
                                query=query, status=status, days=days, tag=tag,kind=kind,
                                account_id=account_id,log_account_id=log_account_id,campaign_link=campaign_link,
-                               selected=selected, logs=logs, detail=detail, page='campaigns', accounts=accounts)
+                               selected=selected, logs=logs, detail=detail, adding_campaign=adding_campaign, page='campaigns', accounts=accounts)
 
     @app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
     @login_required

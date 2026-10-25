@@ -1,0 +1,32 @@
+<link rel="stylesheet" href="{{ url_for('static',filename='campaign-data.css') }}">
+<dialog id="campaign-data-dialog" class="campaign-data-dialog" aria-labelledby="campaign-data-title">
+<header><h2 id="campaign-data-title">Thêm data</h2><a class="data-dialog-close" href="{{ campaign_link(selected=campaign.id,add_data=None) if campaign_link is defined else url_for('campaigns',selected=campaign.id) }}" aria-label="Đóng">×</a></header>
+<form method="post" action="{{ url_for('campaign_data',campaign_id=campaign.id) }}" data-campaign-data-form data-initial-rows="{{ request.form.get('rows_json','[]') }}">
+<input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="rows_json" value="[]"><input type="hidden" name="source_contact_ids" value="[]" data-group-snapshot-ids>
+<div class="campaign-data-body"><p>Chiến dịch: <strong>{{ campaign.name }}</strong></p>
+<div class="campaign-data-tools"><button type="button" data-open-campaign-upload>↥ Nhập/import data</button><button type="button" data-show-groups>▱ Thêm bằng nhóm</button></div>
+<div class="campaign-queue-heading"><b>Data chờ thêm <span data-queue-count></span></b><button type="button" data-clear-queue disabled>♲ Xóa tất cả</button></div>
+<div class="campaign-import-table"><table><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th>{% for i in range(1,6) %}<th>Info {{ i }}</th>{% endfor %}<th></th></tr></thead><tbody data-queue-rows><tr><td colspan="9">Chưa có data nào. Hãy nhập/import hoặc thêm bằng nhóm.</td></tr></tbody></table></div>
+<nav class="campaign-import-pages"><button type="button" data-queue-prev>‹ Trước</button><span data-queue-page></span><button type="button" data-queue-next>Sau ›</button></nav>
+<p class="campaign-data-note">Tối đa 10.000 khách hàng. Số trùng được gộp. Data đã có trong chiến dịch được giữ nguyên.</p>
+<label class="campaign-data-consent"><input type="checkbox" name="consent" value="yes" required checked> Tôi xác nhận khách hàng bổ sung đã đồng ý nhận nội dung này.</label>
+<p class="campaign-data-note">Data bổ sung chạy theo lịch và cấu hình hiện tại của chiến dịch. Các lượt đã xử lý được giữ nguyên.</p>
+<p data-queue-status role="status" aria-live="polite"></p>
+<div hidden><div data-group-snapshot-preview data-initial-group-snapshot="[]"><b data-group-snapshot-summary></b><table><tbody data-group-snapshot-rows></tbody></table><button type="button" data-group-snapshot-prev></button><span data-group-snapshot-page></span><button type="button" data-group-snapshot-next></button></div></div>
+</div><footer><a href="{{ campaign_link(selected=campaign.id,add_data=None) if campaign_link is defined else url_for('campaigns',selected=campaign.id) }}">Hủy</a><button class="campaign-import-primary" type="submit" data-save-queue disabled>＋ Thêm</button></footer>
+</form></dialog>
+<dialog id="campaign-upload-dialog" class="campaign-data-dialog campaign-upload-dialog" aria-labelledby="campaign-upload-title" data-preview-url="{{ url_for('campaign_data_preview',campaign_id=campaign.id) }}">
+<header><h2 id="campaign-upload-title">Upload dữ liệu</h2><button type="button" data-close-campaign-upload aria-label="Đóng">×</button></header>
+<div class="campaign-data-body"><div class="campaign-upload-tabs" role="tablist" aria-label="Nguồn dữ liệu"><button role="tab" type="button" aria-selected="true" data-upload-mode="text" aria-controls="campaign-import-text">Form txt</button><button role="tab" type="button" aria-selected="false" data-upload-mode="file" aria-controls="campaign-import-file">File Excel/CSV của khách hàng</button></div>
+<div id="campaign-import-text" role="tabpanel"><label>Form: Copy vào hoặc tải từ file txt<textarea data-import-text rows="10" placeholder="0901234567&#10;0912345678"></textarea></label><p class="campaign-data-note">Mỗi SĐT cách nhau bằng xuống dòng, dấu phẩy hoặc dấu chấm phẩy. Có thể dán nhiều cột từ Excel rồi chọn cột bên dưới.</p><label class="campaign-txt-upload">↥ Tải file txt<input type="file" accept=".txt" data-import-txt></label></div>
+<div id="campaign-import-file" role="tabpanel" hidden><label>Chọn tệp Excel/CSV<input type="file" accept=".xlsx,.xls,.csv,.txt" data-import-file></label><p class="campaign-data-note">Tối đa 2 MB và 500 dòng mỗi lần nhập. <a href="{{ url_for('static',filename='data-template.csv') }}" download>Tải CSV mẫu</a>.</p></div>
+<div data-import-mapping hidden><div class="campaign-import-table" data-import-sample></div><label><input type="checkbox" data-skip-import-header> Bỏ hàng đầu là tiêu đề</label><div class="campaign-mapping-fields" data-mapping-fields></div><details><summary>Chọn cột Email / Zalo ID</summary><div class="campaign-mapping-fields" data-extra-mapping-fields></div></details></div>
+<div class="campaign-import-check"><button type="button" data-check-campaign-import>⟳ Kiểm tra dữ liệu</button></div>
+<p data-import-status role="status" aria-live="polite"></p>
+<div class="campaign-import-table"><table><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th>{% for i in range(1,6) %}<th>Info {{ i }}</th>{% endfor %}</tr></thead><tbody data-import-preview><tr><td colspan="8">Chưa có dữ liệu đã kiểm tra</td></tr></tbody></table></div>
+<div class="campaign-import-invalid" data-import-invalid hidden><b>Dòng dữ liệu không hợp lệ</b><div data-import-errors></div><label><input type="checkbox" data-confirm-import-skip> Tôi xác nhận bỏ qua dòng lỗi, chỉ thêm số hợp lệ.</label></div>
+</div><footer><button type="button" data-close-campaign-upload>Hủy</button><button class="campaign-import-primary" type="button" data-accept-campaign-import disabled>Thêm vào danh sách chờ</button></footer>
+</dialog>
+<script src="{{ url_for('static',filename='campaign-data.js') }}" defer></script>
+{% set group_dialog_id='campaign-data-group-dialog' %}
+{% include '_campaign_group_picker.html' %}

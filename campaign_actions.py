@@ -481,14 +481,23 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                     raise ValueError('Cần xác nhận khách hàng đã đồng ý nhận nội dung này.')
                 incoming = {phone: {'phone': phone} for phone in parse_phones(request.form.get('phones', ''))}
                 incoming.update(read_contacts(request.files.get('file'), parse_phones))
+                from campaign_import import staged_rows
+                from campaign_group_picker import read_snapshot_contacts
+                incoming.update(staged_rows(request.form.get('rows_json',''),parse_phones))
                 source = request.form.get('source_tag', '')
                 if source:
                     for person in db().execute('SELECT * FROM contacts WHERE user_id=? AND consent=1 AND id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=contacts.user_id AND group_name=?)', (g.user['id'], source)):
                         incoming.setdefault(person['phone'], dict(person))
-                if not incoming:
+                if not incoming and not request.form.get('source_contact_ids'):
                     raise ValueError('Nhập số điện thoại, chọn tệp hoặc chọn nhóm để bổ sung.')
                 db().execute('BEGIN IMMEDIATE')
                 campaign = manager.owned(campaign_id)
+                snapshot=read_snapshot_contacts(db,g.user['id'],request.form.get('source_contact_ids',''))
+                if any(not person['consent'] for person in snapshot):
+                    raise ValueError('Trạng thái đồng ý của data từ nhóm đã thay đổi. Chọn lại nhóm để kiểm tra.')
+                incoming.update({person['phone']:dict(person) for person in snapshot})
+                if not incoming:
+                    raise ValueError('Chưa có data để thêm vào chiến dịch.')
                 existing = list(audience(campaign, apply_exclusions=False)) if campaign['audience_mode'] == 'group' else db().execute(
                     'SELECT p.* FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=?', (campaign_id,)).fetchall()
                 if len({p['phone'] for p in existing} | set(incoming)) > CAMPAIGN_CONTACT_LIMIT:
@@ -504,11 +513,23 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 manager.event(campaign_id, 'data', f'Bổ sung {added} khách hàng mới vào danh sách chiến dịch.')
                 db().commit()
                 flash(f'Đã bổ sung {added} khách hàng. Giữ nguyên các lần gửi trước.', 'success')
+                if 'rows_json' in request.form or 'source_contact_ids' in request.form:
+                    return redirect(url_for('campaigns',selected=campaign_id,detail_tab='data'))
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             except (ValueError, UnicodeError, csv.Error) as error:
                 db().rollback()
                 flash(str(error) if isinstance(error, ValueError) and not isinstance(error, UnicodeError) else 'CSV cần đúng định dạng UTF-8.', 'error')
-        return render_template('campaign_action.html', campaign=campaign, action='data', page='campaigns', data_tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall())
+        return render_template('campaign_data.html', campaign=campaign, page='campaigns')
+
+    @app.post('/campaigns/<int:campaign_id>/data/preview')
+    @login_required
+    def campaign_data_preview(campaign_id):
+        manager.owned(campaign_id)
+        from campaign_import import preview
+        try:
+            return jsonify(preview(request.form,request.files.get('file'),parse_phones))
+        except (ValueError,UnicodeError,csv.Error) as error:
+            return jsonify(error='Tệp TXT/CSV cần định dạng UTF-8.' if isinstance(error,UnicodeError) else str(error)),400
 
     @app.route('/campaigns/<int:campaign_id>/delete', methods=['GET', 'POST'])
     @login_required

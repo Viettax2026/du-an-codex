@@ -67,7 +67,7 @@ def register_campaign_group_picker(app, db, login_required):
         if not group:
             db().rollback()
             return jsonify(error='Không tìm thấy nhóm data hoặc bạn không có quyền truy cập.'),404
-        rows=db().execute('''SELECT p.id,p.name,p.phone FROM contacts p WHERE p.user_id=? AND p.deleted_at IS NULL AND p.consent=1
+        rows=db().execute('''SELECT p.id,p.name,p.phone,p.email,p.zalo_id,p.info1,p.info2,p.info3,p.info4,p.info5 FROM contacts p WHERE p.user_id=? AND p.deleted_at IS NULL AND p.consent=1
             AND p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?)
             ORDER BY p.id LIMIT ?''',(g.user['id'],g.user['id'],group['name'],CAMPAIGN_CONTACT_LIMIT+1)).fetchall()
         db().rollback()
