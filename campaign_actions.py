@@ -531,6 +531,20 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
         except (ValueError,UnicodeError,csv.Error) as error:
             return jsonify(error='Tệp TXT/CSV cần định dạng UTF-8.' if isinstance(error,UnicodeError) else str(error)),400
 
+    @app.post('/campaigns/<int:campaign_id>/data/export')
+    @login_required
+    def campaign_data_export(campaign_id):
+        manager.owned(campaign_id)
+        from campaign_import import preview,export_preview
+        try:
+            form=request.form.to_dict();form['phase']='check'
+            category=form.get('category','')
+            result=preview(form,request.files.get('file'),parse_phones)
+            output=export_preview(result,category)
+            return send_file(output,mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',download_name=f'data-{category}.xlsx',as_attachment=True)
+        except (ValueError,UnicodeError,csv.Error) as error:
+            return jsonify(error='Tệp TXT/CSV cần định dạng UTF-8.' if isinstance(error,UnicodeError) else str(error)),400
+
     @app.route('/campaigns/<int:campaign_id>/delete', methods=['GET', 'POST'])
     @login_required
     def delete_campaign(campaign_id):

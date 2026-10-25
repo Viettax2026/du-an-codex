@@ -67,7 +67,7 @@ def insert_contact(connection, user_id, phone, row, tag='Khách hàng', consent=
          *[row.get(key, '') for key in ('zalo_id','email','info1','info2','info3','info4','info5')]))
 
 
-def read_sheet_rows(upload):
+def read_sheet_rows(upload,sheet_name=None,details=False):
     """Read bounded customer sheets without assuming column names."""
     if not upload or not upload.filename:
         raise ValueError('Chọn file Excel/CSV của khách hàng.')
@@ -76,6 +76,7 @@ def read_sheet_rows(upload):
         raise ValueError('Tệp data không vượt quá 2 MB.')
     suffix = Path(upload.filename).suffix.lower()
     book = None
+    sheets=[];selected_sheet=''
     try:
         if suffix == '.csv':
             text = data.decode('utf-8-sig')
@@ -89,7 +90,10 @@ def read_sheet_rows(upload):
             try:
                 legacy = xlrd.open_workbook(file_contents=data, on_demand=True)
                 try:
-                    sheet = legacy.sheet_by_index(0)
+                    sheets=legacy.sheet_names()
+                    selected_sheet=sheet_name or sheets[0]
+                    if selected_sheet not in sheets:raise ValueError('Sheet được chọn không có trong tệp.')
+                    sheet = legacy.sheet_by_name(selected_sheet)
                     if sheet.nrows > 5000 or sheet.ncols > 100:
                         raise ValueError('Tệp tối đa 5000 dòng kể cả dòng trống và 100 cột.')
                     source = [sheet.row_values(index) for index in range(sheet.nrows)]
@@ -104,7 +108,10 @@ def read_sheet_rows(upload):
                 if sum(item.file_size for item in archive.infolist()) > 20 * 1024 * 1024:
                     raise ValueError('Tệp Excel giải nén quá lớn.')
             book = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
-            source = book.active.iter_rows(values_only=True)
+            sheets=book.sheetnames
+            selected_sheet=sheet_name or book.active.title
+            if selected_sheet not in sheets:raise ValueError('Sheet được chọn không có trong tệp.')
+            source = book[selected_sheet].iter_rows(values_only=True)
         else:
             raise ValueError('Chọn CSV UTF-8 hoặc Excel .xlsx/.xls.')
         rows = []
@@ -120,7 +127,7 @@ def read_sheet_rows(upload):
                 raise ValueError('Tệp tối đa 500 dòng data và một dòng tiêu đề.')
         if not rows:
             raise ValueError('Tệp chưa có dữ liệu.')
-        return rows
+        return dict(rows=rows,sheets=sheets,sheet=selected_sheet) if details else rows
     except (UnicodeError, csv.Error, BadZipFile, KeyError, TypeError, ParseError, OSError) as error:
         raise ValueError('Tệp Excel/CSV không hợp lệ hoặc không phải UTF-8.') from error
     finally:
