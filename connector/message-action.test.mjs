@@ -23,6 +23,23 @@ test('phone lookup returns only recipient identity and normalizes Vietnamese num
   assert.deepEqual(result, {state: 'resolved', uid: '123456', name: 'Lan', original_name: '', gender: null});
   await assert.rejects(executeMessageAction({}, {action: 'resolve', phone: 'bad'}));
 });
+test('empty profiles and explicit missing-user responses are skippable; connection/session failures are not', async()=>{
+  const input={action:'resolve',phone:'0901234567'};
+  let dispatches=0;
+  for (const user of [null,undefined,{}, {uid:null},{uid:''},{uid:0}]) {
+    assert.deepEqual(await executeMessageAction({findUser:async()=>user},input,()=>dispatches++),{state:'not_found'});
+  }
+  for (const code of [216,'216']) {
+    assert.deepEqual(await executeMessageAction({findUser:async()=>{throw Object.assign(new Error('not found'),{code});}},input),{state:'not_found'});
+  }
+  for (const code of [401,429,500,undefined]) {
+    await assert.rejects(executeMessageAction({findUser:async()=>{throw Object.assign(new Error('lookup unavailable'),{code});}},input));
+  }
+  for (const user of ['unexpected',[],{uid:'invalid-id'}]) {
+    await assert.rejects(executeMessageAction({findUser:async()=>user},input));
+  }
+  assert.equal(dispatches,0);
+});
 test('send is successful only with upstream message ID and never retries an uncertain dispatch', async () => {
   let count = 0, dispatched = false;
   const input = {action: 'send', uid: '123456', message: 'Xin chào Lan'};

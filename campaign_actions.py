@@ -172,6 +172,17 @@ class CampaignManager:
         self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}. Nguồn: {origin}.')
         return row.lastrowid
 
+    def store_lookup_skip(self,campaign,person,account,scheduled=False):
+        """Record a confirmed empty lookup without fabricating a Zalo identity."""
+        reason=f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
+        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,
+            recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,message_skip_reason)
+            VALUES (?,?,?,'','','','not_requested','not_requested','not_requested',?,?,?)''',
+            (campaign['id'],person['id'],account['id'],int(scheduled),person['phone'],reason))
+        origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
+        self.event(campaign['id'],'lookup_skip',reason+f' Nguồn: {origin}. Tiếp tục số điện thoại kế tiếp.')
+        return row.lastrowid
+
     def skip_duplicate_message(self,campaign_id,send_id):
         self.db().execute('BEGIN IMMEDIATE')
         try:
@@ -497,7 +508,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
             stream = io.StringIO()
             writer = csv.writer(stream)
             writer.writerow(['ID', 'Khách hàng', 'SĐT', 'Tài khoản', 'Nội dung', 'Tin nhắn', 'Kết bạn', 'Đổi tên', 'Mã tin', 'Thời gian UTC',
-                             'Zalo ID', 'Tên Zalo', 'Lời mời', 'Tên gợi nhớ', 'Media'])
+                             'Zalo ID', 'Tên Zalo', 'Lời mời', 'Tên gợi nhớ', 'Media', 'Lý do bỏ qua'])
             def safe(value):
                 value = str(value or '')
                 return "'" + value if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')) else value
@@ -505,7 +516,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 media = manager.media(row['media_id'])
                 writer.writerow([safe(value) for value in (row['id'], row['name'], row['phone'], row['account_name'], row['message'],
                     STATE_LABELS[row['state']], STATE_LABELS[row['friend_state']], STATE_LABELS[row['alias_state']], row['message_id'], row['created_at'],
-                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '')])
+                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '',row['message_skip_reason'])])
             return send_file(io.BytesIO(('\ufeff'+stream.getvalue()).encode()), mimetype='text/csv', as_attachment=True,
                              download_name=f'chien-dich-{campaign_id}.csv')
         return render_template('campaign_report.html', campaign=campaign, sends=sends, counts=counts,

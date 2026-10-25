@@ -44,6 +44,16 @@ def initialize_schedule(db):
     db().commit()
 
 
+def resume_legacy_lookup_blocks(db,manager):
+    """Retry read-only lookups stopped by the previous all-or-nothing policy."""
+    db().execute('BEGIN IMMEDIATE')
+    for campaign in db().execute("SELECT id,schedule_error FROM campaigns WHERE schedule_enabled=1 AND deleted_at IS NULL AND schedule_error!=''").fetchall():
+        if re.fullmatch(r'Không tìm được Zalo của [0-9]{8,15}\. Kiểm tra data rồi lưu lại lịch\.',campaign['schedule_error']):
+            db().execute("UPDATE campaigns SET schedule_error='',schedule_status='Chờ tra cứu lại và tiếp tục theo lịch',schedule_revision=schedule_revision+1 WHERE id=?",(campaign['id'],))
+            manager.event(campaign['id'],'schedule_resume','Tiếp tục lịch sau cập nhật: số không tìm thấy Zalo sẽ được ghi nhận bỏ qua, rồi xử lý số kế tiếp. Giữ nguyên các lượt đã gửi.')
+    db().commit()
+
+
 def schedule_values(form, account_id):
     enabled = int(form.get('schedule_enabled')=='yes')
     if not enabled:
@@ -283,8 +293,8 @@ class CampaignScheduler:
             resolved=self.connector.message_action(g.user['id'],account['id'],'resolve',phone=person['phone'])
         except Exception:
             resolved={}
-        if resolved.get('state')!='resolved' or not re.fullmatch(r'\d{1,30}',str(resolved.get('uid',''))):
-            raise ValueError(f'Không tìm được Zalo của {person["phone"]}. Kiểm tra data rồi lưu lại lịch.')
+        if not isinstance(resolved,dict) or resolved.get('state') not in ('resolved','not_found') or (resolved['state']=='resolved' and not re.fullmatch(r'\d{1,30}',str(resolved.get('uid','')))):
+            raise ValueError(f'Không thể tra cứu Zalo của {person["phone"]} lúc này. Kiểm tra kết nối, giới hạn tra cứu hoặc đăng nhập Zalo rồi lưu lại lịch.')
         self.db().execute('BEGIN IMMEDIATE')
         try:
             campaign=self.manager.owned(campaign_id);guard(campaign)
@@ -293,6 +303,10 @@ class CampaignScheduler:
                 self.db().rollback();return
             if self.db().execute('SELECT 1 FROM message_sends WHERE campaign_id=? AND contact_id=?',(campaign_id,person['id'])).fetchone():
                 self.db().rollback();return
+            if resolved['state']=='not_found':
+                self.manager.store_lookup_skip(campaign,person,account,scheduled=True)
+                self.db().execute("UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1,schedule_status='Đã bỏ qua số không tìm thấy Zalo; tiếp tục số kế tiếp' WHERE id=?",(now().astimezone(TZ).date().isoformat(),campaign_id))
+                self.db().commit();return
             if contact_is_excluded(self.db,g.user['id'],campaign_id,person['id'],resolved['uid']):
                 self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled)
                     VALUES (?,?,?,?,?,'','not_requested','not_requested','not_requested',1)''',(campaign_id,person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100]))
@@ -346,6 +360,7 @@ class CampaignScheduler:
 def register_campaign_schedule(app,db,login_required,manager,connector,audience):
     with app.app_context():
         initialize_schedule(db)
+        resume_legacy_lookup_blocks(db,manager)
     scheduler=CampaignScheduler(app,db,manager,connector,audience)
     app.extensions['campaign_scheduler']=scheduler
     app.jinja_env.globals['schedule_today']=lambda: local_now().date().isoformat()

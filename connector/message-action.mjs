@@ -2,7 +2,18 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
   if (input.action === 'resolve') {
     const phone = String(input.phone || '').replace(/[\s()+-]/g, '');
     if (!/^\d{8,15}$/.test(phone)) throw new Error('Invalid phone');
-    const user = await api.findUser(phone.startsWith('0') ? `84${phone.slice(1)}` : phone);
+    let user;
+    try {
+      user = await api.findUser(phone.startsWith('0') ? `84${phone.slice(1)}` : phone);
+    } catch (error) {
+      // SDK's profile lookup documents 216 as no matching user. Transport,
+      // session and rate-limit failures must not discard a campaign's data.
+      if (String(error?.code) === '216') return {state:'not_found'};
+      throw error;
+    }
+    if (user === null || user === undefined) return {state:'not_found'};
+    if (typeof user !== 'object' || Array.isArray(user)) throw new Error('Invalid profile');
+    if (user.uid === undefined || user.uid === null || user.uid === '' || String(user.uid) === '0') return {state:'not_found'};
     if (!/^\d{1,30}$/.test(String(user.uid))) throw new Error('Invalid recipient');
     return {state: 'resolved', uid: String(user.uid), name: String(user.display_name || user.zalo_name || '').slice(0,100),
       original_name: String(user.zalo_name || '').slice(0,100), gender: [0,1].includes(user.gender) ? user.gender : null};

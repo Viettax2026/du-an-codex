@@ -434,7 +434,7 @@ def create_app(test_config=None):
             abort(400)
         rows = db().execute(f'''SELECT c.*,a.name AS account_name,
             (SELECT group_concat(DISTINCT za.name) FROM message_sends ms JOIN zalo_accounts za ON za.id=ms.account_id AND za.user_id=c.user_id WHERE ms.campaign_id=c.id) AS used_accounts,
-            coalesce(r.sent_total,0) AS sent_total,coalesce(r.confirmed,0) AS confirmed,
+            coalesce(r.sent_total,0) AS sent_total,coalesce(r.confirmed,0) AS confirmed,coalesce(r.skipped,0) AS skipped,
             coalesce(r.waiting,0) AS waiting,coalesce(r.sending,0) AS sending,
             coalesce(r.uncertain,0) AS uncertain,coalesce(r.failed,0) AS failed,
             (SELECT count(*) FROM deliveries d WHERE d.campaign_id=c.id) AS total,
@@ -444,6 +444,7 @@ def create_app(test_config=None):
             FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
             LEFT JOIN (SELECT campaign_id,count(*) AS sent_total,
                 sum((state='sent' OR friend_state='friend_requested' OR alias_state='renamed') AND state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
+                sum(state='not_requested' AND friend_state='not_requested' AND alias_state='not_requested') AS skipped,
                 sum(state='prepared' OR friend_state='prepared' OR alias_state='prepared') AS waiting,
                 sum(state='sending' OR friend_state='sending' OR alias_state='sending') AS sending,
                 sum(state='unknown' OR friend_state='unknown' OR alias_state='unknown') AS uncertain,
@@ -473,15 +474,15 @@ def create_app(test_config=None):
             elif row['waiting']:
                 label, tone = 'Chờ xác nhận', 'draft'
             elif row['sent_total']:
-                label, tone = ('Đã xử lý', 'complete') if row['confirmed']>=max(row['audience'],row['sent_total']) else ('Đang thực hiện', 'draft')
+                label, tone = ('Đã xử lý', 'complete') if row['confirmed']+row['skipped']>=max(row['audience'],row['sent_total']) else ('Đang thực hiện', 'draft')
             elif row['status']=='simulated':
                 label, tone = 'Đã mô phỏng', 'complete'
             else:
                 label, tone = 'Bản nháp', 'draft'
             row.update(display_status=label, status_tone=tone,
-                       progress_done=row['confirmed'] if row['sent_total'] else row['total'],
+                       progress_done=row['confirmed']+row['skipped'] if row['sent_total'] else row['total'],
                        progress_total=max(row['audience'],row['sent_total'] or row['total']),
-                       progress_basis='Gửi qua Zalo' if row['sent_total'] else 'Mô phỏng')
+                       progress_basis='Đã xử lý (gửi / bỏ qua)' if row['skipped'] else 'Gửi qua Zalo' if row['sent_total'] else 'Mô phỏng')
             row['progress_percent'] = min(100,round(100*row['progress_done']/row['progress_total'])) if row['progress_total'] else 0
         tags = db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
@@ -598,7 +599,7 @@ def create_app(test_config=None):
             result = connector.message_action(g.user['id'], account['id'], 'resolve', phone=person['phone'])
         except Exception:
             result = {'state': 'failed'}
-        if result.get('state') != 'resolved' or not str(result.get('uid', '')).isdigit():
+        if not isinstance(result,dict) or result.get('state') not in ('resolved','not_found') or (result['state']=='resolved' and not str(result.get('uid','')).isdigit()):
             flash('Không tìm được người nhận Zalo. Kiểm tra số điện thoại, quyền tìm kiếm của người nhận hoặc đăng nhập QR lại.', 'error')
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         db().execute('BEGIN IMMEDIATE')
@@ -607,7 +608,7 @@ def create_app(test_config=None):
         person = next((p for p in audience(campaign) if p['id'] == person['id']), None)
         if person is None:
             return 'Khách hàng không còn thuộc chiến dịch.', 400
-        if contact_is_excluded(db, g.user['id'], campaign_id, person['id'], result['uid']):
+        if result['state']=='resolved' and contact_is_excluded(db, g.user['id'], campaign_id, person['id'], result['uid']):
             return 'Người nhận Zalo thuộc danh sách loại trừ của chiến dịch.', 400
         # Recheck consent after the network request, before retaining a send preview.
         allowed = db().execute('SELECT consent FROM contacts WHERE id=? AND user_id=?', (person['id'], g.user['id'])).fetchone()
@@ -615,12 +616,15 @@ def create_app(test_config=None):
             return 'Khách hàng đã thu hồi đồng ý nhận tin.', 400
         try:
             try:
-                manager.store_preview(campaign,person,account,result)
+                if result['state']=='not_found':
+                    manager.store_lookup_skip(campaign,person,account)
+                else:
+                    manager.store_preview(campaign,person,account,result)
             except ValueError as error:
                 flash(str(error),'error')
                 return redirect(url_for('campaign_detail',campaign_id=campaign_id))
             db().commit()
-            flash('Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
+            flash('Đã bỏ qua số không tìm thấy Zalo. Chọn số tiếp theo trong danh sách.' if result['state']=='not_found' else 'Đã tìm thấy người nhận. Kiểm tra tên Zalo và nội dung trước khi xác nhận gửi thật bên dưới.', 'success')
         except sqlite3.IntegrityError:
             db().rollback()
             flash('Bản xem trước đã được tạo. Không tạo trùng.', 'error')
@@ -741,6 +745,7 @@ def create_app(test_config=None):
         scheduled = db().execute('SELECT scheduled FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
         removed = db().execute('''DELETE FROM message_sends WHERE id=? AND campaign_id=? AND state IN ('prepared','not_requested')
             AND friend_state IN ('prepared','not_requested') AND alias_state IN ('prepared','not_requested')
+            AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared')
             AND campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)''', (send_id, campaign_id, g.user['id']))
         if removed.rowcount:
             if scheduled and scheduled['scheduled']:

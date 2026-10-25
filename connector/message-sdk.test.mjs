@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sendMessageFactory } from './node_modules/zca-js/dist/apis/sendMessage.js';
+import { findUserFactory } from './node_modules/zca-js/dist/apis/findUser.js';
 import { createContext } from './node_modules/zca-js/dist/context.js';
 import { encodeAES, decodeAES } from './node_modules/zca-js/dist/utils.js';
 import { executeMessageAction } from './message-action.mjs';
 
-function sdkHarness() {
+function sdkHarness({lookupError=0}={}) {
   const requests=[];
   const ctx=createContext();
   // Synthetic credentials and encrypted mock responses; no Zalo login/network.
@@ -16,17 +17,21 @@ function sdkHarness() {
   ctx.options.logging=false;
   ctx.options.polyfill=async(url,options)=>{
     assert.equal(new URL(url).hostname,'sdk.invalid');
-    const params=JSON.parse(decodeAES(ctx.secretKey,options.body.get('params')));
+    const params=JSON.parse(decodeAES(ctx.secretKey,options.body?.get('params') || new URL(url).searchParams.get('params')));
     requests.push({path:new URL(url).pathname,params});
+    if (new URL(url).pathname==='/api/friend/profile/get' && lookupError) {
+      return new Response(JSON.stringify({error_code:lookupError,error_message:'mock lookup result'}));
+    }
     const data=encodeAES(ctx.secretKey,JSON.stringify({error_code:0,data:{msgId:100+requests.length}}));
     return new Response(JSON.stringify({error_code:0,data}),{headers:{'Content-Type':'application/json'}});
   };
   const api={
-    zpwServiceMap:{chat:['https://sdk.invalid'],group:['https://sdk.invalid'],file:['https://sdk.invalid']},
+    zpwServiceMap:{chat:['https://sdk.invalid'],group:['https://sdk.invalid'],file:['https://sdk.invalid'],friend:['https://sdk.invalid']},
     uploadAttachment:async()=>[{fileType:'image',photoId:'offline-photo',width:2,height:2,totalSize:5,
       normalUrl:'https://sdk.invalid/image',hdUrl:'https://sdk.invalid/image',thumbUrl:'https://sdk.invalid/image'}],
   };
   api.sendMessage=sendMessageFactory(ctx,api);
+  api.findUser=findUserFactory(ctx,api);
   return {api,requests};
 }
 
@@ -51,4 +56,14 @@ test('real pinned SDK sends plain image caption once without duplicating its tex
   assert.equal(requests.length,1);
   assert.equal(requests[0].params.desc,'Chào Lan');
   assert.deepEqual(result,{state:'sent',message_id:'101'});
+});
+
+test('real pinned SDK missing-profile error becomes not_found without hiding other lookup failures',async()=>{
+  const {api,requests}=sdkHarness({lookupError:216});
+  assert.deepEqual(await executeMessageAction(api,{action:'resolve',phone:'0901234567'}),{state:'not_found'});
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].params.phone,'84901234567');
+  const sessionFailure=sdkHarness({lookupError:401});
+  await assert.rejects(executeMessageAction(sessionFailure.api,{action:'resolve',phone:'0901234567'}));
+  assert.equal(sessionFailure.requests.length,1);
 });
