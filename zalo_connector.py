@@ -97,7 +97,11 @@ class QRConnector:
                 shutil.rmtree(base)
 
     def message_action(self, user_id, account_id, action, **data):
-        if not self.available() or self.status(user_id, account_id).get('state') != 'connected':
+        if not self.available():
+            return {'state':'lookup_failed','lookup_reason':'connector_unavailable'} if action=='resolve' else {'state':'failed'}
+        if self.status(user_id, account_id).get('state') != 'connected':
+            if action=='resolve':
+                return {'state':'lookup_failed','lookup_reason':'session'}
             return {'state': 'failed'}
         try:
             base = self.account_path(user_id, account_id)
@@ -108,8 +112,24 @@ class QRConnector:
                 input=json.dumps(payload), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 timeout=45, env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'NODE_ENV': 'production'})
             output = json.loads(result.stdout)
-            return {key: output[key] for key in ('state', 'uid', 'name', 'original_name', 'gender', 'message_id') if key in output}
+            if not isinstance(output,dict):
+                raise ValueError('Invalid response')
+            public={key: output[key] for key in ('state', 'uid', 'name', 'original_name', 'gender', 'message_id') if key in output}
+            if action=='resolve':
+                import re
+                reasons={'session','network','rate_limited','invalid_response','connector_unavailable','unavailable'}
+                if output.get('lookup_reason') in reasons:
+                    public['lookup_reason']=output['lookup_reason']
+                code=str(output.get('lookup_code',''))
+                if re.fullmatch(r'-?\d{1,8}|[A-Z][A-Z0-9_]{0,31}',code):
+                    public['lookup_code']=code
+            return public
         except subprocess.TimeoutExpired:
+            if action=='resolve':
+                return {'state':'lookup_failed','lookup_reason':'network'}
             return {'state': 'unknown' if action in ('send', 'friend', 'alias') else 'failed'}
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            if action=='resolve':
+                reason='session' if isinstance(error,KeyError) else 'connector_unavailable' if isinstance(error,OSError) else 'invalid_response'
+                return {'state':'lookup_failed','lookup_reason':reason}
             return {'state': 'unknown' if action in ('send', 'friend', 'alias') else 'failed'}

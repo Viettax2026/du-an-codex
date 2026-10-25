@@ -69,6 +69,35 @@
 .campaign-list-screen .selected-detail{padding:20px 22px;gap:22px}
 .campaign-list-screen .selected-detail .message-text{font-size:12px}
 .campaign-list-screen .selected-detail h2{font-size:16px}
+.campaign-list-screen .campaign-inline-detail{flex-basis:42%;max-height:52%;min-height:260px}
+.campaign-list-screen #campaign-detail-content{display:flex;flex-direction:column;overflow:hidden}
+.campaign-list-screen #campaign-detail-content[hidden]{display:none}
+.campaign-list-screen .detail-heading{min-height:50px;padding:13px;font-size:13px}
+.campaign-list-screen .detail-heading strong{font-size:13px}
+.campaign-detail-tabs{display:flex;align-items:center;gap:18px;padding:0 12px;flex:0 0 auto;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.campaign-detail-tabs a{font-size:12px;color:#8295b0;padding:12px 0 10px;border-bottom:2px solid transparent;white-space:nowrap;text-decoration:none}
+.campaign-detail-tabs a.active{color:#6a60ff;border-bottom-color:#6a60ff;font-weight:600}
+.campaign-detail-tabs a:focus-visible{outline:2px solid #8c82ff;outline-offset:-2px}
+.campaign-detail-panel{flex:1;min-width:0;min-height:0;overflow:auto;scrollbar-width:thin;font-size:12px}
+.campaign-detail-panel .inline-detail-table{width:100%;font-size:12px;border-collapse:collapse}
+.campaign-detail-panel .inline-detail-table th{font-size:11px;background:#e9f0f8;position:sticky;top:0;z-index:1;font-weight:600}
+.campaign-detail-panel .inline-detail-table td,.campaign-detail-panel .inline-detail-table th{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left;line-height:1.5}
+.inline-history-table td:first-child{width:27%;min-width:165px;white-space:nowrap}
+.inline-data-table,.inline-results-table{min-width:1050px}
+.inline-results-table td:nth-child(6){min-width:250px;max-width:420px}
+.campaign-detail-panel .message-text,.campaign-detail-panel p{font-size:12px;line-height:1.6;margin:0;overflow-wrap:anywhere}
+.campaign-detail-panel p+p{margin-top:6px}
+.campaign-detail-panel .inline-detail-note{padding:8px 12px;color:#7d91ad;font-size:11px}
+.inline-campaign-info{padding:12px 16px}
+.inline-campaign-info dl{display:grid;grid-template-columns:160px minmax(0,1fr);gap:8px 16px;margin:0 0 12px}
+.inline-campaign-info dt{color:#8295b0;font-weight:400}.inline-campaign-info dd{margin:0;overflow-wrap:anywhere}
+.inline-campaign-info .notice{padding:8px 10px;font-size:12px;margin:8px 0}
+.inline-variant-list{padding:10px 14px}.inline-variant-list .inline-detail-note{padding:0 0 10px}
+.inline-variant{padding:10px 0;border-bottom:1px solid var(--line)}.inline-variant>b{display:block;margin-bottom:7px;font-size:12px}
+.inline-variant-list .media-preview img{max-width:220px;max-height:130px;object-fit:contain}
+.inline-detail-footer{display:flex;gap:10px;justify-content:space-between;align-items:center;flex:0 0 auto;padding:8px 12px;border-top:1px solid var(--line);font-size:11px;color:#8397b2}
+.inline-detail-footer>div{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.inline-detail-footer a{white-space:nowrap}.inline-detail-footer [data-detail-status]:empty{display:none}
+@media(max-width:700px){.campaign-list-screen .campaign-inline-detail{flex-basis:48%;min-height:260px;max-height:55%}.campaign-detail-tabs{gap:16px;padding:0 10px}.campaign-detail-tabs a{font-size:11px}.inline-campaign-info dl{grid-template-columns:105px minmax(0,1fr);gap:8px}.inline-history-table{min-width:560px}.inline-detail-footer{font-size:10px}.campaign-list-screen .detail-heading{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .campaign-list-screen .progress-panel{display:flex;flex-direction:column}
 .campaign-list-screen .progress-heading{min-height:54px;height:54px;padding:12px 15px;flex-shrink:0}
 .campaign-list-screen .progress-heading h2{font-size:14px}
@@ -104,3 +133,7 @@
 @media(max-width:1100px){.campaign-list-screen .campaign-layout{grid-template-columns:minmax(0,1fr) 280px;gap:12px}.campaign-list-screen .content{padding:12px}.campaign-list-screen .campaign-count{display:none}.campaign-list-screen .selected-detail{grid-template-columns:1fr;gap:10px}.campaign-list-screen .detail-summary{align-items:flex-start}}
 @media(max-width:850px){.campaign-list-screen .content{height:auto;min-height:100dvh}.campaign-list-screen .campaign-layout{grid-template-columns:minmax(0,1fr);height:auto;overflow:visible;min-height:calc(100dvh - 24px)}.campaign-list-screen .campaign-main{height:700px}.campaign-list-screen .progress-panel{height:460px}.campaign-list-screen .no-logs{padding-bottom:24px}}
 @media(max-width:700px){.campaign-list-screen .sidebar{position:static;flex-direction:row;gap:14px;padding:8px 10px;align-items:center;width:100%;overflow:visible}.campaign-list-screen .sidebar nav{display:flex;flex:1;min-width:0;width:auto;overflow-x:auto;gap:5px}.campaign-list-screen .sidebar nav a{flex:0 0 38px;width:38px;height:38px}.campaign-list-screen .campaign-nav-toggle{display:none}.campaign-list-screen .content{padding:10px 8px}.campaign-list-screen .campaign-titlebar{padding:10px;gap:8px;height:56px;min-height:56px}.campaign-list-screen .title-actions{gap:5px}.campaign-list-screen .campaign-titlebar h1{font-size:14px}.campaign-list-screen .purple-button{font-size:11px;padding:8px 10px;gap:4px}.campaign-list-screen .campaign-main{height:650px}.campaign-list-screen .campaign-inline-detail{flex-basis:30%;min-height:170px}.campaign-list-screen .campaign-filterbar{padding:8px;gap:8px}.campaign-list-screen .campaign-filters{flex-direction:row;flex-wrap:nowrap}.campaign-list-screen .selected-detail{padding:14px}.campaign-list-screen.campaign-nav-expanded .sidebar{width:100%;padding:8px 10px}.campaign-list-screen.campaign-nav-expanded .workspace{margin-left:0}.campaign-list-screen.campaign-nav-expanded .brand-word,.campaign-list-screen.campaign-nav-expanded .nav-label{display:none}}
+
+@media(max-width:700px){.campaign-list-screen .campaign-inline-detail{flex-basis:48%;min-height:260px;max-height:55%}}
+
+.campaign-list-screen .detail-title{font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.campaign-list-screen .detail-title strong{font-weight:600}

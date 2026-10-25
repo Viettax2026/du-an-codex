@@ -23,6 +23,7 @@ from campaign_group_picker import read_snapshot_contacts, CAMPAIGN_CONTACT_LIMIT
 from campaign_schedule import save_schedule
 from campaign_limits import save_limits
 from campaign_duplicates import save_duplicate_check
+from campaign_details import inline_detail, TABS as DETAIL_TABS
 
 
 def create_app(test_config=None):
@@ -52,6 +53,11 @@ def create_app(test_config=None):
     def localtime(value):
         return datetime.fromisoformat(value).replace(tzinfo=timezone.utc).astimezone(
             ZoneInfo('Asia/Bangkok')).strftime('%H:%M %d/%m/%Y')
+
+    @app.template_filter('localtime_seconds')
+    def localtime_seconds(value):
+        return datetime.fromisoformat(value).replace(tzinfo=timezone.utc).astimezone(
+            ZoneInfo('Asia/Bangkok')).strftime('%H:%M:%S %d/%m/%Y')
 
     def db():
         if 'db' not in g:
@@ -487,6 +493,10 @@ def create_app(test_config=None):
         tags = db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall()
         selected_id = request.args.get('selected', type=int)
         selected = next((row for row in rows if row['id'] == selected_id), None)
+        detail_tab=request.args.get('detail_tab','info')
+        if detail_tab not in DETAIL_TABS:
+            abort(400)
+        detail=inline_detail(db,selected,detail_tab,request.args.get('detail_page',1,type=int),connector) if selected else None
         logs = []
         if selected:
             if not log_account_id:
@@ -498,7 +508,7 @@ def create_app(test_config=None):
                 ORDER BY s.id DESC LIMIT 100''', (g.user['id'],selected['id'],log_account_id,log_account_id)))
             logs = sorted(logs,key=lambda item:(item['created_at'],item['id']),reverse=True)[:100]
         def campaign_link(**changes):
-            values=dict(q=query,days=days,status=status,tag=tag,account_id=account_id,kind=kind,log_account_id=log_account_id)
+            values=dict(q=query,days=days,status=status,tag=tag,account_id=account_id,kind=kind,log_account_id=log_account_id,detail_tab=detail_tab)
             if selected:
                 values['selected']=selected['id']
             values.update(changes)
@@ -506,7 +516,7 @@ def create_app(test_config=None):
         return render_template('campaigns.html', campaigns=rows, tags=tags,
                                query=query, status=status, days=days, tag=tag,kind=kind,
                                account_id=account_id,log_account_id=log_account_id,campaign_link=campaign_link,
-                               selected=selected, logs=logs, page='campaigns', accounts=accounts)
+                               selected=selected, logs=logs, detail=detail, page='campaigns', accounts=accounts)
 
     @app.route('/campaigns/<int:campaign_id>/edit', methods=['GET', 'POST'])
     @login_required

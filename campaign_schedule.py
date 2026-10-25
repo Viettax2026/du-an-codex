@@ -4,7 +4,7 @@ import re
 import time
 import signal
 from threading import Event
-from datetime import date, datetime, time as wall_time
+from datetime import date, datetime, timedelta, timezone, time as wall_time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -33,7 +33,8 @@ def initialize_schedule(db):
               'schedule_continue':'INTEGER NOT NULL DEFAULT 1', 'schedule_skip_sunday':'INTEGER NOT NULL DEFAULT 0', 'schedule_stop_enabled':'INTEGER NOT NULL DEFAULT 0',
               'schedule_stop':"TEXT NOT NULL DEFAULT '17:00'", 'schedule_first_day':'TEXT',
               'schedule_carry':'INTEGER NOT NULL DEFAULT 0', 'schedule_error':"TEXT NOT NULL DEFAULT ''",
-              'schedule_status':"TEXT NOT NULL DEFAULT 'Chưa bật lịch'", 'schedule_revision':'INTEGER NOT NULL DEFAULT 0'}
+              'schedule_status':"TEXT NOT NULL DEFAULT 'Chưa bật lịch'", 'schedule_revision':'INTEGER NOT NULL DEFAULT 0',
+              'schedule_wait_until':"TEXT NOT NULL DEFAULT ''",'schedule_wait_message':"TEXT NOT NULL DEFAULT ''"}
     present={row['name'] for row in db().execute('PRAGMA table_info(campaigns)')}
     for name,definition in fields.items():
         if name not in present:
@@ -48,9 +49,11 @@ def resume_legacy_lookup_blocks(db,manager):
     """Retry read-only lookups stopped by the previous all-or-nothing policy."""
     db().execute('BEGIN IMMEDIATE')
     for campaign in db().execute("SELECT id,schedule_error FROM campaigns WHERE schedule_enabled=1 AND deleted_at IS NULL AND schedule_error!=''").fetchall():
-        if re.fullmatch(r'Không tìm được Zalo của [0-9]{8,15}\. Kiểm tra data rồi lưu lại lịch\.',campaign['schedule_error']):
+        missing=r'Không tìm được Zalo của [0-9]{8,15}\. Kiểm tra data rồi lưu lại lịch\.'
+        unavailable=r'Không thể tra cứu Zalo của [0-9]{8,15} lúc này\. Kiểm tra kết nối, giới hạn tra cứu hoặc đăng nhập Zalo rồi lưu lại lịch\.'
+        if re.fullmatch(missing,campaign['schedule_error']) or re.fullmatch(unavailable,campaign['schedule_error']):
             db().execute("UPDATE campaigns SET schedule_error='',schedule_status='Chờ tra cứu lại và tiếp tục theo lịch',schedule_revision=schedule_revision+1 WHERE id=?",(campaign['id'],))
-            manager.event(campaign['id'],'schedule_resume','Tiếp tục lịch sau cập nhật: số không tìm thấy Zalo sẽ được ghi nhận bỏ qua, rồi xử lý số kế tiếp. Giữ nguyên các lượt đã gửi.')
+            manager.event(campaign['id'],'schedule_resume','Tiếp tục lịch sau cập nhật: bỏ qua số tra cứu không tìm được, nghỉ theo cài đặt rồi xử lý số kế tiếp. Giữ nguyên các lượt đã gửi.')
     db().commit()
 
 
@@ -162,10 +165,18 @@ def manual_schedule_block(campaign, now=None):
     if campaign['schedule_skip_sunday'] and now.weekday()==6:
         return 'Lịch đã bật Không chạy ngày Chủ nhật (giờ Việt Nam, UTC+7). Gửi tin, kết bạn và đổi tên sẽ chờ ngày chạy hợp lệ tiếp theo.'
     if active_window(campaign,now):
+        stamp=now.astimezone(timezone.utc).replace(tzinfo=None,microsecond=0).isoformat(' ')
+        if campaign['schedule_wait_until'] and campaign['schedule_wait_until']>stamp:
+            return campaign['schedule_wait_message']+' '+wait_label(campaign['schedule_wait_until'])
         return ''
     stop=campaign['schedule_stop'] if campaign['schedule_stop_enabled'] else '23:59'
     return (f"Ngoài lịch chạy đã lưu: {campaign['schedule_time']}–{stop}, từ {campaign['schedule_date']} "
             '(giờ Việt Nam, UTC+7). Gửi tin, kết bạn và đổi tên chỉ được thực hiện trong lịch đã bật.')
+
+
+def wait_label(stamp):
+    local=datetime.fromisoformat(stamp).replace(tzinfo=timezone.utc).astimezone(TZ)
+    return 'Tiếp tục lúc '+local.strftime('%H:%M:%S %d/%m/%Y')+' (UTC+7).'
 
 
 class CampaignScheduler:
@@ -176,6 +187,46 @@ class CampaignScheduler:
     def status(self,campaign_id,text):
         self.db().execute('UPDATE campaigns SET schedule_status=? WHERE id=?',(text,campaign_id))
         self.db().commit()
+
+    def rest(self,campaign,now,message=None,seconds=None):
+        """Persist a lookup rest without creating a send/quota attempt."""
+        seconds=campaign['interval_seconds'] if seconds is None else seconds
+        instant=now().astimezone(timezone.utc)
+        if instant.microsecond:
+            instant+=timedelta(seconds=1)
+        until=(instant+timedelta(seconds=seconds)).replace(tzinfo=None,microsecond=0).isoformat(' ') if seconds else ''
+        text=message or f'Nghỉ {seconds} giây theo cài đặt trước khi xử lý số điện thoại kế tiếp.'
+        self.db().execute('UPDATE campaigns SET schedule_wait_until=?,schedule_wait_message=?,schedule_status=? WHERE id=?',
+            (until,text if until else '',text+' '+wait_label(until) if until else 'Tiếp tục số điện thoại kế tiếp',campaign['id']))
+        if seconds:
+            self.manager.event(campaign['id'],'schedule_rest',text+' '+wait_label(until))
+
+    def lookup_failure(self,campaign,person,account,result,guard,now):
+        self.db().execute('BEGIN IMMEDIATE')
+        try:
+            campaign=self.manager.owned(campaign['id']);guard(campaign)
+            person=next((p for p in self.audience(campaign) if p['id']==person['id']),None)
+            if person is None or self.db().execute('SELECT 1 FROM message_sends WHERE campaign_id=? AND contact_id=?',(campaign['id'],person['id'])).fetchone():
+                self.db().rollback();return
+            reason=result.get('lookup_reason','unavailable')
+            code=str(result.get('lookup_code',''))
+            code=' (mã '+code+')' if re.fullmatch(r'-?\d{1,8}|[A-Z][A-Z0-9_]{0,31}',code) else ''
+            if reason in ('session','connector_unavailable'):
+                text='Phiên Zalo không đăng nhập được; cần đăng nhập QR lại' if reason=='session' else 'Bộ kết nối Zalo trên VPS chưa sẵn sàng'
+                raise ValueError(text+code+'. Kiểm tra rồi lưu lại lịch.')
+            if reason in ('network','rate_limited','invalid_response'):
+                labels={'network':'Kết nối tra cứu bị gián đoạn','rate_limited':'Zalo đang giới hạn tra cứu','invalid_response':'Phản hồi tra cứu chưa hợp lệ'}
+                delay=max(campaign['interval_seconds'],900 if reason=='rate_limited' else 60)
+                self.rest(campaign,now,labels[reason]+code+f'. Tự thử lại sau {delay} giây.',seconds=delay)
+                self.db().commit();return
+            detail=f'Bỏ qua {person["phone"]}: tra cứu không tìm được người nhận Zalo'+code+'.'
+            self.manager.store_lookup_skip(campaign,person,account,scheduled=True,reason=detail)
+            self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign['id']))
+            self.manager.event(campaign['id'],'schedule_complete',f'Hoàn thành xử lý {person["phone"]}: đã ghi nhận bỏ qua, chưa gửi tin.')
+            self.rest(campaign,now)
+            self.db().commit()
+        except BaseException:
+            self.db().rollback();raise
 
     def guard(self,campaign_id,revision,now):
         def check(campaign,record=None):
@@ -194,7 +245,7 @@ class CampaignScheduler:
         return self.db().execute(f'''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1
             AND ({condition}) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
 
-    def dispatch(self,campaign,record,action,guard):
+    def dispatch(self,campaign,record,action,guard,now):
         column={'send':'state','friend':'friend_state','alias':'alias_state'}[action]
         if record[column]!='prepared':
             return
@@ -222,6 +273,8 @@ class CampaignScheduler:
         else:
             self.db().execute(f'UPDATE message_sends SET {column}=? WHERE id=?',(state,record['id']))
         self.manager.result(campaign['id'],action,record['id'],state)
+        if campaign['interval_seconds']:
+            self.rest(campaign,now)
         self.db().commit()
         if state=='unknown':
             raise ValueError('Kết quả hành động chưa xác định. Kiểm tra hội thoại Zalo rồi lưu lại lịch để tiếp tục; không tự gửi lại lần đó.')
@@ -251,6 +304,9 @@ class CampaignScheduler:
         campaign=self.manager.owned(campaign_id)
         if not active_window(campaign,now()):
             return
+        stamp=now().astimezone(timezone.utc).replace(tzinfo=None,microsecond=0).isoformat(' ')
+        if campaign['schedule_wait_until'] and campaign['schedule_wait_until']>stamp:
+            self.status(campaign_id,campaign['schedule_wait_message']+' '+wait_label(campaign['schedule_wait_until']));return
         revision=campaign['schedule_revision'];guard=self.guard(campaign_id,revision,now)
         if not self.app.config['ZALO_QR_ENABLED']:
             raise ValueError('Máy chủ chưa bật kết nối Zalo.')
@@ -273,10 +329,11 @@ class CampaignScheduler:
             for action,column in (('send','state'),('friend','friend_state'),('alias','alias_state')):
                 if record[column]=='prepared' and action in allowed_actions:
                     try:
-                        self.dispatch(campaign,record,action,guard)
+                        self.dispatch(campaign,record,action,guard,now)
                     except DuplicateMessageBlocked:
                         self.manager.skip_duplicate_message(campaign_id,record['id'])
-                    self.status(campaign_id,'Đang chạy theo lịch')
+                    if not campaign['interval_seconds']:
+                        self.status(campaign_id,'Đang chạy theo lịch')
                     return  # At most one external action per campaign per tick.
         existing={r['contact_id'] for r in self.db().execute('SELECT contact_id FROM message_sends WHERE campaign_id=?',(campaign_id,))}
         person=next((person for person in self.audience(campaign) if person['id'] not in existing),None)
@@ -289,12 +346,17 @@ class CampaignScheduler:
             if self.skip_known_duplicate(campaign,person,account,guard,now):
                 return
         # The lookup is read-only. Revalidate window/settings/consent afterwards in a write transaction.
+        self.manager.event(campaign_id,'schedule_lookup',f'{account["name"]} – {campaign["name"]} · Xử lý {person["phone"]} · Tìm Zalo từ số điện thoại.')
+        self.db().commit()
         try:
             resolved=self.connector.message_action(g.user['id'],account['id'],'resolve',phone=person['phone'])
         except Exception:
-            resolved={}
+            resolved={'state':'lookup_failed','lookup_reason':'network'}
         if not isinstance(resolved,dict) or resolved.get('state') not in ('resolved','not_found') or (resolved['state']=='resolved' and not re.fullmatch(r'\d{1,30}',str(resolved.get('uid','')))):
-            raise ValueError(f'Không thể tra cứu Zalo của {person["phone"]} lúc này. Kiểm tra kết nối, giới hạn tra cứu hoặc đăng nhập Zalo rồi lưu lại lịch.')
+            failure=resolved if isinstance(resolved,dict) else {'lookup_reason':'invalid_response'}
+            if isinstance(resolved,dict) and resolved.get('state')=='resolved':
+                failure={'lookup_reason':'invalid_response'}
+            self.lookup_failure(campaign,person,account,failure,guard,now);return
         self.db().execute('BEGIN IMMEDIATE')
         try:
             campaign=self.manager.owned(campaign_id);guard(campaign)
@@ -305,7 +367,9 @@ class CampaignScheduler:
                 self.db().rollback();return
             if resolved['state']=='not_found':
                 self.manager.store_lookup_skip(campaign,person,account,scheduled=True)
-                self.db().execute("UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1,schedule_status='Đã bỏ qua số không tìm thấy Zalo; tiếp tục số kế tiếp' WHERE id=?",(now().astimezone(TZ).date().isoformat(),campaign_id))
+                self.db().execute("UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?",(now().astimezone(TZ).date().isoformat(),campaign_id))
+                self.manager.event(campaign_id,'schedule_complete',f'Hoàn thành xử lý {person["phone"]}: không tìm thấy Zalo, đã bỏ qua.')
+                self.rest(campaign,now)
                 self.db().commit();return
             if contact_is_excluded(self.db,g.user['id'],campaign_id,person['id'],resolved['uid']):
                 self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled)

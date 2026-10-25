@@ -1,0 +1,56 @@
+{% if selected and detail %}
+<nav class="campaign-detail-tabs" role="tablist" aria-label="Chi tiết chiến dịch">
+{% for key,label in [('info','Thông tin'),('accounts','Tài khoản'),('data','Data ban đầu'),('results','Kết quả chạy'),('preview','Xem trước nội dung'),('history','Lịch sử chạy')] %}
+<a href="{{ campaign_link(detail_tab=key,detail_page=1) }}" role="tab" id="detail-tab-{{ key }}" aria-controls="detail-tab-panel" aria-selected="{{ 'true' if detail.tab==key else 'false' }}" tabindex="{{ '0' if detail.tab==key else '-1' }}" class="{{ 'active' if detail.tab==key }}" data-detail-load>{{ label }}{% if key not in ('info','accounts') %} ({{ detail.counts[key] }}){% endif %}</a>
+{% endfor %}
+</nav>
+<div id="detail-tab-panel" class="campaign-detail-panel" role="tabpanel" aria-labelledby="detail-tab-{{ detail.tab }}" data-detail-current="{{ detail.tab }}">
+{% if detail.tab=='info' %}
+  <div class="inline-campaign-info">
+    <dl>
+      <dt>Tên chiến dịch</dt><dd>{{ selected.name }} · #{{ selected.id }}</dd>
+      <dt>Trạng thái</dt><dd>{{ selected.display_status }}{% if selected.schedule_enabled %} · {{ selected.schedule_status }}{% endif %}</dd>
+      <dt>Hành động</dt><dd>{% if selected.send_message %}Nhắn tin{% endif %}{% if selected.send_friend %} · Kết bạn{% endif %}{% if selected.rename_enabled %} · Đổi tên gợi nhớ{% endif %}</dd>
+      <dt>Tài khoản gửi</dt><dd>{{ selected.account_name or 'Chưa chọn tài khoản' }}</dd>
+      <dt>Nguồn data</dt><dd>{{ 'Danh sách riêng đã lưu' if selected.audience_mode=='list' else 'Nhóm động: ' ~ (selected.tag or 'Tất cả khách hàng') }} · {{ detail.counts.data }} data · {{ selected.audience }} đủ điều kiện nhận tin</dd>
+      <dt>Lịch chạy</dt><dd>{% if selected.schedule_enabled %}{{ {'daily':'Hằng ngày','weekly':'Theo tuần','monthly':'Theo tháng'}.get(selected.schedule_kind,selected.schedule_kind) }} · Từ {{ selected.schedule_date }} · {{ selected.schedule_time }}–{{ selected.schedule_stop if selected.schedule_stop_enabled else '23:59' }} (UTC+7){% if selected.schedule_skip_sunday %} · Không chạy Chủ nhật{% endif %}{% else %}Chưa bật{% endif %}</dd>
+      <dt>Chạy tiếp data</dt><dd>{{ 'Có' if selected.schedule_continue else 'Không' }}</dd>
+      <dt>Khoảng nghỉ</dt><dd>{{ selected.interval_seconds }} giây</dd>
+      <dt>Giới hạn nhắn tin</dt><dd>{{ selected.message_limit or 'Không giới hạn' }} / ngày · {{ selected.message_hour_limit or 'Không giới hạn' }} / {{ selected.message_window_minutes }} phút</dd>
+      <dt>Giới hạn kết bạn</dt><dd>{{ selected.friend_limit or 'Không giới hạn' }} / ngày · {{ selected.friend_hour_limit or 'Không giới hạn' }} / {{ selected.friend_window_minutes }} phút</dd>
+      <dt>Kiểm tra trùng lặp</dt><dd>{% if selected.duplicate_enabled %}{{ selected.duplicate_days }} ngày · {{ 'Toàn bộ tài khoản' if selected.duplicate_all_accounts else 'Cùng tài khoản gửi' }}{% else %}Chưa bật{% endif %}</dd>
+      <dt>Loại trừ</dt><dd>{{ detail.exclusions|map(attribute='name')|join(', ') or 'Chưa chọn nhóm/danh sách loại trừ' }}</dd>
+      <dt>Ngày tạo</dt><dd>{{ selected.created_at|localtime_seconds }} · UTC+7</dd>
+    </dl>
+    {% if selected.schedule_error %}<p class="notice error">{{ selected.schedule_error }}</p>{% endif %}
+    {% set blocked_schedule=manual_schedule_block(selected) %}{% if blocked_schedule %}<p class="notice">{{ blocked_schedule }}</p>{% endif %}
+    <p><a href="{{ url_for('campaign_report',campaign_id=selected.id) }}">Báo cáo đầy đủ</a>{% if not selected.deleted_at %} · <a href="{{ url_for('campaign_schedule',campaign_id=selected.id) }}">Cài đặt lịch chạy</a> · <a href="{{ url_for('campaign_limits',campaign_id=selected.id) }}">Giới hạn hành động</a>{% endif %}</p>
+  </div>
+{% elif detail.tab=='accounts' %}
+  <table class="inline-detail-table"><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Kết nối</th><th>Thao tác</th></tr></thead><tbody>
+  {% for account in detail.rows %}<tr><td>{{ account.name }}</td><td>{{ 'Đang được chọn' if account.id==selected.account_id else 'Đã dùng trong chiến dịch' }}</td><td>{{ {'connected':'Đã đăng nhập','disconnected':'Chưa đăng nhập','expired':'Phiên đã hết hạn','qr':'Chờ quét QR','scanned':'Đã quét QR','loading':'Đang kết nối','error':'Cần đăng nhập lại'}.get(account.connection.state,'Cần kiểm tra') }}</td><td><a href="{{ url_for('accounts',connect=account.id) }}">Mở tài khoản</a></td></tr>{% else %}<tr><td colspan="4">Chiến dịch chưa chọn hoặc sử dụng tài khoản Zalo.</td></tr>{% endfor %}
+  </tbody></table>
+{% elif detail.tab=='data' %}
+  <p class="inline-detail-note">{% if selected.audience_mode=='list' %}Danh sách riêng đã lưu. Trạng thái nhận tin hiển thị theo hồ sơ hiện tại.{% else %}Nhóm động: hiển thị data hiện tại của nhóm; đây không phải bản chụp tại ngày tạo chiến dịch.{% endif %}</p>
+  <table class="inline-detail-table inline-data-table"><thead><tr><th>STT</th><th>Tên</th><th>Số điện thoại</th><th>Zalo ID</th><th>Nhóm</th><th>Nhận tin</th><th>Email</th>{% for i in range(1,6) %}<th>Info {{ i }}</th>{% endfor %}</tr></thead><tbody>
+  {% for person in detail.rows %}<tr><td>{{ detail.offset+loop.index }}</td><td>{{ person.name }}</td><td>{{ person.phone }}</td><td>{{ person.zalo_id or '—' }}</td><td>{{ person.tag or 'Chưa có nhóm' }}</td><td>{{ 'Đã xóa' if person.deleted_at else 'Đã đồng ý' if person.consent else 'Chưa đồng ý' }}</td><td>{{ person.email or '—' }}</td>{% for i in range(1,6) %}<td>{{ person['info' ~ i] or '—' }}</td>{% endfor %}</tr>{% else %}<tr><td colspan="12">Chưa có data trong danh sách này.</td></tr>{% endfor %}
+  </tbody></table>
+{% elif detail.tab=='results' %}
+  <p class="inline-detail-note">Gồm bản chờ, kết quả gửi và số bỏ qua. <a href="{{ url_for('campaign_report',campaign_id=selected.id,format='csv') }}">Tải CSV kết quả</a></p>
+  <table class="inline-detail-table inline-results-table"><thead><tr><th>Khách hàng / SĐT</th><th>Tài khoản</th><th>Tin nhắn</th><th>Kết bạn</th><th>Đổi tên</th><th>Nội dung / lý do</th><th>Thời gian · UTC+7</th></tr></thead><tbody>
+  {% for result in detail.rows %}<tr><td>{{ result.recipient_name or result.name }}<br>{{ result.recipient_phone or result.phone }}</td><td>{{ result.account_name }}</td><td>{{ 'Đã bỏ qua' if result.message_skip_reason and result.state=='not_requested' else send_state_labels.get(result.state,result.state) }}{% if result.message_id %}<br>{{ result.message_id }}{% endif %}</td><td>{{ send_state_labels.get(result.friend_state,result.friend_state) }}</td><td>{{ send_state_labels.get(result.alias_state,result.alias_state) }}</td><td>{% if result.message_skip_reason %}<p>{{ result.message_skip_reason }}</p>{% endif %}<div class="message-text">{{ display_message(result.message,result.message_styles) }}</div>{% if result.friend_message %}<p>Lời mời: {{ result.friend_message }}</p>{% endif %}{% if result.alias %}<p>Tên gợi nhớ: {{ result.alias }}</p>{% endif %}</td><td>{{ result.created_at|localtime_seconds }}</td></tr>{% else %}<tr><td colspan="7">Chưa có bản xem trước hoặc kết quả chạy.</td></tr>{% endfor %}
+  </tbody></table>
+{% elif detail.tab=='preview' %}
+  <div class="inline-variant-list"><p class="inline-detail-note">Nội dung đã lưu, gồm cú pháp cá nhân hóa và các lựa chọn bạn đã nhập. Kết quả theo người nhận có trong tab Kết quả chạy.</p>
+  {% for html in detail.variants %}<article class="inline-variant"><b>Nội dung {{ loop.index }} / {{ detail.counts.preview }}</b><div class="message-text">{{ html }}</div></article>{% else %}<p>Chiến dịch không có nội dung nhắn tin.</p>{% endfor %}
+  {% if selected.send_friend %}<article class="inline-variant"><b>Lời mời kết bạn</b><p class="message-text">{{ selected.friend_message }}</p></article>{% endif %}
+  {% if selected.rename_enabled %}<article class="inline-variant"><b>Tên gợi nhớ</b><p>{{ selected.rename_template }}</p></article>{% endif %}
+  {% set media=campaign_media(selected.media_id) %}{% if media %}{% include '_media_preview.html' %}{% endif %}</div>
+{% elif detail.tab=='history' %}
+  <table class="inline-detail-table inline-history-table"><thead><tr><th>Thời gian (UTC+7)</th><th>Nội dung</th></tr></thead><tbody>
+  {% for event in detail.rows %}<tr><td>{{ event.created_at|localtime_seconds }}</td><td>{{ event.detail }}</td></tr>{% else %}<tr><td colspan="2">Chưa ghi nhận lịch sử chạy.</td></tr>{% endfor %}
+  </tbody></table>
+{% endif %}
+</div>
+<div class="inline-detail-footer"><span>{% if detail.tab in ('data','results','history','accounts') %}{{ detail.offset+1 if detail.total else 0 }}–{{ [detail.offset+detail.per_page,detail.total]|min }} / {{ detail.total }}{% else %}{{ selected.name }}{% endif %}</span><div>{% if detail.pages>1 %}{% if detail.number>1 %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number-1) }}">‹ Trước</a>{% endif %}<span>Trang {{ detail.number }}/{{ detail.pages }}</span>{% if detail.number<detail.pages %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number+1) }}">Sau ›</a>{% endif %}{% endif %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number) }}" aria-label="Làm mới chi tiết chiến dịch">↻ Làm mới</a><span data-detail-status role="status" aria-live="polite"></span></div></div>
+{% else %}<div class="no-detail">Chọn một chiến dịch để xem chi tiết.</div>{% endif %}

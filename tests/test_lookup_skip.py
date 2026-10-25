@@ -70,14 +70,15 @@ def test_skipped_lookup_is_persistent_not_a_success_and_not_cancellable_as_a_pre
     assert query(app,'SELECT count(*) FROM campaign_attempts')==[(0,)]
 
 
-@pytest.mark.parametrize('result',[{'state':'failed'}, {'state':'resolved','uid':'bad'}, None, RuntimeError('private failure')])
-def test_operational_lookup_failures_do_not_skip_customers_or_leak_errors(app,result):
+@pytest.mark.parametrize('result',[{'state':'lookup_failed','lookup_reason':'network'}, {'state':'resolved','uid':'bad'}, None, RuntimeError('private failure')])
+def test_operational_lookup_failures_wait_automatically_without_skipping_or_leaking_errors(app,result):
     client,connector=setup(app);add_contact(client)
     connector.message_action.side_effect=result if isinstance(result,Exception) else None
     connector.message_action.return_value=result
     tick(app)
-    assert campaign(app)['schedule_error'].startswith('Không thể tra cứu Zalo')
-    assert 'private failure' not in campaign(app)['schedule_error']
+    assert not campaign(app)['schedule_error']
+    assert campaign(app)['schedule_wait_until']
+    assert 'private failure' not in campaign(app)['schedule_wait_message']
     assert query(app,'SELECT count(*) FROM message_sends')==[(0,)]
     assert query(app,'SELECT count(*) FROM campaign_attempts')==[(0,)]
     assert connector.message_action.call_count==1

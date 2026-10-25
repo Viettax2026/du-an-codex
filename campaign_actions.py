@@ -172,9 +172,9 @@ class CampaignManager:
         self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}. Nguồn: {origin}.')
         return row.lastrowid
 
-    def store_lookup_skip(self,campaign,person,account,scheduled=False):
+    def store_lookup_skip(self,campaign,person,account,scheduled=False,reason=''):
         """Record a confirmed empty lookup without fabricating a Zalo identity."""
-        reason=f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
+        reason=reason or f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
         row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,
             recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,message_skip_reason)
             VALUES (?,?,?,'','','','not_requested','not_requested','not_requested',?,?,?)''',

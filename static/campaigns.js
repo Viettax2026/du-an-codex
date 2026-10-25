@@ -75,3 +75,71 @@ document.querySelectorAll('[data-campaign-url]').forEach(row => row.addEventList
   if (event.target.closest('button,a,input,select,details')) return;
   location.assign(row.dataset.campaignUrl);
 }));
+
+// Detail links work without JavaScript; enhance them to keep the selected row
+// and scroll position while replacing only the read-only detail panel.
+let detailEpoch=0,detailController,detailLoading=false;
+function revealDetailTab() {
+  const nav=document.querySelector('.campaign-detail-tabs'),active=nav?.querySelector('[aria-selected=true]');
+  if(!nav || !active)return;
+  const bounds=nav.getBoundingClientRect(),position=active.getBoundingClientRect();
+  if(position.left<bounds.left)nav.scrollLeft-=bounds.left-position.left+12;
+  else if(position.right>bounds.right)nav.scrollLeft+=position.right-bounds.right+12;
+}
+revealDetailTab();
+async function loadDetail(href,automatic=false) {
+  const root=document.querySelector('#campaign-detail-content');
+  if(!root || root.hidden)return;
+  const epoch=++detailEpoch;
+  const focusKey=root.contains(document.activeElement)?document.activeElement.id:'';
+  const previousPanel=root.querySelector('.campaign-detail-panel'),position={top:previousPanel?.scrollTop || 0,left:previousPanel?.scrollLeft || 0,nav:root.querySelector('.campaign-detail-tabs')?.scrollLeft || 0};
+  detailLoading=true;
+  detailController?.abort();detailController=new AbortController();
+  try {
+    const response=await fetch(href,{credentials:'same-origin',signal:detailController.signal});
+    if(!response.ok)throw new Error('Không tải được chi tiết.');
+    const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+    const panel=doc.querySelector('#campaign-detail-content');
+    if(!panel || !panel.querySelector('[data-detail-current]'))throw new Error('Phiên làm việc đã thay đổi. Tải lại trang.');
+    if(epoch!==detailEpoch)return;
+    root.replaceChildren(...panel.childNodes);
+    const nextPanel=root.querySelector('.campaign-detail-panel'),nextNav=root.querySelector('.campaign-detail-tabs');
+    if(nextNav)nextNav.scrollLeft=position.nav;
+    if(automatic && nextPanel){nextPanel.scrollTop=position.top;nextPanel.scrollLeft=position.left;}
+    revealDetailTab();
+    if(!automatic) {
+      history.replaceState(null,'',href);
+      root.querySelector('[role=tab][aria-selected=true]')?.focus({preventScroll:true});
+    } else if(focusKey)root.querySelector('#'+CSS.escape(focusKey))?.focus({preventScroll:true});
+    const active=root.querySelector('[data-detail-current]')?.dataset.detailCurrent;
+    if(filters.elements.detail_tab)filters.elements.detail_tab.value=active || 'info';
+    document.querySelectorAll('[data-campaign-url]').forEach(row=>{
+      const url=new URL(row.dataset.campaignUrl,location.origin);url.searchParams.set('detail_tab',active || 'info');url.searchParams.set('detail_page','1');
+      row.dataset.campaignUrl=url.href;const name=row.querySelector('.campaign-name');if(name)name.href=url.href;
+    });
+  } catch(error) {
+    if(error.name==='AbortError')return;
+    const status=root.querySelector('[data-detail-status]');
+    if(status)status.textContent=error.message;
+  } finally {
+    if(epoch===detailEpoch)detailLoading=false;
+  }
+}
+document.addEventListener('click',event=>{
+  const link=event.target.closest('[data-detail-load]');
+  if(!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button!==0)return;
+  event.preventDefault();loadDetail(link.href);
+});
+document.addEventListener('keydown',event=>{
+  const current=event.target.closest('.campaign-detail-tabs [role=tab]');
+  if(!current || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  event.preventDefault();
+  const links=[...current.closest('[role=tablist]').querySelectorAll('[role=tab]')],index=links.indexOf(current);
+  const next=event.key==='Home'?0:event.key==='End'?links.length-1:(index+(event.key==='ArrowRight'?1:-1)+links.length)%links.length;
+  links[next].focus();
+});
+setInterval(()=>{
+  if(document.hidden || detailLoading || document.querySelector('dialog[open]') || window.getSelection()?.toString())return;
+  const active=document.querySelector('[data-detail-current]')?.dataset.detailCurrent;
+  if(['history','results'].includes(active))loadDetail(location.href,true);
+},15000);

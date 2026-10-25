@@ -1,3 +1,5 @@
+import { lookupFailure } from './lookup-errors.mjs';
+
 export async function executeMessageAction(api, input, onDispatch = () => {}) {
   if (input.action === 'resolve') {
     const phone = String(input.phone || '').replace(/[\s()+-]/g, '');
@@ -8,7 +10,8 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
     } catch (error) {
       // SDK's profile lookup documents 216 as no matching user. Transport,
       // session and rate-limit failures must not discard a campaign's data.
-      if (String(error?.code) === '216') return {state:'not_found'};
+      const outcome=lookupFailure(error);
+      if (outcome.state==='not_found') return outcome;
       throw error;
     }
     if (user === null || user === undefined) return {state:'not_found'};
