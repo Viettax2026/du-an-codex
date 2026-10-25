@@ -19,7 +19,7 @@ from campaign_duplicates import recent_message, DuplicateMessageBlocked
 
 TZ = ZoneInfo('Asia/Ho_Chi_Minh')
 CONFIG_COLUMNS = ('schedule_kind','schedule_date','schedule_time','schedule_weekdays',
-                  'schedule_monthday','schedule_continue','schedule_stop_enabled','schedule_stop')
+                  'schedule_monthday','schedule_continue','schedule_stop_enabled','schedule_stop','schedule_skip_sunday')
 
 
 def local_now():
@@ -30,7 +30,7 @@ def initialize_schedule(db):
     fields = {'schedule_enabled':'INTEGER NOT NULL DEFAULT 0', 'schedule_kind':"TEXT NOT NULL DEFAULT 'daily'",
               'schedule_date':"TEXT NOT NULL DEFAULT ''", 'schedule_time':"TEXT NOT NULL DEFAULT '08:00'",
               'schedule_weekdays':"TEXT NOT NULL DEFAULT ''", 'schedule_monthday':'INTEGER NOT NULL DEFAULT 1',
-              'schedule_continue':'INTEGER NOT NULL DEFAULT 1', 'schedule_stop_enabled':'INTEGER NOT NULL DEFAULT 0',
+              'schedule_continue':'INTEGER NOT NULL DEFAULT 1', 'schedule_skip_sunday':'INTEGER NOT NULL DEFAULT 0', 'schedule_stop_enabled':'INTEGER NOT NULL DEFAULT 0',
               'schedule_stop':"TEXT NOT NULL DEFAULT '17:00'", 'schedule_first_day':'TEXT',
               'schedule_carry':'INTEGER NOT NULL DEFAULT 0', 'schedule_error':"TEXT NOT NULL DEFAULT ''",
               'schedule_status':"TEXT NOT NULL DEFAULT 'Chưa bật lịch'", 'schedule_revision':'INTEGER NOT NULL DEFAULT 0'}
@@ -73,9 +73,12 @@ def schedule_values(form, account_id):
         raise ValueError('Giờ chạy cần trước 23:59 khi không bật giờ dừng.')
     if stop_enabled and stop_time <= start_time:
         raise ValueError('Giờ dừng phải sau giờ chạy trong cùng ngày (UTC+7).')
-    return dict(schedule_enabled=enabled,schedule_kind=kind,schedule_date=anchor.isoformat(),schedule_time=start,
+    values=dict(schedule_enabled=enabled,schedule_kind=kind,schedule_date=anchor.isoformat(),schedule_time=start,
                 schedule_weekdays=','.join(map(str,weekdays)),schedule_monthday=monthday,
                 schedule_continue=int(form.get('schedule_continue')=='yes'),schedule_stop_enabled=stop_enabled,schedule_stop=stop)
+    if form.get('schedule_skip_sunday_present')=='yes' or 'schedule_skip_sunday' in form:
+        values['schedule_skip_sunday']=int(form.get('schedule_skip_sunday')=='yes')
+    return values
 
 
 def save_schedule(db, campaign_id, form, account_id):
@@ -83,7 +86,11 @@ def save_schedule(db, campaign_id, form, account_id):
         return
     values=schedule_values(form,account_id)
     old=db().execute('SELECT * FROM campaigns WHERE id=?',(campaign_id,)).fetchone()
-    unchanged=bool(old['schedule_enabled'] and values['schedule_enabled'] and all(old[name]==value for name,value in values.items()))
+    skip_sunday=values.get('schedule_skip_sunday',old['schedule_skip_sunday'])
+    if values['schedule_enabled'] and skip_sunday and values['schedule_kind']=='weekly' and values['schedule_weekdays']=='6':
+        raise ValueError('Đã bật Không chạy ngày Chủ nhật. Chọn ít nhất một ngày từ Thứ 2 đến Thứ 7 cho lịch tuần.')
+    # Adding/removing a rest day must not discard already unfinished data.
+    unchanged=bool(old['schedule_enabled'] and values['schedule_enabled'] and all(old[name]==value for name,value in values.items() if name!='schedule_skip_sunday'))
     db().execute('UPDATE campaigns SET '+','.join(name+'=?' for name in values)+''',
         schedule_first_day=?,schedule_carry=?,schedule_error='',schedule_revision=schedule_revision+1,schedule_status=? WHERE id=?''',
         (*values.values(),old['schedule_first_day'] if unchanged else None,old['schedule_carry'] if unchanged else 0,
@@ -98,7 +105,8 @@ def save_schedule(db, campaign_id, form, account_id):
         elif values['schedule_kind']=='monthly':
             recurrence=f" · Ngày {values['schedule_monthday']} mỗi tháng"
         account=db().execute('SELECT name FROM zalo_accounts WHERE id=? AND user_id=?',(account_id,old['user_id'])).fetchone()
-        detail=f"Lưu lịch: {kind}{recurrence} · Từ {values['schedule_date']} · {values['schedule_time']}–{stop} (24 giờ, UTC+7) · Tài khoản: {account['name'] if account else account_id}."
+        skipped_day=' · Không chạy ngày Chủ nhật' if skip_sunday else ''
+        detail=f"Lưu lịch: {kind}{recurrence} · Từ {values['schedule_date']} · {values['schedule_time']}–{stop} (24 giờ, UTC+7){skipped_day} · Tài khoản: {account['name'] if account else account_id}."
     elif old['schedule_enabled']:
         detail='Tắt lịch chạy tự động. Các thao tác gửi thủ công vẫn cần xác nhận.'
     else:
@@ -113,6 +121,8 @@ def active_window(campaign, now):
     try:
         anchor=date.fromisoformat(campaign['schedule_date'])
         today=now.date()
+        if campaign['schedule_skip_sunday'] and today.weekday()==6:
+            return False
         if today<anchor:
             return False
         regular=campaign['schedule_kind']=='daily'
@@ -138,7 +148,10 @@ def manual_schedule_block(campaign, now=None):
         return ''
     if campaign['schedule_error']:
         return 'Lịch đang tạm dừng: '+campaign['schedule_error']+' Kiểm tra và lưu lại lịch trước khi thực hiện hành động.'
-    if active_window(campaign,now or local_now()):
+    now=(now or local_now()).astimezone(TZ)
+    if campaign['schedule_skip_sunday'] and now.weekday()==6:
+        return 'Lịch đã bật Không chạy ngày Chủ nhật (giờ Việt Nam, UTC+7). Gửi tin, kết bạn và đổi tên sẽ chờ ngày chạy hợp lệ tiếp theo.'
+    if active_window(campaign,now):
         return ''
     stop=campaign['schedule_stop'] if campaign['schedule_stop_enabled'] else '23:59'
     return (f"Ngoài lịch chạy đã lưu: {campaign['schedule_time']}–{stop}, từ {campaign['schedule_date']} "

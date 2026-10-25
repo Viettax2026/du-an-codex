@@ -15,6 +15,7 @@ document.querySelectorAll('[data-schedule-fields]').forEach(root=>{
     let error='';
     const validTime=value=>/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value);
     if(on && kind==='weekly' && !root.querySelector('[name=schedule_weekdays]:checked')) error='Chọn ít nhất một ngày trong tuần.';
+    if(on && kind==='weekly' && fields.schedule_skip_sunday.checked && ![...root.querySelectorAll('[name=schedule_weekdays]:checked')].some(input=>input.value!=='6')) error='Đã bật Không chạy ngày Chủ nhật. Chọn ít nhất một ngày từ Thứ 2 đến Thứ 7 cho lịch tuần.';
     if(on && fields.schedule_time.value && !validTime(fields.schedule_time.value)) error='Giờ chạy cần đúng HH:MM trong khoảng 00:00–23:59.';
     if(on && fields.schedule_stop_enabled.checked && fields.schedule_stop.value && !validTime(fields.schedule_stop.value)) error='Giờ dừng cần đúng HH:MM trong khoảng 00:00–23:59.';
     if(on && !fields.schedule_stop_enabled.checked && fields.schedule_time.value==='23:59') error='Giờ chạy cần trước 23:59 khi không bật giờ dừng.';
@@ -23,7 +24,7 @@ document.querySelectorAll('[data-schedule-fields]').forEach(root=>{
     fields.schedule_stop.setCustomValidity(error.startsWith('Giờ dừng')?error:'');
     status.textContent=error;
     root.dataset.scheduleValid=String(!error);
-    if(footer) footer.textContent=on?`Sau khi lưu: bắt đầu ${fields.schedule_time.value || 'HH:MM'}, dừng ${fields.schedule_stop_enabled.checked?fields.schedule_stop.value:'23:59'} (24 giờ, giờ Việt Nam · UTC+7).`:'Lưu chiến dịch chưa gửi tin đến Zalo.';
+    if(footer) footer.textContent=on?`Sau khi lưu: bắt đầu ${fields.schedule_time.value || 'HH:MM'}, dừng ${fields.schedule_stop_enabled.checked?fields.schedule_stop.value:'23:59'} (24 giờ, giờ Việt Nam · UTC+7)${fields.schedule_skip_sunday.checked?' · Không chạy ngày Chủ nhật':''}.`:'Lưu chiến dịch chưa gửi tin đến Zalo.';
     root.classList.toggle('is-off',!on);
     form.dispatchEvent(new Event('input',{bubbles:true}));
   }

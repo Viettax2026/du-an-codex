@@ -277,6 +277,8 @@ Mục **6. Lịch chạy** có trong Thêm, Sửa, Nhân bản chiến dịch. C
 
 Giờ chạy và giờ dừng nhập dạng 24 giờ `HH:MM`: `00:00` là đầu ngày, `12:00` là 12 giờ trưa, `17:00` là 5 giờ chiều. Không dùng bộ chọn SA/CH phụ thuộc trình duyệt. Khi bật lịch, cả các nút gửi tin, kết bạn và đổi tên thủ công cũng bị chặn ngoài lịch; điều kiện được kiểm tra lại trong giao dịch chốt hành động trước khi gọi Zalo. Tìm người nhận/xem trước có thể thực hiện trước giờ chạy và chưa gửi tin. Nhật ký mới ghi ngày/giờ lịch đã lưu, tài khoản gửi và nguồn thao tác (theo lịch tự động hoặc xác nhận thủ công). Cấu hình cũ `00:00` được giữ nguyên; muốn chạy buổi trưa cần đổi thành `12:00` và lưu lại.
 
+Tích **Không chạy ngày Chủ nhật** để bỏ qua Chủ nhật theo giờ Việt Nam, áp dụng cho lịch ngày/tuần/tháng, data chạy tiếp và các hành động thủ công khi lịch đang bật. Chủ nhật không tạo lượt mới hoặc xử lý bản chờ; giữ data cho ngày chạy hợp lệ tiếp theo. Lịch hằng ngày tiếp tục vào Thứ 2; lịch tuần/tháng tiếp tục theo ngày đã chọn hoặc chế độ chạy tiếp đang bật. Lịch tuần chỉ chọn Chủ nhật sẽ được yêu cầu chọn thêm ngày Thứ 2–Thứ 7. Tùy chọn được lưu, giữ khi nhân bản và mặc định tắt cho cấu hình cũ; biểu mẫu cũ không có trường mới không tự xóa lựa chọn đã lưu.
+
 - Hằng ngày, các thứ trong tuần hoặc ngày 1–31 trong tháng, từ ngày bắt đầu. Tháng thiếu ngày được chọn dùng ngày cuối tháng.
 - Giờ dừng phải sau giờ chạy trong cùng ngày. Không bật giờ dừng thì dừng nhận lượt mới lúc 23:59. Lượt đã bắt đầu có thể hoàn tất sau giờ dừng.
 - **Tiếp tục data hôm sau** cho phép xử lý phần còn lại vào ngày kế tiếp, kể cả khi ngày đó không thuộc lịch tuần/tháng. Bỏ chọn thì chờ đúng ngày lịch kế tiếp. Hết data không gửi lại; data mới của nguồn nhóm chỉ được nhận trong một lần lịch đến hạn.
