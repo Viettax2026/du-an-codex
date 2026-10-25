@@ -617,3 +617,44 @@ def test_linking_existing_contacts_never_crosses_account_ownership(app):
         assert db.execute('SELECT count(*) FROM contacts').fetchone() == (2,)
         assert db.execute("SELECT user_id FROM contact_group_memberships WHERE group_name='Target'").fetchall() == [(2,)]
         assert db.execute("SELECT consent FROM contacts WHERE user_id=1").fetchone() == (1,)
+
+
+def test_group_inspection_defaults_headerless_file_to_a_and_keeps_first_phone(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Auto A'})
+    raw = '0319755044,2026-10-20,Công ty A\n0319755037,2026-10-20,Công ty B\n'.encode()
+    response = post(client, '/data-groups/import/columns', {'group': 'Auto A', 'file': (io.BytesIO(raw), 'customers.csv')})
+    data = response.json
+    assert data['mapping']['phone'] == '0' and data['skip_header'] is False
+    assert all(data['mapping'][key] == '' for key in ('name','info1','info2','info3','info4','info5'))
+    assert data['preview_rows'][0][0] == '0319755044'
+    assert data['sheets'] == []
+    fields = {'group': 'Auto A', 'import_mode': 'mapped', **{'column_'+key:value for key,value in data['mapping'].items()}}
+    result = post(client, '/data-groups/import/preview', {**fields, 'file': (io.BytesIO(raw), 'customers.csv')}).json
+    assert [row['phone'] for row in result['rows']] == ['0319755044', '0319755037']
+    with database(app) as db:
+        assert db.execute('SELECT count(*) FROM contacts').fetchone()[0] == 0
+    post(client, '/data-groups/import', {**fields, 'file': (io.BytesIO(raw), 'customers.csv')})
+    with database(app) as db:
+        assert db.execute('SELECT phone FROM contacts ORDER BY id').fetchall() == [('0319755044',), ('0319755037',)]
+
+
+def test_group_inspection_sheet_choice_is_used_for_preview_and_final_save(app):
+    client = app.test_client(); register(client)
+    post(client, '/data-groups', {'name': 'Sheets'})
+    book = Workbook(); first = book.active; first.title = 'CSKH'; first.append(['0319755044'])
+    sheet = book.create_sheet('Other'); sheet.append(['Họ tên', 'Số điện thoại']); sheet.append(['Lan', '0912345678'])
+    stream = io.BytesIO(); book.save(stream); raw = stream.getvalue()
+    inspect = post(client, '/data-groups/import/columns', {'group':'Sheets', 'file':(io.BytesIO(raw),'customers.xlsx')}).json
+    assert inspect['sheets'] == ['CSKH', 'Other'] and inspect['sheet'] == 'CSKH'
+    assert inspect['mapping']['phone'] == '0' and not inspect['skip_header']
+    inspect = post(client, '/data-groups/import/columns', {'group':'Sheets', 'sheet':'Other', 'file':(io.BytesIO(raw),'customers.xlsx')}).json
+    assert inspect['sheet'] == 'Other' and inspect['mapping']['phone'] == '1' and inspect['skip_header']
+    fields = {'group':'Sheets', 'sheet':'Other', 'import_mode':'mapped', 'skip_header':'yes',
+              **{'column_'+key:value for key,value in inspect['mapping'].items()}}
+    preview = post(client, '/data-groups/import/preview', {**fields, 'file':(io.BytesIO(raw),'customers.xlsx')}).json
+    assert preview['total'] == 1 and preview['rows'][0]['name'] == 'Lan'
+    assert post(client, '/data-groups/import/columns', {'group':'Sheets', 'sheet':'missing', 'file':(io.BytesIO(raw),'customers.xlsx')}).status_code == 400
+    post(client, '/data-groups/import', {**fields, 'file':(io.BytesIO(raw),'customers.xlsx')})
+    with database(app) as db:
+        assert db.execute('SELECT name,phone FROM contacts').fetchall() == [('Lan', '0912345678')]

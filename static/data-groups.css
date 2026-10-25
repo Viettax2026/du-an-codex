@@ -112,3 +112,7 @@
   .data-screen .data-page-heading { padding: 14px; }
   .data-screen .data-page-heading p { font-size: 12px; }
 }
+
+.data-screen .group-sheet-options{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin:20px 0 12px}
+.data-screen .group-sheet-options>label{display:flex;align-items:center;gap:12px;margin:0}
+.data-screen .group-sheet-options select{min-width:180px;width:auto}

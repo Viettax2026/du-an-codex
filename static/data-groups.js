@@ -108,6 +108,7 @@ if (fileImportForm) {
   nextPage.addEventListener('click', () => { normalizedPage += 1; renderNormalizedPage(); });
   function clearPreview(message = 'Dữ liệu đã thay đổi. Bấm Format chuẩn dữ liệu để xem trước.') {
     revision += 1; ready = false; save.disabled = true;
+    format.disabled = false;
     invalidCount = 0; invalidPanel.hidden = true; invalidBody.replaceChildren(); skipInvalid.checked = false;
     normalizedRows = []; normalizedPage = 1; range.hidden = true; pager.hidden = true;
     preview.replaceChildren();
@@ -116,6 +117,7 @@ if (fileImportForm) {
     status.textContent = message;
   }
   function activateTab(tab) {
+    inspectionRevision += 1;
     fileImportForm.dataset.activeTab = tab.dataset.importTab;
     const isText = tab.dataset.importTab === 'txt';
     tabs.forEach(button => { const active = button === tab; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
@@ -125,7 +127,8 @@ if (fileImportForm) {
     filePanel.setAttribute('aria-labelledby', tab.id);
     phones.disabled = !isText; spreadsheet.disabled = isText;
     const mapped = tab.dataset.importTab === 'file';
-    fileImportForm.querySelector('[data-customer-mapping]').hidden = !mapped;
+    fileImportForm.querySelector('[data-customer-mapping]').hidden = !mapped || !sheetColumns.length;
+    sheetSelect.disabled = !mapped || !sheetSelect.options.length;
     fileImportForm.querySelector('[data-template-help]').hidden = mapped;
     fileImportForm.querySelector('[data-template-downloads]').hidden = mapped;
     format.hidden = tab.dataset.importTab === 'template';
@@ -151,6 +154,9 @@ if (fileImportForm) {
   phones.addEventListener('input', () => clearPreview());
   let sheetColumns = [];
   let sheetPreviewRows = [];
+  let inspectionRevision = 0;
+  const sheetChoice = fileImportForm.querySelector('[data-sheet-choice]');
+  const sheetSelect = fileImportForm.elements.sheet;
   const rawPreview = fileImportForm.querySelector('[data-raw-sheet-preview]');
   function columnLetter(index) {
     let value = index + 1; let label = '';
@@ -175,29 +181,21 @@ if (fileImportForm) {
     });
     if (!rows.length) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = sheetColumns.length; cell.textContent = 'Không có dòng data sau khi bỏ tiêu đề.'; row.append(cell); body.append(row); }
   }
-  function fillColumns(autoSelect = false) {
-    const aliases = { name: ['name','ten','ho ten','fullname','full name'], phone: ['phone','sdt','so dien thoai','phone number','mobile'] };
+  function fillColumns(mapping = {}) {
     fileImportForm.querySelectorAll('[data-column-field]').forEach(select => {
-      const previous = select.value;
       select.replaceChildren(new Option('— Bỏ qua —', ''));
       sheetColumns.forEach(column => {
-        const label = `Cột ${columnLetter(column.index)}${column.sample ? ': ' + column.sample : ''}`;
-        select.add(new Option(label, String(column.index)));
+        const option = new Option(columnLetter(column.index), String(column.index));
+        option.title = column.sample; select.add(option);
       });
-      if (!autoSelect) select.value = previous;
-      else if (fileImportForm.elements.skip_header.checked) {
-        const field = select.dataset.columnField;
-        const found = sheetColumns.find(column => {
-          const normalized = column.sample.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim().replace(/đ/g, 'd');
-          return (aliases[field] || [field, field.replace('info', 'info ')]).includes(normalized);
-        });
-        if (found) select.value = String(found.index);
-      }
+      select.value = mapping[select.dataset.columnField] || '';
     });
   }
   async function inspectColumns() {
+    const inspection = ++inspectionRevision;
     clearPreview('Đang đọc cột từ tệp…');
-    sheetColumns = []; sheetPreviewRows = []; renderRawPreview(); fillColumns(true);
+    sheetColumns = []; sheetPreviewRows = []; renderRawPreview(); fillColumns();
+    fileImportForm.querySelector('[data-customer-mapping]').hidden = true;
     const file = spreadsheet.files[0];
     if (!file) return;
     fileImportForm.querySelector('[data-upload-filename]').textContent = file.name;
@@ -206,14 +204,22 @@ if (fileImportForm) {
     try {
       const response = await fetch(fileImportForm.dataset.columnsUrl, {method: 'POST', body: new FormData(fileImportForm)});
       const data = await response.json();
-      if (spreadsheet.files[0] !== file || fileImportForm.elements.import_mode.disabled) return;
+      if (inspection !== inspectionRevision || spreadsheet.files[0] !== file || fileImportForm.elements.import_mode.disabled) return;
       if (!response.ok) throw new Error(data.error || 'Không đọc được cột trong tệp.');
-      sheetColumns = data.columns; sheetPreviewRows = data.preview_rows; fillColumns(true); renderRawPreview();
-      status.textContent = 'Đã đọc tệp. Kiểm tra dòng tiêu đề và chọn cột, rồi bấm Format chuẩn dữ liệu.';
-    } catch (error) { if (spreadsheet.files[0] === file && !fileImportForm.elements.import_mode.disabled) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
-    finally { format.disabled = false; }
+      sheetColumns = data.columns; sheetPreviewRows = data.preview_rows;
+      sheetSelect.replaceChildren(...data.sheets.map(name => new Option(name, name)));
+      sheetSelect.value = data.sheet; sheetSelect.disabled = !data.sheets.length; sheetChoice.hidden = !data.sheets.length;
+      fileImportForm.elements.skip_header.checked = data.skip_header;
+      fillColumns(data.mapping);
+      fileImportForm.querySelector('[data-customer-mapping]').hidden = false;
+      renderRawPreview();
+      status.textContent = 'Đã đọc tệp và chọn cột Số điện thoại. Kiểm tra dữ liệu nguồn, rồi bấm Format chuẩn dữ liệu.';
+    } catch (error) { if (inspection === inspectionRevision && spreadsheet.files[0] === file && !fileImportForm.elements.import_mode.disabled) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
+    finally { if (inspection === inspectionRevision) format.disabled = false; }
   }
+  sheetSelect.addEventListener('change', inspectColumns);
   spreadsheet.addEventListener('change', () => {
+    inspectionRevision += 1; sheetSelect.replaceChildren(); sheetSelect.disabled = true; sheetChoice.hidden = true;
     clearPreview();
     sheetColumns = []; sheetPreviewRows = []; renderRawPreview();
     fileImportForm.querySelector('[data-upload-filename]').textContent = spreadsheet.files[0]?.name || 'Chưa chọn tệp.';
@@ -258,7 +264,7 @@ if (fileImportForm) {
       status.textContent = `${data.total} số hợp lệ · ${data.added} số cần thêm vào nhóm · ${data.existing} số đã có trong nhóm · ${invalidCount} dòng lỗi.`;
       ready = data.total > 0; updateSaveButton();
     } catch (error) { if (current === revision) status.textContent = error instanceof SyntaxError ? 'Phiên làm việc hết hạn hoặc máy chủ không trả dữ liệu. Tải lại trang.' : error.message; }
-    finally { format.disabled = false; }
+    finally { if (current === revision) format.disabled = false; }
   }
   format.addEventListener('click', formatImport);
   const dropzone = fileImportForm.querySelector('[data-spreadsheet-dropzone]');

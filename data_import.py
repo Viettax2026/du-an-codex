@@ -135,9 +135,9 @@ def read_sheet_rows(upload,sheet_name=None,details=False):
             book.close()
 
 
-def read_mapped_contacts(upload, parse_phones, mapping, skip_header, report=False):
+def read_mapped_contacts(upload, parse_phones, mapping, skip_header, report=False, sheet_name=None):
     from werkzeug.datastructures import FileStorage
-    rows = read_sheet_rows(upload)
+    rows = read_sheet_rows(upload, sheet_name=sheet_name)
     width = max(len(row) for row in rows)
     fields = ('name','phone','info1','info2','info3','info4','info5')
     chosen = {}

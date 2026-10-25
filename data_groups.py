@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from data_sources import initialize_data_sources, create_source_batch, record_contact_source
 
 from flask import Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
-from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts, default_contact_consent
+from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts, default_contact_consent, canonical_header
 
 
 def insert_data_group(db, user_id, name, data_type='all', color='#6860f6'):
@@ -337,7 +337,8 @@ def register_data_groups(app, db, login_required, parse_phones):
                 raise ValueError('Chỉ nhập một nguồn dữ liệu mỗi lần.')
             mapping = {key: request.form.get('column_' + key, '') for key in ('name','phone','info1','info2','info3','info4','info5')}
             mapped, invalid = read_mapped_contacts(request.files.get('file'), parse_phones, mapping,
-                                                   request.form.get('skip_header') == 'yes', report=True)
+                                                   request.form.get('skip_header') == 'yes', report=True,
+                                                   sheet_name=request.form.get('sheet') or None)
             incoming.update(mapped)
             if invalid and not preview and request.form.get('skip_invalid') != 'yes':
                 first = invalid[0]
@@ -373,11 +374,23 @@ def register_data_groups(app, db, login_required, parse_phones):
         group = request.form.get('group', '')
         require_group(group)
         try:
-            rows = read_sheet_rows(request.files.get('file'))
+            source = read_sheet_rows(request.files.get('file'), sheet_name=request.form.get('sheet') or None, details=True)
+            rows = source['rows']
             width = max(len(row) for row in rows)
+            aliases = {'mobile':'phone', 'full name':'name', 'fullname':'name'}
+            headers = [aliases.get(canonical_header(cell), canonical_header(cell)) for cell in rows[0]]
+            fields = ('name','phone','info1','info2','info3','info4','info5')
+            mapping = {key: str(headers.index(key)) if key in headers else '' for key in fields}
+            if not mapping['phone']:
+                # Headerless customer sheets start with phone numbers in A.
+                # Do not assign that column to a second field as well.
+                mapping = {key: value if value != '0' else '' for key, value in mapping.items()}
+                mapping['phone'] = '0'
             return jsonify(columns=[{'index': index, 'sample': rows[0][index][:100] if index < len(rows[0]) else ''}
                                     for index in range(width)], row_count=len(rows),
-                           preview_rows=[[cell[:1000] for cell in row] for row in rows[:6]])
+                           preview_rows=[[cell[:1000] for cell in row] for row in rows[:6]],
+                           mapping=mapping, skip_header='phone' in headers,
+                           sheets=source['sheets'], sheet=source['sheet'])
         except ValueError as error:
             return jsonify(error=str(error)), 400
 
