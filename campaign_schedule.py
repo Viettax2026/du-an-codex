@@ -18,6 +18,7 @@ from campaign_limits import usage, available_actions
 from campaign_duplicates import recent_message, DuplicateMessageBlocked
 
 TZ = ZoneInfo('Asia/Ho_Chi_Minh')
+ACTION_RECOVERY_GRACE_SECONDS=90  # Longer than the connector's 45-second process timeout.
 CONFIG_COLUMNS = ('schedule_kind','schedule_date','schedule_time','schedule_weekdays',
                   'schedule_monthday','schedule_continue','schedule_stop_enabled','schedule_stop','schedule_skip_sunday')
 
@@ -47,10 +48,28 @@ def initialize_schedule(db):
         db().execute('ALTER TABLE message_sends ADD COLUMN schedule_turn_finished INTEGER NOT NULL DEFAULT 0')
     if 'schedule_completed_at' not in present:
         db().execute('ALTER TABLE message_sends ADD COLUMN schedule_completed_at TEXT')
+    if 'schedule_skip_reason' not in present:
+        db().execute("ALTER TABLE message_sends ADD COLUMN schedule_skip_reason TEXT NOT NULL DEFAULT ''")
     if 'schedule_turn_finished' not in present or 'schedule_completed_at' not in present:
         db().execute('''UPDATE message_sends SET schedule_turn_finished=1,schedule_completed_at=created_at
             WHERE scheduled=1 AND state NOT IN ('prepared','sending','unknown')
             AND friend_state NOT IN ('prepared','sending','unknown') AND alias_state NOT IN ('prepared','sending','unknown')''')
+    db().commit()
+
+
+def resume_failed_action_blocks(db,manager):
+    db().execute('BEGIN IMMEDIATE')
+    errors=(
+        'Kết quả hành động chưa xác định. Kiểm tra hội thoại Zalo rồi lưu lại lịch để tiếp tục; không tự gửi lại lần đó.',
+        'Có lần gửi bị gián đoạn. Kiểm tra hội thoại Zalo và lịch sử trước khi tiếp tục.',
+    )
+    rows=db().execute('''SELECT c.id FROM campaigns c WHERE c.schedule_enabled=1 AND c.deleted_at IS NULL
+        AND c.schedule_error IN (?,?) AND EXISTS (SELECT 1 FROM message_sends s WHERE s.campaign_id=c.id
+        AND s.scheduled=1 AND (s.state IN ('unknown','sending') OR s.friend_state IN ('unknown','sending')
+                             OR s.alias_state IN ('unknown','sending')))''',errors).fetchall()
+    for row in rows:
+        db().execute("UPDATE campaigns SET schedule_error='',schedule_revision=schedule_revision+1,schedule_status='Chờ bỏ qua lượt lỗi và tiếp tục theo lịch' WHERE id=?",(row['id'],))
+        manager.event(row['id'],'schedule_resume','Tiếp tục sau cập nhật: ghi nhận lượt lỗi/chưa xác định, bỏ qua và nghỉ theo cài đặt; không tự thực hiện lại lượt đó.')
     db().commit()
 
 
@@ -241,6 +260,8 @@ class CampaignScheduler:
         The caller commits this together with the final action's result.
         """
         row=self.db().execute('SELECT * FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign['id'])).fetchone()
+        if row['schedule_skip_reason']:
+            return False
         states={'send':row['state'],'friend':row['friend_state'],'alias':row['alias_state']}
         if row['schedule_turn_finished'] or any(state in ('sending','unknown') for state in states.values()):
             return False
@@ -265,6 +286,51 @@ class CampaignScheduler:
 
     def status_text(self,campaign_id,text):
         self.db().execute('UPDATE campaigns SET schedule_status=? WHERE id=?',(text,campaign_id))
+
+    def skip_problem(self,campaign,send_id,now):
+        """Preserve failed/unknown results and consumed attempts; abandon this recipient."""
+        row=self.db().execute('SELECT * FROM message_sends WHERE id=? AND campaign_id=? AND scheduled=1',
+            (send_id,campaign['id'])).fetchone()
+        if row is None or row['schedule_skip_reason']:
+            return False
+        phone=row['recipient_phone'] or self.db().execute('SELECT phone FROM contacts WHERE id=?',(row['contact_id'],)).fetchone()[0]
+        unknown='unknown' in (row['state'],row['friend_state'],row['alias_state'])
+        reason=f'Bỏ qua {phone}: '+('có hành động chưa xác định kết quả' if unknown else 'có hành động thất bại')+'. Không tự thực hiện lại; tiếp tục số điện thoại kế tiếp.'
+        self.db().execute('''UPDATE message_sends SET schedule_skip_reason=?,schedule_turn_finished=1,
+            schedule_completed_at=CURRENT_TIMESTAMP,
+            state=CASE WHEN state='prepared' THEN 'not_requested' ELSE state END,
+            friend_state=CASE WHEN friend_state='prepared' THEN 'not_requested' ELSE friend_state END,
+            alias_state=CASE WHEN alias_state='prepared' THEN 'not_requested' ELSE alias_state END WHERE id=?''',(reason,send_id))
+        self.manager.event(campaign['id'],'schedule_action_skip',f'{self.prefix(campaign,row["account_id"])} – {reason}')
+        self.rest(campaign,now)
+        return True
+
+    def recover_problem(self,campaign,guard,now):
+        """Resume past uncertain outcomes without treating a live claim as abandoned."""
+        self.db().execute('BEGIN IMMEDIATE')
+        try:
+            campaign=self.manager.owned(campaign['id']);guard(campaign)
+            row=self.db().execute('''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1 AND schedule_skip_reason=''
+                AND (state IN ('failed','unknown','sending') OR friend_state IN ('failed','unknown','sending')
+                     OR alias_state IN ('failed','unknown','sending')) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
+            if row is None:
+                self.db().rollback();return False
+            columns={'send':'state','friend':'friend_state','alias':'alias_state'}
+            sending=[action for action,column in columns.items() if row[column]=='sending']
+            cutoff=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(seconds=ACTION_RECOVERY_GRACE_SECONDS)
+            for action in sending:
+                attempt=self.db().execute('SELECT created_at FROM campaign_attempts WHERE send_id=? AND action=?',(row['id'],action)).fetchone()
+                started=datetime.fromisoformat(attempt['created_at'] if attempt else row['created_at'])
+                if started>cutoff:
+                    self.status_text(campaign['id'],'Đang chờ kết quả lượt đã bắt đầu; chưa thực hiện lại.')
+                    self.db().commit();return True
+            for action in sending:
+                self.db().execute(f"UPDATE message_sends SET {columns[action]}='unknown' WHERE id=?",(row['id'],))
+                self.manager.result(campaign['id'],action,row['id'],'unknown')
+            self.skip_problem(campaign,row['id'],now)
+            self.db().commit();return True
+        except BaseException:
+            self.db().rollback();raise
 
     def lookup_failure(self,campaign,person,account,result,guard,now):
         self.db().execute('BEGIN IMMEDIATE')
@@ -312,7 +378,7 @@ class CampaignScheduler:
         if not selected:
             return None
         condition=' OR '.join(columns[a]+"='prepared'" for a in columns if a in selected)
-        return self.db().execute(f'''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1
+        return self.db().execute(f'''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1 AND schedule_skip_reason=''
             AND ({condition}) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
 
     def dispatch(self,campaign,record,action,guard,now):
@@ -336,6 +402,7 @@ class CampaignScheduler:
             result=self.connector.message_action(g.user['id'],record['account_id'],action,**data)
         except Exception:
             result={'state':'unknown'}
+        result=result if isinstance(result,dict) else {'state':'unknown'}
         success={'send':'sent','friend':'friend_requested','alias':'renamed'}[action]
         state=result.get('state') if result.get('state') in (success,'failed','unknown') else 'unknown'
         if action=='send':
@@ -343,11 +410,11 @@ class CampaignScheduler:
         else:
             self.db().execute(f'UPDATE message_sends SET {column}=? WHERE id=?',(state,record['id']))
         self.manager.result(campaign['id'],action,record['id'],state)
-        if state!='unknown':
+        if state in ('failed','unknown'):
+            self.skip_problem(campaign,record['id'],now)
+        else:
             self.finish_turn(campaign,record['id'],now)
         self.db().commit()
-        if state=='unknown':
-            raise ValueError('Kết quả hành động chưa xác định. Kiểm tra hội thoại Zalo rồi lưu lại lịch để tiếp tục; không tự gửi lại lần đó.')
 
     def skip_known_duplicate(self,campaign,person,account,guard,now):
         self.db().execute('BEGIN IMMEDIATE')
@@ -390,12 +457,11 @@ class CampaignScheduler:
             self.db().execute('UPDATE campaigns SET schedule_started_revision=? WHERE id=?',(revision,campaign_id))
             self.manager.event(campaign_id,'schedule_start',f'{self.prefix(campaign)} – Bắt đầu chiến dịch theo lịch đã lưu.')
             self.db().commit()
-        unfinished=self.db().execute("SELECT 1 FROM message_sends WHERE campaign_id=? AND scheduled=1 AND (state='sending' OR friend_state='sending' OR alias_state='sending') LIMIT 1",(campaign_id,)).fetchone()
-        if unfinished:
-            raise ValueError('Có lần gửi bị gián đoạn. Kiểm tra hội thoại Zalo và lịch sử trước khi tiếp tục.')
+        if self.recover_problem(campaign,guard,now):
+            return
         # Recover a terminal recipient whose read-only skip was committed just
         # before a restart. Never jump straight to the next phone without rest.
-        finished=self.db().execute('''SELECT id FROM message_sends WHERE campaign_id=? AND scheduled=1 AND schedule_turn_finished=0
+        finished=self.db().execute('''SELECT id FROM message_sends WHERE campaign_id=? AND scheduled=1 AND schedule_turn_finished=0 AND schedule_skip_reason=''
             AND state NOT IN ('prepared','sending','unknown') AND friend_state NOT IN ('prepared','sending','unknown')
             AND alias_state NOT IN ('prepared','sending','unknown') ORDER BY id LIMIT 1''',(campaign_id,)).fetchone()
         if finished:
@@ -423,7 +489,7 @@ class CampaignScheduler:
         existing={r['contact_id'] for r in self.db().execute('SELECT contact_id FROM message_sends WHERE campaign_id=?',(campaign_id,))}
         person=next((person for person in self.audience(campaign) if person['id'] not in existing),None)
         if person is None and self.pending(campaign) is None:
-            pending_manual=self.db().execute('''SELECT 1 FROM message_sends WHERE campaign_id=?
+            pending_manual=self.db().execute('''SELECT 1 FROM message_sends WHERE campaign_id=? AND schedule_skip_reason=''
                 AND (state IN ('prepared','sending','unknown') OR friend_state IN ('prepared','sending','unknown')
                      OR alias_state IN ('prepared','sending','unknown')) LIMIT 1''',(campaign_id,)).fetchone()
             if pending_manual:
@@ -520,6 +586,7 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
     with app.app_context():
         initialize_schedule(db)
         resume_legacy_lookup_blocks(db,manager)
+        resume_failed_action_blocks(db,manager)
     scheduler=CampaignScheduler(app,db,manager,connector,audience)
     app.extensions['campaign_scheduler']=scheduler
     app.jinja_env.globals['schedule_today']=lambda: local_now().date().isoformat()

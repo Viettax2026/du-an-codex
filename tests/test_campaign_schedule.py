@@ -163,15 +163,17 @@ def test_worker_limits_wait_without_consuming_attempts_and_unknown_never_retries
     post(client,'/campaigns/1/limits',{'message_limit':'0','friend_limit':'0','alias_limit':'0','interval_seconds':'0'})
     connector.message_action.side_effect=lambda user,account,action,**kwargs: {'state':'resolved','uid':'123456','name':'Bình'} if action=='resolve' else {'state':'unknown'}
     tick(app);tick(app);assert query(app,'SELECT state FROM message_sends ORDER BY id')==[('sent',),('unknown',)]
-    assert campaign(app)['schedule_error']
+    assert not campaign(app)['schedule_error']
+    assert query(app,'SELECT schedule_skip_reason FROM message_sends WHERE contact_id=2')[0][0]
     count=connector.message_action.call_count
     tick(app);tick(app);assert connector.message_action.call_count==count
 
 
-def test_interrupted_send_and_disconnected_account_block_without_retries(app):
+def test_live_claim_waits_without_retry_and_disconnected_account_still_requires_login(app):
     client,connector=setup(app);tick(app)
     with sqlite3.connect(app.config['DATABASE']) as db:db.execute("UPDATE message_sends SET state='sending'")
-    tick(app);assert 'gián đoạn' in campaign(app)['schedule_error']
+    tick(app);assert not campaign(app)['schedule_error']
+    assert 'Đang chờ kết quả' in campaign(app)['schedule_status']
     assert len(connector.message_action.call_args_list)==1
     configure(client);connector.status.return_value={'state':'disconnected'}
     tick(app);assert 'đăng nhập' in campaign(app)['schedule_error']

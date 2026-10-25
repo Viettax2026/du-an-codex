@@ -126,7 +126,7 @@ class CampaignManager:
             self.require_active(campaign)
             row = connection.execute(f'SELECT * FROM message_sends WHERE id=? AND campaign_id=?',
                                       (send_id, campaign_id)).fetchone()
-            if row is None or row[column] != 'prepared':
+            if row is None or row[column] != 'prepared' or row['schedule_skip_reason']:
                 connection.rollback()
                 return False
             if guard is not None:
@@ -541,7 +541,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 media = manager.media(row['media_id'])
                 writer.writerow([safe(value) for value in (row['id'], row['name'], row['phone'], row['account_name'], row['message'],
                     STATE_LABELS[row['state']], STATE_LABELS[row['friend_state']], STATE_LABELS[row['alias_state']], row['message_id'], row['created_at'],
-                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '',row['message_skip_reason'])])
+                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '',' '.join(filter(None,(row['message_skip_reason'],row['schedule_skip_reason']))))])
             return send_file(io.BytesIO(('\ufeff'+stream.getvalue()).encode()), mimetype='text/csv', as_attachment=True,
                              download_name=f'chien-dich-{campaign_id}.csv')
         return render_template('campaign_report.html', campaign=campaign, sends=sends, counts=counts,

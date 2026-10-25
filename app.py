@@ -449,12 +449,12 @@ def create_app(test_config=None):
                    (c.audience_mode='group' AND (c.tag='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=c.tag)))) AND NOT {exclusion_predicate()}) AS audience
             FROM campaigns c LEFT JOIN zalo_accounts a ON a.id=c.account_id AND a.user_id=c.user_id
             LEFT JOIN (SELECT campaign_id,count(*) AS sent_total,
-                sum((state='sent' OR friend_state='friend_requested' OR alias_state='renamed') AND state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
-                sum(state='not_requested' AND friend_state='not_requested' AND alias_state='not_requested') AS skipped,
-                sum(state='prepared' OR friend_state='prepared' OR alias_state='prepared') AS waiting,
-                sum(state='sending' OR friend_state='sending' OR alias_state='sending') AS sending,
-                sum(state='unknown' OR friend_state='unknown' OR alias_state='unknown') AS uncertain,
-                sum(state='failed' OR friend_state='failed' OR alias_state='failed') AS failed
+                sum(schedule_skip_reason='' AND (state='sent' OR friend_state='friend_requested' OR alias_state='renamed') AND state IN ('sent','not_requested') AND friend_state IN ('friend_requested','not_requested') AND alias_state IN ('renamed','not_requested')) AS confirmed,
+                sum(schedule_skip_reason<>'' OR (state='not_requested' AND friend_state='not_requested' AND alias_state='not_requested')) AS skipped,
+                sum(schedule_skip_reason='' AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared')) AS waiting,
+                sum(schedule_skip_reason='' AND (state='sending' OR friend_state='sending' OR alias_state='sending')) AS sending,
+                sum(schedule_skip_reason='' AND (state='unknown' OR friend_state='unknown' OR alias_state='unknown')) AS uncertain,
+                sum(schedule_skip_reason='' AND (state='failed' OR friend_state='failed' OR alias_state='failed')) AS failed
                 FROM message_sends GROUP BY campaign_id) r ON r.campaign_id=c.id
             WHERE c.user_id=? AND c.name LIKE ?
               AND ((?='deleted' AND c.deleted_at IS NOT NULL) OR (?!='deleted' AND c.deleted_at IS NULL))

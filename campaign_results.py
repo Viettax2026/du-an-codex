@@ -2,7 +2,7 @@
 
 RESULTS_SQL='''WITH source AS (
     SELECT s.id,s.recipient_name,s.recipient_phone,s.recipient_id,s.created_at,s.lookup_state,
-        s.state,s.friend_state,s.alias_state,s.alias,s.message_skip_reason,a.name AS account_name,p.phone FROM message_sends s
+        s.state,s.friend_state,s.alias_state,s.alias,s.message_skip_reason,s.schedule_skip_reason,a.name AS account_name,p.phone FROM message_sends s
     JOIN campaigns c ON c.id=s.campaign_id AND c.user_id=:owner
     JOIN contacts p ON p.id=s.contact_id AND p.user_id=c.user_id
     JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=c.user_id
@@ -33,7 +33,7 @@ def result_count(db,owner,campaign):
 
 def result_rows(db,owner,campaign,limit,offset):
     rows=db().execute(RESULTS_SQL+'''SELECT o.*,s.recipient_name,s.recipient_phone,s.phone,s.account_name,
-        s.message_skip_reason,s.alias FROM outcomes o JOIN source s ON s.id=o.id
+        s.message_skip_reason,s.schedule_skip_reason,s.alias FROM outcomes o JOIN source s ON s.id=o.id
         ORDER BY o.occurred_at DESC,o.id DESC,o.rank DESC LIMIT :limit OFFSET :offset''',
         dict(owner=owner,campaign=campaign,limit=limit,offset=offset)).fetchall()
     results=[]
@@ -62,6 +62,8 @@ def result_rows(db,owner,campaign,limit,offset):
             status,description='Đang xử lý / cần kiểm tra','Chưa có kết quả xác nhận. Không tự thực hiện lại hành động.'
         else:
             description='Chưa xác định kết quả. Kiểm tra hội thoại Zalo trước khi tiếp tục.'
+        if row['schedule_skip_reason'] and state in ('unknown','failed','sending'):
+            description+=' '+row['schedule_skip_reason']
         item.update(name=name,phone=phone,label=LABELS[action],status=status,tone=tone,description=description)
         results.append(item)
     return results

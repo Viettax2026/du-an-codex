@@ -22,7 +22,7 @@
   {% set blocked=s.contact_id not in eligible_ids %}
   {% set recent_message=recent_message_for(campaign,s) if s.state=='prepared' else none %}
   <article class="real-send-record">
-    {% if s.message_skip_reason %}<p class="duplicate-warning">{{ s.message_skip_reason }}</p>{% endif %}
+    {% if s.schedule_skip_reason %}<p class="notice">{{ s.schedule_skip_reason }}</p>{% endif %}{% if s.message_skip_reason %}<p class="duplicate-warning">{{ s.message_skip_reason }}</p>{% endif %}
     {% if recent_message %}<p class="duplicate-warning">Không gửi lại: người nhận có tin trong {{ campaign.duplicate_days }} ngày gần đây tại chiến dịch “{{ recent_message.campaign_name }}”, tài khoản {{ recent_message.account_name }} ({{ recent_message.sent_at|localtime }}).<a href="{{ url_for('campaign_duplicate_check',campaign_id=campaign.id) }}">Cài đặt kiểm tra trùng lặp</a></p>{% endif %}
     {% if s.scheduled and not s.message_skip_reason and s.state=='not_requested' and s.friend_state=='not_requested' and s.alias_state=='not_requested' %}<p class="notice">Đã bỏ qua theo điều kiện nhận tin/loại trừ; chưa gửi hành động nào.</p>{% endif %}
     {% if blocked and ('prepared' in [s.state,s.friend_state,s.alias_state]) %}<p class="notice">Khách hàng không còn đủ điều kiện nhận tin hoặc đang được loại trừ. Các hành động chưa gửi đã bị chặn.</p>{% endif %}
