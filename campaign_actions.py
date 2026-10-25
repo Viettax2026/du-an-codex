@@ -135,6 +135,9 @@ class CampaignManager:
             if row is None or row[column] != 'prepared' or row['schedule_skip_reason']:
                 connection.rollback()
                 return False
+            if not connection.execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
+                                      (row['account_id'], g.user['id'])).fetchone():
+                abort(409, 'Tài khoản gửi đã xóa. Chọn tài khoản khác trước khi tiếp tục.')
             if guard is not None:
                 guard(campaign,row)
             elif campaign['schedule_enabled']:
@@ -174,6 +177,7 @@ class CampaignManager:
 
     def store_preview(self, campaign, person, account, resolved, scheduled=False, skip_message=False, skip_reason='',lookup_state='resolved'):
         """Store one immutable personalized payload inside the caller's write transaction."""
+        self.require_account(account['id'])
         alias=personalize(campaign['rename_template'],person,resolved).strip() if campaign['rename_enabled'] else ''
         if campaign['rename_enabled'] and (not alias or utf16(alias)>100):
             raise ValueError('Tên gợi nhớ sau cá nhân hóa phải có từ 1 đến 100 ký tự.')
@@ -195,6 +199,7 @@ class CampaignManager:
 
     def store_lookup_skip(self,campaign,person,account,scheduled=False,reason='',lookup_state='not_found'):
         """Record a skipped lookup and its classification without fabricating a Zalo identity."""
+        self.require_account(account['id'])
         reason=reason or f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
         row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,
             recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,message_skip_reason)
@@ -204,6 +209,11 @@ class CampaignManager:
         origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
         self.event(campaign['id'],'lookup_skip',reason+f' Nguồn: {origin}. Tiếp tục số điện thoại kế tiếp.')
         return row.lastrowid
+
+    def require_account(self, account_id):
+        if not self.db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
+                                 (account_id, g.user['id'])).fetchone():
+            raise ValueError('Tài khoản gửi đã xóa. Chọn tài khoản khác trước khi tiếp tục.')
 
     def skip_duplicate_message(self,campaign_id,send_id):
         self.db().execute('BEGIN IMMEDIATE')
@@ -425,7 +435,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
         snapshot=[dict(row) for row in members] if len(members)>500 else []
         return render_template('campaign_edit.html',campaign=campaign,duplicating=True,
             phones='' if snapshot else '\n'.join(row['phone'] for row in members),snapshot_contacts=snapshot,
-            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name',(g.user['id'],)).fetchall(),
+            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name',(g.user['id'],)).fetchall(),
             tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag',(g.user['id'],)).fetchall(),page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>/limits', methods=['GET', 'POST'])
@@ -606,7 +616,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
     @login_required
     def campaign_account(campaign_id):
         campaign = manager.owned(campaign_id)
-        account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
+        account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
                                (campaign['account_id'], g.user['id'])).fetchone()
         used_accounts = db().execute('''SELECT DISTINCT a.* FROM zalo_accounts a JOIN message_sends s ON s.account_id=a.id
             WHERE s.campaign_id=? AND a.user_id=?''', (campaign_id, g.user['id'])).fetchall()

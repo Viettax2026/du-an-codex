@@ -28,7 +28,7 @@
   </div>
 {% elif detail.tab=='accounts' %}
   <table class="inline-detail-table"><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Kết nối</th><th>Thao tác</th></tr></thead><tbody>
-  {% for account in detail.rows %}<tr><td>{{ account.name }}</td><td>{{ 'Đang được chọn' if account.id==selected.account_id else 'Đã dùng trong chiến dịch' }}</td><td>{{ {'connected':'Đã đăng nhập','disconnected':'Chưa đăng nhập','expired':'Phiên đã hết hạn','qr':'Chờ quét QR','scanned':'Đã quét QR','loading':'Đang kết nối','error':'Cần đăng nhập lại'}.get(account.connection.state,'Cần kiểm tra') }}</td><td><a href="{{ url_for('accounts',connect=account.id) }}">Mở tài khoản</a></td></tr>{% else %}<tr><td colspan="4">Chiến dịch chưa chọn hoặc sử dụng tài khoản Zalo.</td></tr>{% endfor %}
+  {% for account in detail.rows %}<tr><td>{{ account.name }}</td><td>{{ 'Đang được chọn' if account.id==selected.account_id else 'Đã dùng trong chiến dịch' }}</td><td>{{ {'deleted':'Đã xóa','connected':'Đã đăng nhập','disconnected':'Chưa đăng nhập','expired':'Phiên đã hết hạn','qr':'Chờ quét QR','scanned':'Đã quét QR','loading':'Đang kết nối','error':'Cần đăng nhập lại'}.get(account.connection.state,'Cần kiểm tra') }}</td><td>{% if not account.deleted_at %}<a href="{{ url_for('accounts',connect=account.id) }}">Mở tài khoản</a>{% else %}Đã xóa{% endif %}</td></tr>{% else %}<tr><td colspan="4">Chiến dịch chưa chọn hoặc sử dụng tài khoản Zalo.</td></tr>{% endfor %}
   </tbody></table>
 {% elif detail.tab=='data' %}
   <p class="inline-detail-note">{% if selected.audience_mode=='list' %}Danh sách riêng đã lưu. Trạng thái nhận tin hiển thị theo hồ sơ hiện tại.{% else %}Nhóm động: hiển thị data hiện tại của nhóm; đây không phải bản chụp tại ngày tạo chiến dịch.{% endif %}</p>

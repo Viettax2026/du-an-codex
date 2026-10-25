@@ -172,7 +172,7 @@ def register_data_groups(app, db, login_required, parse_phones):
         consent = request.args.get('consent', '')
         if kind not in ('', 'phone', 'uid') or consent not in ('', 'yes', 'no'):
             abort(400)
-        accounts = db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? ORDER BY name,id', (g.user['id'],)).fetchall()
+        accounts = db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name,id', (g.user['id'],)).fetchall()
         account_id = request.args.get('account_id', '')
         if account_id and (not account_id.isdigit() or int(account_id) not in {account['id'] for account in accounts}):
             abort(404)

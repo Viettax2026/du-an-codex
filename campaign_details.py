@@ -58,7 +58,7 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
                                   (campaign_id,per_page,offset)).fetchall()
     elif tab=='accounts':
         rows=db().execute('SELECT a.* FROM zalo_accounts a WHERE '+account_where+' ORDER BY a.id LIMIT ? OFFSET ?',(*account_args,per_page,offset)).fetchall()
-        detail['rows']=[dict(row,connection=connector.status(user_id,row['id']) if connector else {'state':'disconnected'}) for row in rows]
+        detail['rows']=[dict(row,connection={'state':'deleted'} if row['deleted_at'] else connector.status(user_id,row['id']) if connector else {'state':'disconnected'}) for row in rows]
     elif tab=='info':
         detail['exclusions']=db().execute('''SELECT r.name FROM exclusion_rule_groups r JOIN campaign_exclusion_rules x ON x.rule_group_id=r.id
             WHERE x.campaign_id=? AND r.user_id=? UNION SELECT l.name FROM exclusion_lists l JOIN campaign_exclusion_lists x ON x.list_id=l.id

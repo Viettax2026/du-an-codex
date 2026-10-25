@@ -9,3 +9,13 @@
 .account-screen .is-disconnected .account-ready{background:#f7bfc3;color:#ad2635}
 .account-screen .account-card-heading h2{min-width:0;overflow-wrap:anywhere}
 .account-screen .account-card-heading .row-action{flex-shrink:0}
+
+.account-screen .account-card-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.account-screen .account-delete-button{color:#ad2635;border-color:#dc9399;background:#fff5f5}
+.account-screen .account-delete-button:hover{background:#ffe2e5}
+.account-screen .account-delete-confirm{background:#c93442;color:#fff;border:1px solid #c93442;border-radius:8px;padding:10px 16px;cursor:pointer;font:inherit}
+.account-screen .account-delete-confirm:hover{background:#a92a36}
+.account-screen #delete-account-description{line-height:1.6}
+.account-screen #delete-account-dialog{width:min(540px,calc(100vw - 32px));padding:0;border:1px solid #c5d4e9;border-radius:13px;background:#f6f9fe;color:#17263e;box-shadow:0 25px 70px #0f1f4433}
+.account-screen #delete-account-form{padding:18px 25px 24px;overflow-wrap:anywhere}
+@media(max-width:600px){.account-screen .account-card-heading{align-items:flex-start;flex-direction:column;gap:12px}.account-screen .account-card-actions{justify-content:flex-start}}

@@ -390,7 +390,7 @@ class CampaignScheduler:
         if record[column]!='prepared':
             return
         # Check private ownership and payload before committing the dispatch claim.
-        account=self.db().execute('SELECT id FROM zalo_accounts WHERE id=? AND user_id=?',(record['account_id'],g.user['id'])).fetchone()
+        account=self.db().execute('SELECT id FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',(record['account_id'],g.user['id'])).fetchone()
         if not account or self.connector.status(g.user['id'],record['account_id']).get('state')!='connected':
             raise ValueError('Tài khoản chưa đăng nhập Zalo. Đăng nhập lại rồi lưu lại lịch.')
         data={'uid':record['recipient_id'],'message':record['message'] if action=='send' else record['friend_message'] if action=='friend' else record['alias']}
@@ -453,7 +453,7 @@ class CampaignScheduler:
         revision=campaign['schedule_revision'];guard=self.guard(campaign_id,revision,now)
         if not self.app.config['ZALO_QR_ENABLED']:
             raise ValueError('Máy chủ chưa bật kết nối Zalo.')
-        account=self.db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',(campaign['account_id'],g.user['id'])).fetchone()
+        account=self.db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',(campaign['account_id'],g.user['id'])).fetchone()
         if not account or self.connector.status(g.user['id'],account['id']).get('state')!='connected':
             raise ValueError('Tài khoản chưa đăng nhập Zalo. Đăng nhập lại rồi lưu lại lịch.')
         guard(campaign)
@@ -612,7 +612,7 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
                 if request.form.get('schedule_present')!='yes':
                     raise ValueError('Biểu mẫu lịch chưa đầy đủ. Tải lại trang để thử lại.')
                 account_id=request.form.get('account_id') or None
-                if account_id and not db().execute('SELECT id FROM zalo_accounts WHERE id=? AND user_id=?',(account_id,g.user['id'])).fetchone():
+                if account_id and not db().execute('SELECT id FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',(account_id,g.user['id'])).fetchone():
                     raise ValueError('Tài khoản gửi không hợp lệ.')
                 save_schedule(db,campaign_id,request.form,account_id)
                 db().execute('UPDATE campaigns SET account_id=? WHERE id=?',(account_id,campaign_id))
@@ -620,7 +620,7 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
                 return redirect(url_for('campaign_detail',campaign_id=campaign_id))
             except ValueError as error:
                 db().rollback();flash(str(error),'error')
-        return render_template('campaign_schedule.html',campaign=campaign,page='campaigns',accounts=db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? ORDER BY name',(g.user['id'],)).fetchall())
+        return render_template('campaign_schedule.html',campaign=campaign,page='campaigns',accounts=db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name',(g.user['id'],)).fetchall())
 
     @app.cli.command('run-scheduler')
     @click.option('--once',is_flag=True,help='Check one cycle and exit.')

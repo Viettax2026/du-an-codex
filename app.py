@@ -121,6 +121,7 @@ def create_app(test_config=None):
             db().commit()
 
         for table, columns in {
+            'zalo_accounts': {'deleted_at': 'TEXT'},
             'contacts': {**{column: "TEXT NOT NULL DEFAULT ''" for column in ('email','info1','info2','info3','info4','info5')}, 'deleted_at':'TEXT'},
             'campaigns': {'rename_enabled': 'INTEGER NOT NULL DEFAULT 0', 'rename_template': "TEXT NOT NULL DEFAULT ''", 'send_message': 'INTEGER NOT NULL DEFAULT 1', 'send_friend': 'INTEGER NOT NULL DEFAULT 0', 'friend_message': "TEXT NOT NULL DEFAULT ''"},
             'message_sends': {'alias': "TEXT NOT NULL DEFAULT ''", 'alias_state': "TEXT NOT NULL DEFAULT 'not_requested'", 'friend_message': "TEXT NOT NULL DEFAULT ''", 'friend_state': "TEXT NOT NULL DEFAULT 'not_requested'"},
@@ -179,7 +180,7 @@ def create_app(test_config=None):
         if not name or (message_enabled and not message):
             raise ValueError('Vui lòng nhập tên chiến dịch và nội dung.')
         account_id = request.form.get('account_id') or None
-        if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=?', (account_id, g.user['id'])).fetchone():
+        if account_id and not db().execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL', (account_id, g.user['id'])).fetchone():
             raise ValueError('Tài khoản Zalo không hợp lệ.')
         mode = request.form.get('data_mode')
         if mode not in (None, 'direct', 'group'):
@@ -429,7 +430,7 @@ def create_app(test_config=None):
         days = request.args.get('days', '')
         days = days if days in ('7', '30', '90') else ''
         tag = request.args.get('tag', '').strip()[:80]
-        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
+        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name', (g.user['id'],)).fetchall()
         account_id = request.args.get('account_id', '')
         log_account_id = request.args.get('log_account_id', '')
         valid_accounts = {str(row['id']) for row in accounts}
@@ -550,7 +551,7 @@ def create_app(test_config=None):
         members = db().execute('SELECT p.id,p.name,p.phone FROM contacts p JOIN campaign_contacts cc ON cc.contact_id=p.id WHERE cc.campaign_id=? AND p.user_id=? AND p.deleted_at IS NULL ORDER BY p.id', (campaign_id,g.user['id'])).fetchall()
         snapshot = [dict(row) for row in members] if len(members)>500 else []
         return render_template('campaign_edit.html', campaign=campaign, phones='' if snapshot else '\n'.join(p['phone'] for p in members), snapshot_contacts=snapshot,
-            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall(),
+            accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name', (g.user['id'],)).fetchall(),
             tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>', methods=['GET', 'POST'])
@@ -589,7 +590,7 @@ def create_app(test_config=None):
             preview = display_message(preview_text, json.dumps(preview_styles))
         except ValueError as error:
             preview = str(error)
-        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? ORDER BY name', (g.user['id'],)).fetchall()
+        accounts = db().execute('SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name', (g.user['id'],)).fetchall()
         connected = [account for account in accounts if connector.status(g.user['id'], account['id']).get('state') == 'connected']
         sends = db().execute('''SELECT s.*, p.name AS contact_name, a.name AS account_name FROM message_sends s
             JOIN contacts p ON p.id=s.contact_id JOIN zalo_accounts a ON a.id=s.account_id
@@ -603,7 +604,7 @@ def create_app(test_config=None):
         campaign = manager.owned(campaign_id)
         manager.require_active(campaign)
         person = next((p for p in audience(campaign) if str(p['id']) == request.form.get('contact_id')), None)
-        account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
+        account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
                                (request.form.get('account_id'), g.user['id'])).fetchone()
         if not person or not account:
             return 'Tài khoản hoặc khách hàng không hợp lệ.', 400
@@ -797,10 +798,10 @@ def create_app(test_config=None):
             return redirect(url_for('accounts'))
         query = request.args.get('q', '').strip()[:100]
         group = request.args.get('group', '').strip()[:80]
-        rows = db().execute('''SELECT * FROM zalo_accounts WHERE user_id=?
+        rows = db().execute('''SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL
             AND name LIKE ? AND (?='' OR account_group=?) ORDER BY id DESC''',
             (g.user['id'], '%' + query + '%', group, group)).fetchall()
-        groups = db().execute("SELECT DISTINCT account_group FROM zalo_accounts WHERE user_id=? AND account_group!='' ORDER BY account_group", (g.user['id'],)).fetchall()
+        groups = db().execute("SELECT DISTINCT account_group FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL AND account_group!='' ORDER BY account_group", (g.user['id'],)).fetchall()
         return render_template('accounts.html', accounts=rows, groups=groups,
                                query=query, group=group, page='accounts',
                                qr_enabled=app.config['ZALO_QR_ENABLED'],
@@ -810,14 +811,57 @@ def create_app(test_config=None):
     @app.get('/accounts/status')
     @login_required
     def account_statuses():
-        rows=db().execute('SELECT id FROM zalo_accounts WHERE user_id=?',(g.user['id'],)).fetchall()
+        rows=db().execute('SELECT id FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL',(g.user['id'],)).fetchall()
         response=jsonify(accounts=[dict(id=row['id'],state='connected' if connector.status(g.user['id'],row['id']).get('state')=='connected' else 'disconnected') for row in rows])
         response.headers['Cache-Control']='no-store'
         return response
 
     def own_account(account_id):
-        return db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
+        return db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
                             (account_id, g.user['id'])).fetchone()
+
+    @app.post('/accounts/<int:account_id>/delete')
+    @login_required
+    def account_delete(account_id):
+        if request.form.get('confirm_delete') != 'yes':
+            abort(400, 'Cần xác nhận xóa tài khoản.')
+        connection = db()
+        connection.execute('BEGIN IMMEDIATE')
+        try:
+            account = own_account(account_id)
+            if account is None:
+                abort(404, 'Không tìm thấy tài khoản.')
+            # Keep immutable send identities for reports and duplicate protection.
+            # A new login with the same display name must get a different ID.
+            archived_name = f'{account["name"]} (đã xóa #{account_id})'
+            name, suffix = archived_name, 1
+            while connection.execute('SELECT 1 FROM zalo_accounts WHERE user_id=? AND name=?',
+                                     (g.user['id'], name)).fetchone():
+                suffix += 1
+                name = f'{archived_name} -{suffix}'
+            connection.execute('UPDATE zalo_accounts SET deleted_at=CURRENT_TIMESTAMP,name=? WHERE id=?',
+                               (name, account_id))
+            affected = connection.execute('SELECT id FROM campaigns WHERE user_id=? AND account_id=? AND deleted_at IS NULL',
+                                          (g.user['id'], account_id)).fetchall()
+            connection.execute('''UPDATE campaigns SET account_id=NULL,paused=1,schedule_enabled=0,
+                schedule_revision=schedule_revision+1,schedule_error='',schedule_status=?
+                WHERE user_id=? AND account_id=?''',
+                ('Tài khoản gửi đã xóa. Chọn tài khoản khác để tiếp tục.', g.user['id'], account_id))
+            for campaign in affected:
+                manager.event(campaign['id'], 'account_deleted',
+                              f'Đã xóa tài khoản gửi {account["name"]}. Tạm ngưng chiến dịch; chọn tài khoản khác để tiếp tục.')
+            # Serialize deletion with QR creation so an old tab cannot recreate a session.
+            connector.disconnect(g.user['id'], account_id)
+            connection.commit()
+        except OSError:
+            connection.rollback()
+            flash('Chưa xóa được phiên đăng nhập trên VPS. Vui lòng thử lại.', 'error')
+            return redirect(url_for('accounts'))
+        except BaseException:
+            connection.rollback()
+            raise
+        flash('Đã xóa tài khoản và phiên đăng nhập. Các chiến dịch dùng tài khoản này đã tạm ngưng; lịch sử cũ được giữ lại.', 'success')
+        return redirect(url_for('accounts'))
 
     @app.route('/accounts/<int:account_id>/qr', methods=['GET', 'POST'])
     @login_required
@@ -830,10 +874,19 @@ def create_app(test_config=None):
             return jsonify(error='Đăng nhập QR chưa được bật trên máy chủ.'), 503
         if request.form.get('accept_unofficial') != 'yes':
             return jsonify(error='Cần xác nhận sử dụng kết nối Zalo cá nhân không chính thức.'), 400
+        db().execute('BEGIN IMMEDIATE')
         try:
-            return jsonify(connector.start(g.user['id'], account_id)), 202
+            if own_account(account_id) is None:
+                abort(404, 'Không tìm thấy tài khoản.')
+            result = connector.start(g.user['id'], account_id)
+            db().commit()
+            return jsonify(result), 202
         except (RuntimeError, OSError):
+            db().rollback()
             return jsonify(error='Không thể khởi tạo QR. Kiểm tra Node.js, npm ci và quyền thư mục instance trên VPS.'), 503
+        except BaseException:
+            db().rollback()
+            raise
 
     @app.post('/accounts/<int:account_id>/disconnect')
     @login_required

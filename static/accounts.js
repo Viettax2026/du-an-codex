@@ -135,3 +135,16 @@ async function refreshAccountCards() {
 }
 setInterval(refreshAccountCards,15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAccountCards();});
+
+const deleteAccountDialog = document.getElementById('delete-account-dialog');
+const deleteAccountForm = document.getElementById('delete-account-form');
+document.querySelectorAll('[data-delete-account-id]').forEach(button => {
+  button.addEventListener('click', () => {
+    document.getElementById('delete-account-name').textContent = button.dataset.deleteAccountName;
+    deleteAccountForm.action = button.dataset.deleteUrl;
+    deleteAccountDialog.showModal();
+  });
+});
+deleteAccountForm.addEventListener('submit', () => {
+  deleteAccountForm.querySelector('[type="submit"]').disabled = true;
+});
