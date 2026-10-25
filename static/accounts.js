@@ -16,7 +16,17 @@ const instruction = document.getElementById('qr-instruction');
 function stopPolling() { clearTimeout(poll); poll = null; }
 function clearImage() { image.hidden = true; image.removeAttribute('src'); }
 function showError(message) { status.textContent = message; clearImage(); expiresAt = null; timer.textContent = ''; }
-function render(data) {
+function updateAccountCard(id,state) {
+  const label=document.querySelector(`[data-account-status="${id}"]`);
+  if(!label)return;
+  const connected=state==='connected',card=label.closest('.account-card');
+  card.classList.toggle('is-connected',connected);card.classList.toggle('is-disconnected',!connected);
+  label.textContent=connected?'Đã đăng nhập':'Chưa đăng nhập';
+  const badge=card.querySelector('[data-account-ready]');
+  badge.textContent=connected?'Sẵn sàng':'Cần đăng nhập';
+}
+function render(data,updateCard=true) {
+  if(updateCard)updateAccountCard(accountId,data.state);
   retry.hidden = true;
   retry.textContent = 'Tạo mã QR mới';
   disconnect.hidden = data.state === 'disconnected';
@@ -32,8 +42,7 @@ function render(data) {
   } else if (data.state === 'connected') {
     consent.hidden = true;
     retry.hidden = false; retry.textContent = 'Đăng nhập lại bằng QR';
-    status.textContent = `${data.display_name || 'Tài khoản'}: đăng nhập đã được xác nhận. Chưa bật gửi tự động.`;
-    document.querySelector(`[data-account-status="${accountId}"]`).textContent = 'Đã xác nhận đăng nhập';
+    status.textContent = `${data.display_name || 'Tài khoản'}: đã đăng nhập.`;
   } else if (['expired', 'error', 'declined'].includes(data.state)) {
     status.textContent = data.message || 'Phiên đăng nhập đã kết thúc.';
     consent.hidden = true; retry.hidden = false;
@@ -78,13 +87,13 @@ function openConnect(button) {
   stopPolling(); accountId = button.dataset.accountId; pending = false;
   accept.checked = false; start.disabled = true;
   document.getElementById('connect-name').textContent = button.dataset.connectName;
-  render({ state: 'disconnected' }); connectDialog.showModal();
+  render({ state: 'disconnected' },false); connectDialog.showModal();
   readStatus(accountId);
 }
 document.getElementById('add-account').addEventListener('click', () => document.getElementById('account-dialog').showModal());
 document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.close).close()));
 document.querySelectorAll('[data-account-id]').forEach(button => button.addEventListener('click', () => openConnect(button)));
-connectDialog.addEventListener('close', () => { stopPolling(); clearImage(); });
+connectDialog.addEventListener('close', () => { stopPolling(); clearImage(); refreshAccountCards(); });
 accept.addEventListener('change', () => start.disabled = !accept.checked);
 start.addEventListener('click', begin);
 retry.addEventListener('click', () => {
@@ -96,7 +105,7 @@ disconnect.addEventListener('click', async () => {
   try {
     const response = await fetch(`/accounts/${id}/disconnect`, { method: 'POST', body: new URLSearchParams({ csrf }) });
     if (!response.ok || response.redirected) throw new Error();
-    if (id === accountId) { accept.checked = false; start.disabled = true; render({ state: 'disconnected' }); document.querySelector(`[data-account-status="${id}"]`).textContent = 'Chưa kết nối'; }
+    if (id === accountId) { accept.checked = false; start.disabled = true; render({ state: 'disconnected' }); }
   } catch { showError('Không thể xóa phiên. Vui lòng thử lại.'); }
   finally { disconnect.disabled = false; }
 });
@@ -110,3 +119,19 @@ if (connectDialog.dataset.autoConnect) {
   const button = document.querySelector(`[data-account-id="${connectDialog.dataset.autoConnect}"]`);
   if (button) openConnect(button);
 }
+
+let refreshingAccounts=false;
+async function refreshAccountCards() {
+  if(document.hidden || connectDialog.open || refreshingAccounts)return;
+  refreshingAccounts=true;
+  try {
+    const response=await fetch('/accounts/status',{cache:'no-store',credentials:'same-origin'});
+    if(!response.ok || response.redirected)return;
+    const data=await response.json();
+    if(connectDialog.open)return;
+    for(const account of data.accounts || [])updateAccountCard(account.id,account.state);
+  } catch { /* A network error does not prove that a Zalo account logged out. */ }
+  finally {refreshingAccounts=false;}
+}
+setInterval(refreshAccountCards,15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAccountCards();});

@@ -72,3 +72,27 @@ def test_status_scrubs_secrets_and_expired_image(app, tmp_path):
     response = client.post('/accounts/1/disconnect', data={'csrf': token(client)})
     assert response.status_code == 200
     assert not base.exists()
+
+
+def test_account_cards_use_login_state_and_bulk_status_is_private_read_only(app):
+    client=app.test_client();register(client)
+    post(client,'/accounts',{'name':'Connected account'})
+    post(client,'/accounts',{'name':'Expired account'})
+    connector=app.extensions['zalo_connector']
+    connector.status=Mock(side_effect=lambda owner,account:dict(state='connected' if account==1 else 'expired',
+        image='PRIVATE_QR',cookie='PRIVATE_COOKIE',message='PRIVATE_MESSAGE'))
+    connector.start=Mock()
+    page=client.get('/accounts').text
+    assert 'class="account-card is-connected"' in page and 'class="account-card is-disconnected"' in page
+    assert 'Đã đăng nhập' in page and 'Chưa đăng nhập' in page
+    assert 'PRIVATE_' not in page
+    response=client.get('/accounts/status')
+    assert response.json=={'accounts':[{'id':1,'state':'connected'},{'id':2,'state':'disconnected'}]}
+    assert response.headers['Cache-Control']=='no-store'
+    assert 'PRIVATE_' not in response.text
+    assert not connector.start.called
+    other=app.test_client();register(other,'other')
+    connector.status.reset_mock()
+    assert other.get('/accounts/status').json=={'accounts':[]}
+    assert not connector.status.called
+    assert app.test_client().get('/accounts/status').status_code==302

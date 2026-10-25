@@ -1,0 +1,11 @@
+/* Account colors describe login state, independent of list order. */
+.account-screen .account-card.is-connected{background:#d9f2e8;border-left-color:#0bbb86}
+.account-screen .account-card.is-disconnected{background:#f8dede;border-left-color:#f0444c}
+.account-screen .account-card.is-connected .account-dot{background:#0bbb86;box-shadow:0 0 0 4px #0bbb8626}
+.account-screen .account-card.is-disconnected .account-dot{background:#f0444c;box-shadow:0 0 0 4px #f0444c26}
+.account-screen .is-connected [data-account-status]{color:#087c5b}
+.account-screen .is-disconnected [data-account-status]{color:#a72e38;font-weight:500}
+.account-screen .is-connected .account-ready{background:#bdebd9;color:#087c5b}
+.account-screen .is-disconnected .account-ready{background:#f7bfc3;color:#ad2635}
+.account-screen .account-card-heading h2{min-width:0;overflow-wrap:anywhere}
+.account-screen .account-card-heading .row-action{flex-shrink:0}

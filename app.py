@@ -805,6 +805,14 @@ def create_app(test_config=None):
                                auto_connect=request.args.get('connect', type=int),
                                connection_states={row['id']: connector.status(g.user['id'], row['id']) for row in rows})
 
+    @app.get('/accounts/status')
+    @login_required
+    def account_statuses():
+        rows=db().execute('SELECT id FROM zalo_accounts WHERE user_id=?',(g.user['id'],)).fetchall()
+        response=jsonify(accounts=[dict(id=row['id'],state='connected' if connector.status(g.user['id'],row['id']).get('state')=='connected' else 'disconnected') for row in rows])
+        response.headers['Cache-Control']='no-store'
+        return response
+
     def own_account(account_id):
         return db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=?',
                             (account_id, g.user['id'])).fetchone()
