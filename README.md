@@ -269,6 +269,8 @@ Trong mỗi nội dung, cú pháp `{a|b|c}` chọn ngẫu nhiên một cách vi�
 
 Định dạng được làm sạch phía máy chủ, chuyển sang style ranges của SDK Zalo sau khi cá nhân hóa và lưu cùng bản xem trước/nhật ký. Sửa nội dung sau đó không đổi chữ, định dạng hoặc media của bản xem trước cũ. Các API `/message-templates` và `/composer/*` phục vụ giao diện web, cần phiên đăng nhập và CSRF cho POST; không phải Public API.
 
+Khi có ảnh JPG/PNG/WEBP và nội dung định dạng, bộ kết nối gửi ảnh không chú thích trước rồi gửi tin chữ với định dạng đã chốt ngay sau đó. Thư viện zca-js 2.2.0 không chuyển style ranges vào chú thích ảnh, nên ghép chữ vào ảnh sẽ mất in đậm/nghiêng. Chỉ báo thành công khi cả ảnh và chữ đều có mã xác nhận; thiếu xác nhận hoặc lỗi giữa hai phần được đánh dấu chưa xác định và không tự gửi lại. Hai phần vẫn thuộc một lượt gửi cho một khách hàng trong hạn mức của chiến dịch. Ảnh kèm văn bản thường vẫn dùng chú thích ảnh; PDF/MP4 dùng đường gửi chữ và tệp của SDK.
+
 ## Lịch chạy chiến dịch (UTC+7)
 
 Mục **6. Lịch chạy** có trong Thêm, Sửa, Nhân bản chiến dịch. Chiến dịch cũ và bản sao mặc định tắt lịch; chọn **Bật lịch chạy tự động** và tài khoản gửi rồi lưu để cho phép xử lý tự động. **Hành động → Lịch chạy** cập nhật lịch/tài khoản ngay cả khi chiến dịch đã có nhật ký. Bộ chạy dùng giờ Việt Nam (`Asia/Ho_Chi_Minh`), độc lập múi giờ VPS/trình duyệt.

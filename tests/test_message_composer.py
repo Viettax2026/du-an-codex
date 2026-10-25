@@ -98,16 +98,22 @@ def test_wizard_media_rich_edit_duplicate_and_simulation(app):
     assert len(list(manager.media_root.iterdir()))==2  # Detaching never deletes the library file.
 
 
-def test_rich_send_uses_frozen_styles_even_after_content_edit(app):
+@pytest.mark.parametrize('with_image',[False,True])
+def test_rich_send_uses_frozen_styles_even_after_content_edit(app,with_image):
     client,connector=setup_send(app)
-    post(client,'/campaigns/1/content',rich('😊 <b>Chào {{name}}</b>'))
+    attachment_fields=dict(media_present='yes',media_mode='send',media=png()) if with_image else {}
+    post(client,'/campaigns/1/content',rich('😊 <b>Chào {{name}}</b>',**attachment_fields))
     prepare(client)
     text,styles=query(app,'SELECT message,message_styles FROM message_sends')[0]
     assert text=='😊 Chào Lan' and json.loads(styles)==[{'start':3,'len':8,'st':'b'}]
     post(client,'/campaigns/1/content',rich('<i>Khác</i>'))
     connector.message_action.reset_mock();connector.message_action.return_value={'state':'sent','message_id':'123'}
     post(client,'/campaigns/1/send/1',{'confirm_send':'yes'})
-    assert connector.message_action.call_args.kwargs=={'uid':'123456','message':'😊 Chào Lan','styles':[{'start':3,'len':8,'st':'b'}]}
+    args=connector.message_action.call_args.kwargs
+    assert {key:value for key,value in args.items() if key!='attachment'}=={'uid':'123456','message':'😊 Chào Lan','styles':[{'start':3,'len':8,'st':'b'}]}
+    assert ('attachment' in args)==with_image
+    if with_image:
+        assert args['attachment']['filename']=='bao-gia.png' and args['attachment']['width']==3
     post(client,'/campaigns/1/send/1',{'confirm_send':'yes'})
     assert connector.message_action.call_count==1
 

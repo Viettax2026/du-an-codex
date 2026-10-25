@@ -25,7 +25,7 @@
     {% if blocked and ('prepared' in [s.state,s.friend_state,s.alias_state]) %}<p class="notice">Khách hàng không còn đủ điều kiện nhận tin hoặc đang được loại trừ. Các hành động chưa gửi đã bị chặn.</p>{% endif %}
     <h3>{{ s.contact_name }} · Zalo: {{ s.recipient_name or 'Không có tên hiển thị' }}</h3>
     <p class="muted">Tài khoản gửi: {{ s.account_name }} · Zalo ID: {{ s.recipient_id }} · {{ s.created_at|localtime }}</p>
-    <p class="message-text">{{ display_message(s.message, s.message_styles) }}</p>{% set media=campaign_media(s.media_id) %}{% if media %}{% include '_media_preview.html' %}{% endif %}
+    <p class="message-text">{{ display_message(s.message, s.message_styles) }}</p>{% set media=campaign_media(s.media_id) %}{% if media %}{% include '_media_preview.html' %}{% if media.mime.startswith('image/') and s.message_styles!='[]' and s.state=='prepared' %}<p class="muted">Khi gửi: ảnh trước, rồi tin chữ có định dạng ngay sau ảnh.</p>{% endif %}{% endif %}
     {% if s.friend_state!='not_requested' %}
     <h4>Lời mời kết bạn</h4><p class="message-text">{{ s.friend_message }}</p>
     {% if s.friend_state=='prepared' %}

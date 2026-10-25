@@ -38,13 +38,25 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
     const result = await api.sendFriendRequest(input.message, input.uid);
     return {state: result === '' ? 'friend_requested' : 'unknown'};
   }
+  const imageAttachment = attachment && /\.(jpe?g|png|webp)$/i.test(attachment.filename);
+  const acceptedAttachments = result => Array.isArray(result?.attachment) && result.attachment.length > 0 && result.attachment.every(item => item?.msgId);
+  if (imageAttachment && styles.length) {
+    // zca-js 2.2.0 folds a single image's text into `desc` and discards its
+    // styles. Send the image without a caption, then use the styled text API.
+    // This remains one claimed delivery; partial/uncertain results never retry.
+    const imageResult = await api.sendMessage({msg:'', attachments:[attachment]}, input.uid, 0);
+    if (!acceptedAttachments(imageResult)) return {state:'unknown'};
+    const textResult = await api.sendMessage({msg:input.message, styles}, input.uid, 0);
+    if (!textResult?.message?.msgId) return {state:'unknown'};
+    return {state:'sent', message_id:[...imageResult.attachment.map(item => item.msgId), textResult.message.msgId].map(String).join(',')};
+  }
   const result = await api.sendMessage(attachment || styles.length ? {msg: input.message, ...(attachment ? {attachments:[attachment]} : {}), ...(styles.length ? {styles} : {})} : input.message, input.uid, 0); // ThreadType.User
   if (attachment) {
     // A caption/text acknowledgement alone does not prove that the attachment was accepted.
-    if (!result.attachment?.length || !result.attachment.every(item => item.msgId)) return {state: 'unknown'};
+    if (!acceptedAttachments(result) || !imageAttachment && !result.message?.msgId) return {state: 'unknown'};
     const ids = [result.message?.msgId, ...result.attachment.map(item => item.msgId)].filter(Boolean);
     return {state: 'sent', message_id: ids.map(String).join(',')};
   }
-  if (result.message?.msgId) return {state: 'sent', message_id: String(result.message.msgId)};
+  if (result?.message?.msgId) return {state: 'sent', message_id: String(result.message.msgId)};
   return {state: 'unknown'};
 }

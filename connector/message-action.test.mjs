@@ -89,3 +89,51 @@ test('rich message and attachment preserve UTF-16 styles; malformed styles never
   await assert.rejects(executeMessageAction(api,{...input,action:'friend'},()=>dispatches++));
   assert.equal(calls,2);assert.equal(dispatches,2);
 });
+
+for (const filename of ['quote.jpg','quote.PNG','quote.webp']) {
+  test(`styled ${filename} sends image first and rich text second, with both acknowledgements`, async () => {
+    const attachment={data:Buffer.from('image'),filename,metadata:{totalSize:5,width:2,height:2}};
+    const styles=[{start:3,len:8,st:'b'}];
+    const calls=[];let claims=0;
+    const api={sendMessage:async(...args)=>{
+      calls.push(args);
+      return calls.length===1 ? {message:null,attachment:[{msgId:10}]} : {message:{msgId:11},attachment:[]};
+    }};
+    const result=await executeMessageAction(api,{action:'send',uid:'123',message:'😊 Chào Lan',styles,attachment},()=>claims++);
+    assert.deepEqual(calls,[[{msg:'',attachments:[attachment]},'123',0],[{msg:'😊 Chào Lan',styles},'123',0]]);
+    assert.deepEqual(result,{state:'sent',message_id:'10,11'});
+    assert.equal(claims,1);
+  });
+}
+
+test('styled image partial acceptance never retries or claims success for a missing part', async () => {
+  const attachment={data:Buffer.from('image'),filename:'quote.jpg',metadata:{totalSize:5,width:2,height:2}};
+  const input={action:'send',uid:'123',message:'Chào Lan',styles:[{start:0,len:8,st:'b'}],attachment};
+  for (const response of [undefined,{}, {attachment:[]}, {attachment:[{}]}, {message:{msgId:1},attachment:[]}]) {
+    let calls=0;
+    assert.deepEqual(await executeMessageAction({sendMessage:async()=>{calls++;return response;}},input),{state:'unknown'});
+    assert.equal(calls,1); // No text dispatch without an image acknowledgement.
+  }
+  let calls=0;
+  assert.deepEqual(await executeMessageAction({sendMessage:async()=>++calls===1?{attachment:[{msgId:1}]}:{attachment:[]}},input),{state:'unknown'});
+  assert.equal(calls,2);
+  calls=0;
+  await assert.rejects(executeMessageAction({sendMessage:async()=>{
+    if (++calls===1) return {attachment:[{msgId:1}]};
+    throw new Error('uncertain text acceptance');
+  }},input));
+  assert.equal(calls,2);
+});
+
+test('plain image keeps its single caption and non-image attachments require text acknowledgement', async () => {
+  const attachment={data:Buffer.from('image'),filename:'quote.jpg',metadata:{totalSize:5,width:2,height:2}};
+  let calls=0;
+  const api={sendMessage:async content=>{
+    calls++;assert.equal(content.msg,'Chào Lan');assert.deepEqual(content.attachments,[attachment]);
+    return {message:null,attachment:[{msgId:10}]};
+  }};
+  assert.deepEqual(await executeMessageAction(api,{action:'send',uid:'123',message:'Chào Lan',attachment}),{state:'sent',message_id:'10'});
+  assert.equal(calls,1);
+  assert.deepEqual(await executeMessageAction({sendMessage:async()=>({attachment:[{msgId:10}]})},
+    {action:'send',uid:'123',message:'Chào Lan',attachment:{...attachment,filename:'quote.pdf'}}),{state:'unknown'});
+});
