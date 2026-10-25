@@ -3,7 +3,7 @@ import sqlite3
 
 from test_workflow import app,post,register
 from test_send import setup_send,prepare
-from test_message_composer import rich,query
+from test_message_composer import rich,query,png
 
 
 def test_inline_details_have_real_data_accounts_variants_results_and_history_without_dispatch(app):
@@ -59,3 +59,20 @@ def test_inline_saved_list_keeps_deleted_members_visible_as_history_and_escapes_
     assert 'Data ban đầu (1)' in response.text and 'Đã xóa' in response.text
     assert '&lt;script&gt;bad()&lt;/script&gt;' in response.text
     assert '<script>bad()</script>' not in response.text
+
+
+def test_phone_previews_repeat_private_image_per_variant_and_preserve_format_without_sending(app):
+    client,connector=setup_send(app)
+    post(client,'/campaigns/1/edit',{'name':'Preview','message':'Hi','tag':'VIP','account_id':'1'})
+    post(client,'/campaigns/1/content',rich('<b>Chào {{name}}</b> | Nội dung thường',media_present='yes',media_mode='send',media=png()))
+    media_id=query(app,'SELECT media_id FROM campaigns WHERE id=1')[0][0]
+    connector.message_action.reset_mock()
+    response=client.get('/campaigns?selected=1&detail_tab=preview')
+    assert response.status_code==200
+    assert response.text.count('class="inline-variant zalo-preview-card"')==2
+    assert response.text.count(f'src="/media/{media_id}"')==2
+    assert '<strong>Chào {{name}}</strong>' in response.text
+    assert 'zalo-preview-image' in response.text and 'zalo-preview-caption' in response.text
+    assert 'Đang hoạt động' not in response.text
+    assert not connector.message_action.called
+    assert query(app,'SELECT count(*) FROM message_sends')==[(0,)]

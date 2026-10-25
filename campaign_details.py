@@ -36,15 +36,18 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
         spans=variant_spans(message) if message else []
     except ValueError:
         spans=[(0,len(message))] if message else []
-    variants=[Markup(markup(message[a:b],[(max(a,start)-a,min(b,end)-a,style)
-              for start,end,style in ranges if min(b,end)>max(a,start)])) for a,b in spans]
+    variants,formatted=[],[]
+    for a,b in spans:
+        clipped=[(max(a,start)-a,min(b,end)-a,style) for start,end,style in ranges if min(b,end)>max(a,start)]
+        variants.append(Markup(markup(message[a:b],clipped)))
+        formatted.append(bool(clipped))
     totals['preview']=len(variants)
     per_page=100 if tab=='history' else 50
     total=totals.get(tab,0)
     pages=max(1,math.ceil(total/per_page));number=max(1,min(number,pages))
     offset=(number-1)*per_page
     detail=dict(tab=tab,counts=totals,number=number,pages=pages,total=total,per_page=per_page,offset=offset,
-                rows=[],variants=variants,exclusions=[])
+                rows=[],variants=variants,formatted=formatted,exclusions=[])
     if tab=='data':
         detail['rows']=db().execute('SELECT p.* FROM contacts p WHERE '+data_where+' ORDER BY p.id LIMIT ? OFFSET ?',(*data_args,per_page,offset)).fetchall()
     elif tab=='results':

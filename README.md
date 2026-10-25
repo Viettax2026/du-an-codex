@@ -292,6 +292,8 @@ Khi tra cứu không tìm được người nhận Zalo (gồm mã 216, thông b
 
 Phần **Chi tiết** ngay dưới danh sách chiến dịch có 6 tab: Thông tin, Tài khoản, Data ban đầu, Kết quả chạy, Xem trước nội dung và Lịch sử chạy. Chọn dòng chiến dịch để xem dữ liệu riêng; bảng dài có phân trang, kết quả và lịch sử tự tải lại mỗi 15 giây khi đang xem. Thời gian lịch sử có giây, theo UTC+7. Tab chỉ đọc, không gọi gửi/tra cứu Zalo; tab Tài khoản đọc trạng thái phiên đã lưu. Data danh sách riêng hiển thị các thành viên đã lưu (kể cả hồ sơ đã xóa để tra cứu lịch sử); nhóm động được ghi rõ là danh sách hiện tại, không giả lập bản chụp lúc tạo.
 
+Tab **Xem trước nội dung** hiển thị mỗi biến thể trong một khung hội thoại Zalo, đặt cạnh nhau trên màn hình rộng và xếp dọc trên điện thoại. Dùng tên tài khoản gửi đã chọn, lặp lại tệp chung cho từng biến thể và giữ định dạng chữ. Ảnh kèm chữ định dạng được minh họa thành ảnh rồi tin chữ riêng, phù hợp luồng gửi; ảnh kèm chữ thường dùng chú thích chung. Video/PDF hiện sau tin chữ. Đây là bản minh họa nội dung đã lưu, không giả lập trạng thái người nhận đang online và không gửi tin khi mở tab.
+
 ## Giới hạn hành động
 
 Mục **7. Giới hạn hành động** trong Thêm/Sửa/Nhân bản chiến dịch có khoảng nghỉ giữa hai hành động, thẻ Nhắn tin và Kết bạn, số lượt đã chạy/còn lại và thanh tiến độ. **Đổi số phút/giờ** mở số phút của từng khung, từ 1 đến 1.440 phút. Có thể cập nhật sau khi đã có lần gửi qua **Hành động → Cập nhật giới hạn gửi**. Giới hạn đổi tên gợi nhớ được giữ trong phần mở rộng.

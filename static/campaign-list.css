@@ -137,3 +137,36 @@
 @media(max-width:700px){.campaign-list-screen .campaign-inline-detail{flex-basis:48%;min-height:260px;max-height:55%}}
 
 .campaign-list-screen .detail-title{font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.campaign-list-screen .detail-title strong{font-weight:600}
+
+.campaign-phone-previews{padding:0 14px 20px}
+.campaign-phone-previews>.inline-detail-note{padding:10px 0 12px}
+.zalo-preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:24px;max-width:910px;align-items:start}
+.campaign-detail-panel .zalo-preview-card{border:0;padding:0;max-width:443px;min-width:0}
+.zalo-preview-title{display:flex;align-items:center;gap:10px;min-height:38px;margin-bottom:12px}
+.zalo-variant-number{display:grid;place-items:center;flex:0 0 32px;height:32px;border-radius:10px;background:#e9e7ff;color:#6b60ff;font-weight:700;font-size:15px}
+.zalo-preview-title h3{font-size:15px;margin:0;font-weight:650;white-space:nowrap}
+.zalo-preview-badge{margin-left:auto;font-size:11px;border-radius:18px;color:#7568ff;background:#e9e7ff;padding:5px 9px;white-space:nowrap}
+.zalo-preview-phone{border:8px solid #222735;border-radius:38px;overflow:hidden;background:#f2f4f8;box-shadow:0 7px 18px #18233820}
+.zalo-preview-header{display:flex;align-items:center;gap:12px;padding:15px 17px;background:#0868ff;color:white;min-height:68px}
+.zalo-preview-avatar{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:50%;background:#478eff;font-size:16px;font-weight:600;color:white}
+.zalo-preview-header>div{min-width:0}
+.zalo-preview-header b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+.zalo-preview-header small{display:block;font-size:10px;margin-top:3px;color:#d4e4ff}
+.zalo-preview-chat{padding:14px 10px 12px;min-height:180px;background:#f2f4f8}
+.zalo-preview-date{text-align:center;color:#8a9ab0;font-size:11px;margin:3px 0 18px}
+.zalo-preview-bubble{margin:0 0 9px 48px;border-radius:18px 18px 4px 18px;overflow:hidden;min-width:0}
+.zalo-preview-image,.zalo-preview-caption{background:white}
+.zalo-preview-image img,.zalo-preview-caption img{display:block;width:100%;height:auto;max-height:none;object-fit:contain}
+.campaign-detail-panel .zalo-preview-text{background:#dcecff;color:#172b46;padding:12px 14px;font-size:14px;line-height:1.65;overflow-wrap:anywhere}
+.zalo-preview-text strong,.zalo-preview-text b{font-weight:700}
+.zalo-preview-caption .zalo-preview-text{border-radius:0}
+.zalo-preview-attachment{padding:12px;background:white}
+.zalo-preview-attachment a{display:flex;align-items:flex-start;gap:9px;color:#49688d;font-size:12px;overflow-wrap:anywhere}
+.zalo-preview-attachment a>svg{flex-shrink:0}.zalo-preview-attachment small{display:block;font-size:10px;color:#899bb3;margin-top:3px}
+.zalo-preview-attachment video{display:block;width:100%;max-height:240px;margin-bottom:10px}
+.zalo-preview-composer{display:flex;align-items:center;gap:12px;padding:10px 12px;background:white;border-top:1px solid #e2e8f2;color:#8193af;min-height:50px}
+.zalo-preview-composer span{display:block;flex:1;padding:8px 12px;border-radius:24px;background:#f0f2f6;font-size:12px;color:#95a2b5}
+.zalo-preview-composer svg{flex-shrink:0}
+.zalo-preview-setting{padding-top:16px;max-width:910px}.zalo-preview-setting>b{display:block;margin-bottom:6px;font-size:12px}
+@media(max-width:700px){.campaign-phone-previews{padding:0 10px 16px}.zalo-preview-grid{grid-template-columns:minmax(0,1fr);gap:20px}.zalo-preview-phone{border-width:7px;border-radius:30px}.zalo-preview-header{padding:12px;gap:10px}.zalo-preview-header b{max-width:220px}.zalo-preview-bubble{margin-left:28px}.campaign-detail-panel .zalo-preview-text{font-size:13px;padding:10px 12px}.zalo-preview-title{gap:8px}.zalo-preview-title h3{font-size:14px}.zalo-preview-badge{font-size:10px;padding:4px 8px}}
+@media(min-width:851px){.campaign-list-screen .campaign-inline-detail:not(.is-collapsed):has([data-detail-current="preview"]){flex-basis:min(60%,calc(100% - 300px));max-height:65%}}

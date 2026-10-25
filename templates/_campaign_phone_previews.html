@@ -1,0 +1,32 @@
+{% set media=campaign_media(selected.media_id) %}
+{% set sender=selected.account_name or 'Tài khoản gửi' %}
+<div class="campaign-phone-previews">
+  <p class="inline-detail-note">Minh họa nội dung đã lưu. Các biến cá nhân hóa sẽ thay theo người nhận.{% if media and media.mime.startswith('image/') and true in detail.formatted %} Ảnh và chữ có định dạng được gửi thành hai tin liên tiếp.{% endif %}</p>
+  <div class="zalo-preview-grid">
+  {% for html in detail.variants %}
+    <article class="inline-variant zalo-preview-card" aria-label="Xem trước nội dung {{ loop.index }}">
+      <header class="zalo-preview-title"><span class="zalo-variant-number">{{ loop.index }}</span><h3>Nội dung {{ loop.index }}</h3><span class="zalo-preview-badge">Tin nhắn Zalo</span></header>
+      <div class="zalo-preview-phone">
+        <div class="zalo-preview-header"><span class="zalo-preview-avatar" aria-hidden="true">{{ sender[0]|upper }}</span><div><b title="{{ sender }}">{{ sender }}</b><small>Xem trước nội dung</small></div></div>
+        <div class="zalo-preview-chat">
+          <div class="zalo-preview-date">Bản xem trước</div>
+          {% if media and media.mime.startswith('image/') %}
+            {% if detail.formatted[loop.index0] %}
+              <div class="zalo-preview-bubble zalo-preview-image"><img src="{{ url_for('media_file',media_id=media.id) }}" alt="{{ media.filename }}" loading="lazy"></div>
+              <div class="zalo-preview-bubble zalo-preview-text message-text">{{ html }}</div>
+            {% else %}
+              <div class="zalo-preview-bubble zalo-preview-caption"><img src="{{ url_for('media_file',media_id=media.id) }}" alt="{{ media.filename }}" loading="lazy"><div class="zalo-preview-text message-text">{{ html }}</div></div>
+            {% endif %}
+          {% else %}
+            <div class="zalo-preview-bubble zalo-preview-text message-text">{{ html }}</div>
+            {% if media %}<div class="zalo-preview-bubble zalo-preview-attachment">{% if media.mime=='video/mp4' %}<video controls preload="none" src="{{ url_for('media_file',media_id=media.id) }}" aria-label="{{ media.filename }}"></video>{% endif %}<a href="{{ url_for('media_file',media_id=media.id) }}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 3H5v18h14V8zM14 3v6h5M8 13h8M8 17h6"/></svg><span>{{ media.filename }}<small>{{ (media.size/1024)|round(1) }} KB</small></span></a></div>{% endif %}
+          {% endif %}
+        </div>
+        <div class="zalo-preview-composer" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 17a8 8 0 1 1 4 3l-5 1z"/></svg><span>Nhập tin nhắn</span><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 11 18-8-8 18-2-8zM11 13 21 3"/></svg></div>
+      </div>
+    </article>
+  {% else %}<p class="inline-detail-note">Chiến dịch không có nội dung nhắn tin.</p>{% endfor %}
+  </div>
+  {% if selected.send_friend %}<section class="zalo-preview-setting"><b>Lời mời kết bạn</b><p class="message-text">{{ selected.friend_message }}</p></section>{% endif %}
+  {% if selected.rename_enabled %}<section class="zalo-preview-setting"><b>Tên gợi nhớ</b><p>{{ selected.rename_template }}</p></section>{% endif %}
+</div>

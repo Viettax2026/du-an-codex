@@ -41,11 +41,7 @@
   {% for result in detail.rows %}<tr><td>{{ result.recipient_name or result.name }}<br>{{ result.recipient_phone or result.phone }}</td><td>{{ result.account_name }}</td><td>{{ 'Đã bỏ qua' if result.message_skip_reason and result.state=='not_requested' else send_state_labels.get(result.state,result.state) }}{% if result.message_id %}<br>{{ result.message_id }}{% endif %}</td><td>{{ send_state_labels.get(result.friend_state,result.friend_state) }}</td><td>{{ send_state_labels.get(result.alias_state,result.alias_state) }}</td><td>{% if result.message_skip_reason %}<p>{{ result.message_skip_reason }}</p>{% endif %}<div class="message-text">{{ display_message(result.message,result.message_styles) }}</div>{% if result.friend_message %}<p>Lời mời: {{ result.friend_message }}</p>{% endif %}{% if result.alias %}<p>Tên gợi nhớ: {{ result.alias }}</p>{% endif %}</td><td>{{ result.created_at|localtime_seconds }}</td></tr>{% else %}<tr><td colspan="7">Chưa có bản xem trước hoặc kết quả chạy.</td></tr>{% endfor %}
   </tbody></table>
 {% elif detail.tab=='preview' %}
-  <div class="inline-variant-list"><p class="inline-detail-note">Nội dung đã lưu, gồm cú pháp cá nhân hóa và các lựa chọn bạn đã nhập. Kết quả theo người nhận có trong tab Kết quả chạy.</p>
-  {% for html in detail.variants %}<article class="inline-variant"><b>Nội dung {{ loop.index }} / {{ detail.counts.preview }}</b><div class="message-text">{{ html }}</div></article>{% else %}<p>Chiến dịch không có nội dung nhắn tin.</p>{% endfor %}
-  {% if selected.send_friend %}<article class="inline-variant"><b>Lời mời kết bạn</b><p class="message-text">{{ selected.friend_message }}</p></article>{% endif %}
-  {% if selected.rename_enabled %}<article class="inline-variant"><b>Tên gợi nhớ</b><p>{{ selected.rename_template }}</p></article>{% endif %}
-  {% set media=campaign_media(selected.media_id) %}{% if media %}{% include '_media_preview.html' %}{% endif %}</div>
+  {% include '_campaign_phone_previews.html' %}
 {% elif detail.tab=='history' %}
   <table class="inline-detail-table inline-history-table"><thead><tr><th>Thời gian (UTC+7)</th><th>Nội dung</th></tr></thead><tbody>
   {% for event in detail.rows %}<tr><td>{{ event.created_at|localtime_seconds }}</td><td>{{ event.detail }}</td></tr>{% else %}<tr><td colspan="2">Chưa ghi nhận lịch sử chạy.</td></tr>{% endfor %}
