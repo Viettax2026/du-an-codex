@@ -43,7 +43,8 @@ def register_contact_management(app, db, login_required):
                         group=db().execute('SELECT deleted_at FROM data_groups WHERE user_id=? AND name=?',(g.user['id'],tag)).fetchone()
                         if group and group['deleted_at']:
                             raise ValueError('Nhóm này đã được lưu trữ. Chọn tên nhóm khác.')
-                        db().execute('INSERT OR IGNORE INTO data_groups(user_id,name,created_at) VALUES (?,?,CURRENT_TIMESTAMP)',(g.user['id'],tag))
+                        from data_groups import insert_data_group
+                        insert_data_group(db,g.user['id'],tag)
                         updates.append('tag=?');values.append(tag)
                     if consent:
                         updates.append('consent=?');values.append(int(consent=='yes'))

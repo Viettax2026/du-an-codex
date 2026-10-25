@@ -11,11 +11,69 @@ from flask import Response, abort, flash, g, jsonify, redirect, render_template,
 from data_import import read_contacts, insert_contact, read_sheet_rows, read_mapped_contacts, default_contact_consent
 
 
+def insert_data_group(db, user_id, name, data_type='all', color='#6860f6'):
+    # A persistent high-water mark prevents a deleted group's ID being reused by
+    # a new group, including when the last remaining group is deleted.
+    existing = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,name)).fetchone()
+    if existing:
+        return existing['id']
+    db().execute('''UPDATE data_group_sequence SET last_id=max(last_id,
+        (SELECT coalesce(max(id),0) FROM data_groups))+1 WHERE id=1''')
+    group_id = db().execute('SELECT last_id FROM data_group_sequence WHERE id=1').fetchone()[0]
+    db().execute('''INSERT OR IGNORE INTO data_groups(id,user_id,name,data_type,color,created_at)
+        VALUES (?,?,?,?,?,CURRENT_TIMESTAMP)''', (group_id,user_id,name,data_type,color))
+    return db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,name)).fetchone()['id']
+
+
+def materialize_legacy_groups(db, user_id):
+    for row in db().execute('''SELECT DISTINCT tag FROM contacts p WHERE user_id=? AND tag!=''
+        AND NOT EXISTS (SELECT 1 FROM data_groups d WHERE d.user_id=p.user_id AND d.name=p.tag)''', (user_id,)).fetchall():
+        insert_data_group(db,user_id,row['tag'])
+
+
+def remove_data_group(db, user_id, name):
+    """Delete the group; preserve profiles, provenance and existing audiences."""
+    group = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,name)).fetchone()
+    # Freeze dynamic campaigns before detaching the group's name. Snapshot all
+    # current members; consent and exclusions are still evaluated before sending.
+    db().execute('''DELETE FROM campaign_contacts WHERE campaign_id IN
+        (SELECT id FROM campaigns WHERE user_id=? AND tag=? AND audience_mode='group')''', (user_id,name))
+    db().execute('''INSERT OR IGNORE INTO campaign_contacts(campaign_id,contact_id)
+        SELECT c.id,m.contact_id FROM campaigns c JOIN contact_group_memberships m
+          ON m.user_id=c.user_id AND m.group_name=c.tag
+        WHERE c.user_id=? AND c.tag=? AND c.audience_mode='group' ''', (user_id,name))
+    db().execute("UPDATE campaigns SET audience_mode='list',tag='' WHERE user_id=? AND tag=? AND audience_mode='group'", (user_id,name))
+    db().execute("UPDATE campaigns SET tag='' WHERE user_id=? AND tag=?", (user_id,name))
+    if group:
+        group_id = group['id']
+        # Existing exclusions must continue protecting these recipients after
+        # deletion, and must never follow a new group with the same name.
+        db().execute('''INSERT OR IGNORE INTO exclusion_rule_contacts(rule_group_id,contact_id)
+            SELECT r.id,m.contact_id FROM exclusion_rule_groups r JOIN contact_group_memberships m
+              ON m.user_id=r.user_id AND m.group_name=?
+            WHERE r.user_id=? AND r.data_group_id=?''', (name,user_id,group_id))
+        db().execute('UPDATE exclusion_rule_groups SET data_group_id=NULL WHERE user_id=? AND data_group_id=?', (user_id,group_id))
+        db().execute('UPDATE data_import_batches SET group_id=NULL WHERE user_id=? AND group_id=?', (user_id,group_id))
+        db().execute('UPDATE contact_data_sources SET group_id=NULL WHERE user_id=? AND group_id=?', (user_id,group_id))
+        db().execute('UPDATE data_group_sequence SET last_id=max(last_id,?) WHERE id=1', (group_id,))
+        db().execute('DELETE FROM data_group_contacts WHERE group_id=?', (group_id,))
+        db().execute('DELETE FROM data_groups WHERE id=? AND user_id=?', (group_id,user_id))
+    db().execute("UPDATE contacts SET tag='' WHERE user_id=? AND tag=?", (user_id,name))
+
+
+def purge_archived_groups(app, db):
+    """Apply permanent deletion to groups hidden by earlier versions as well."""
+    with app.app_context():
+        db().execute('BEGIN IMMEDIATE')
+        for group in db().execute('SELECT user_id,name FROM data_groups WHERE deleted_at IS NOT NULL').fetchall():
+            remove_data_group(db,group['user_id'],group['name'])
+        db().commit()
+
+
 def save_group_members(db, user_id, group, incoming, consent=1, filename='', source_type=None, confirm_existing=False):
     """Persist validated members and provenance in the caller's transaction."""
     added = created_profiles = confirmed = 0
-    db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (user_id,group))
-    destination_id = db().execute('SELECT id FROM data_groups WHERE user_id=? AND name=?', (user_id,group)).fetchone()['id']
+    destination_id = insert_data_group(db,user_id,group)
     batch_id = create_source_batch(db, user_id, group, filename, source_type)
     recorded = 0
     for phone, row in incoming.items():
@@ -54,14 +112,18 @@ def register_data_groups(app, db, login_required, parse_phones):
         contact_columns = {row['name'] for row in db().execute('PRAGMA table_info(contacts)')}
         if 'data_source' not in contact_columns:
             db().execute("ALTER TABLE contacts ADD COLUMN data_source TEXT NOT NULL DEFAULT ''")
-        db().executescript('''CREATE TABLE IF NOT EXISTS data_group_contacts (
+        db().executescript('''CREATE TABLE IF NOT EXISTS data_group_sequence (
+            id INTEGER PRIMARY KEY CHECK(id=1),last_id INTEGER NOT NULL);
+            INSERT OR IGNORE INTO data_group_sequence(id,last_id) SELECT 1,coalesce(max(id),0) FROM data_groups;
+            UPDATE data_group_sequence SET last_id=max(last_id,(SELECT coalesce(max(id),0) FROM data_groups)) WHERE id=1;
+            CREATE TABLE IF NOT EXISTS data_group_contacts (
             group_id INTEGER NOT NULL REFERENCES data_groups(id) ON DELETE CASCADE,
             contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
             PRIMARY KEY(group_id,contact_id));
             CREATE INDEX IF NOT EXISTS data_group_contacts_contact ON data_group_contacts(contact_id);
             DROP VIEW IF EXISTS contact_group_memberships;
             CREATE VIEW contact_group_memberships AS
-            SELECT user_id,tag AS group_name,id AS contact_id FROM contacts WHERE deleted_at IS NULL
+            SELECT user_id,tag AS group_name,id AS contact_id FROM contacts WHERE deleted_at IS NULL AND tag!=''
             UNION SELECT d.user_id,d.name,m.contact_id FROM data_group_contacts m
                 JOIN data_groups d ON d.id=m.group_id JOIN contacts p ON p.id=m.contact_id AND p.user_id=d.user_id AND p.deleted_at IS NULL;''')
         initialize_data_sources(db)
@@ -81,21 +143,23 @@ def register_data_groups(app, db, login_required, parse_phones):
                 error = 'Loại data không hợp lệ.'
             elif not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
                 error = 'Màu nhóm không hợp lệ.'
-            elif db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
+            if not error:
+                db().execute('BEGIN IMMEDIATE')
+            if not error and db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
                               (g.user['id'], name, g.user['id'], name)).fetchone():
                 error = 'Tên nhóm đã tồn tại. Vui lòng chọn tên khác.'
             if error:
+                db().rollback()
                 flash(error, 'error')
             else:
-                db().execute('INSERT INTO data_groups(user_id,name,data_type,color,created_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)',
-                             (g.user['id'], name, data_type, color.lower()))
+                insert_data_group(db,g.user['id'],name,data_type,color.lower())
                 db().commit()
                 return redirect(url_for('data_groups', group=name))
-        db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) SELECT user_id,tag FROM contacts WHERE user_id=? GROUP BY tag', (g.user['id'],))
+        materialize_legacy_groups(db,g.user['id'])
         db().commit()
         groups = db().execute('''SELECT names.name, d.id, count(p.id) AS total,
             COALESCE(d.data_type,'all') AS data_type, COALESCE(d.color,'#6860f6') AS color FROM
-            (SELECT name FROM data_groups WHERE user_id=? UNION SELECT tag FROM contacts WHERE user_id=?) names
+            (SELECT name FROM data_groups WHERE user_id=? UNION SELECT tag FROM contacts WHERE user_id=? AND tag!='') names
             LEFT JOIN contacts p ON p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=p.user_id AND group_name=names.name) AND p.user_id=?
             LEFT JOIN data_groups d ON d.name=names.name AND d.user_id=?
             WHERE d.deleted_at IS NULL GROUP BY names.name ORDER BY names.name''',
@@ -180,6 +244,8 @@ def register_data_groups(app, db, login_required, parse_phones):
         return Response('\ufeff' + stream.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename="group-data.csv"'})
 
     def require_group(name):
+        if not name:
+            abort(404)
         metadata = db().execute('SELECT * FROM data_groups WHERE user_id=? AND name=?', (g.user['id'], name)).fetchone()
         if metadata and metadata['deleted_at']:
             abort(404)
@@ -202,7 +268,7 @@ def register_data_groups(app, db, login_required, parse_phones):
             if name != original and db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
                                                   (g.user['id'], name, g.user['id'], name)).fetchone():
                 raise ValueError('Tên nhóm đã tồn tại. Vui lòng chọn tên khác.')
-            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'], original))
+            insert_data_group(db,g.user['id'],original)
             db().execute('UPDATE data_groups SET name=?,data_type=?,color=? WHERE user_id=? AND name=?', (name, data_type, color.lower(), g.user['id'], original))
             db().execute('UPDATE contacts SET tag=? WHERE user_id=? AND tag=?', (name, g.user['id'], original))
             db().execute('UPDATE campaigns SET tag=? WHERE user_id=? AND tag=?', (name, g.user['id'], original))
@@ -230,10 +296,9 @@ def register_data_groups(app, db, login_required, parse_phones):
                 if db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?',
                                  (g.user['id'], name, g.user['id'], name)).fetchone():
                     raise ValueError('Tên nhóm đã tồn tại. Vui lòng chọn tên khác.')
-                result = db().execute('''INSERT INTO data_groups(user_id,name,data_type,color,created_at)
-                    VALUES (?,?,?,?,CURRENT_TIMESTAMP)''', (g.user['id'], name, metadata['data_type'] if metadata else 'all', metadata['color'] if metadata else '#6860f6'))
+                group_id = insert_data_group(db,g.user['id'],name,metadata['data_type'] if metadata else 'all',metadata['color'] if metadata else '#6860f6')
                 db().execute('''INSERT INTO data_group_contacts(group_id,contact_id)
-                    SELECT ?,contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?''', (result.lastrowid, g.user['id'], original))
+                    SELECT ?,contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?''', (group_id, g.user['id'], original))
                 db().commit()
                 flash('Đã nhân bản nhóm cùng danh sách data. Không tạo trùng hồ sơ khách hàng hoặc sao chép chiến dịch.', 'success')
                 return redirect(url_for('data_groups', group=name))
@@ -250,12 +315,15 @@ def register_data_groups(app, db, login_required, parse_phones):
         if request.method == 'POST':
             if request.form.get('confirm_delete') != 'yes':
                 abort(400)
-            db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) VALUES (?,?)', (g.user['id'], name))
-            db().execute('UPDATE data_groups SET deleted_at=CURRENT_TIMESTAMP WHERE user_id=? AND name=?', (g.user['id'], name))
+            db().execute('BEGIN IMMEDIATE')
+            current = require_group(name)
+            if request.form.get('group_id') and (not current or str(current['id']) != request.form['group_id']):
+                abort(409, 'Nhóm đã thay đổi. Tải lại trước khi xóa.')
+            remove_data_group(db,g.user['id'],name)
             db().commit()
-            flash('Đã ẩn nhóm khỏi danh sách. Khách hàng và dữ liệu chiến dịch được giữ nguyên.', 'success')
+            flash('Đã xóa nhóm. Khách hàng và lịch sử nguồn được giữ nguyên; chiến dịch cũ giữ danh sách hiện tại.', 'success')
             return redirect(url_for('data_groups'))
-        return render_template('group_delete.html', name=name, page='data_groups')
+        return render_template('group_delete.html', name=name, metadata=metadata, page='data_groups')
 
     def group_import_input(preview=False):
         group = request.form.get('group', '')

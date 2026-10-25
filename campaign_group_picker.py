@@ -30,7 +30,8 @@ def register_campaign_group_picker(app, db, login_required):
     @app.get('/campaigns/group-options')
     @login_required
     def campaign_group_options():
-        db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) SELECT user_id,tag FROM contacts WHERE user_id=? GROUP BY tag',(g.user['id'],))
+        from data_groups import materialize_legacy_groups
+        materialize_legacy_groups(db,g.user['id'])
         db().commit()
         rows=db().execute('''SELECT d.id,d.name,d.data_type,count(p.id) AS total,coalesce(sum(p.consent=1),0) AS eligible
             FROM data_groups d LEFT JOIN contact_group_memberships m ON m.user_id=d.user_id AND m.group_name=d.name

@@ -437,7 +437,7 @@ def test_delete_group_requires_confirmation_and_preserves_contacts_campaigns(app
     assert post(client, '/data-groups/import', {'group': 'Archive', 'phones': '0912345678'}).status_code == 404
     with database(app) as db:
         assert db.execute('SELECT phone FROM contacts').fetchall() == [('0901234567',)]
-        assert db.execute('SELECT deleted_at FROM data_groups WHERE name=?', ('Archive',)).fetchone()[0]
+        assert db.execute('SELECT id FROM data_groups WHERE name=?', ('Archive',)).fetchone() is None
         assert db.execute('SELECT count(*) FROM campaigns').fetchone() == (1,)
     other = app.test_client(); register(other, 'other')
     assert other.get('/data-groups/delete?group=Archive').status_code == 404

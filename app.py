@@ -848,6 +848,8 @@ def create_app(test_config=None):
     register_message_composer(app, db, login_required, manager)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
+    from data_groups import purge_archived_groups
+    purge_archived_groups(app, db)
     return app
 
 

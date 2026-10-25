@@ -249,6 +249,8 @@ Tab **Từ template Excel ZaloFlow** hỗ trợ chọn hoặc kéo thả một t
 
 ### Nhân bản nhóm data
 
+Xóa nhóm sẽ xóa vĩnh viễn nhóm và liên kết thành viên, cho phép tạo lại cùng tên với ID mới. Hồ sơ khách hàng, thành viên ở nhóm khác và lịch sử nguồn vẫn được giữ nguyên. Khách hàng chỉ thuộc nhóm đã xóa trở thành chưa có nhóm gốc. Chiến dịch dùng nhóm động được chốt thành danh sách riêng tại thời điểm xóa; điều kiện loại trừ dùng nhóm giữ danh sách khách hàng hiện tại. Nhóm tạo lại không làm thay đổi chiến dịch hoặc loại trừ cũ. Khi cập nhật, các nhóm đã bị ẩn ở phiên bản trước cũng được xử lý theo cách này.
+
 Biểu tượng hai ô vuông cạnh nhóm mở màn hình **Nhân bản nhóm data**, cho phép đặt tên mới. Nhóm sao chép có ID riêng, giữ màu, loại data và danh sách hiện tại, bao gồm khách hàng chưa đồng ý nhận tin. Hai nhóm dùng chung hồ sơ khách hàng; không tạo thêm số điện thoại trùng hoặc đổi nhóm gốc. Thêm khách hàng mới vào nhóm gốc sau đó không tự bổ sung vào bản sao. Nhóm sao chép dùng được trong chiến dịch, bộ lọc tài khoản và xuất CSV; chiến dịch chỉ lấy khách hàng đã đồng ý nhận tin. Không sao chép chiến dịch hoặc nhật ký gửi. Nút sao chép nhỏ tại huy hiệu ID vẫn chép ID vào clipboard.
 
 ### Lịch sử nguồn data

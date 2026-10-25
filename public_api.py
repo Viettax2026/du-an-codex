@@ -10,7 +10,7 @@ from functools import wraps
 from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import HTTPException
 
-from data_groups import save_group_members
+from data_groups import save_group_members, insert_data_group, materialize_legacy_groups
 from media_library import store_library_upload, remove_library_media
 
 SCOPES = {'data:read': 'Đọc nhóm và data', 'data:write': 'Tạo nhóm, thêm data',
@@ -169,7 +169,7 @@ def register_public_api(app, db, login_required, manager, parse_phones):
         if len(search)>200:
             raise ValueError('Từ khóa tối đa 200 ký tự.')
         # Materialize legacy tag groups so every group has a stable ID.
-        db().execute('INSERT OR IGNORE INTO data_groups(user_id,name) SELECT user_id,tag FROM contacts WHERE user_id=? GROUP BY tag', (g.user['id'],))
+        materialize_legacy_groups(db,g.user['id'])
         db().commit()
         args=(g.user['id'],'%'+search+'%')
         total=db().execute('SELECT count(*) FROM data_groups WHERE user_id=? AND deleted_at IS NULL AND name LIKE ?',args).fetchone()[0]
@@ -189,9 +189,9 @@ def register_public_api(app, db, login_required, manager, parse_phones):
         db().execute('BEGIN IMMEDIATE')
         if db().execute('SELECT 1 FROM data_groups WHERE user_id=? AND name=? UNION SELECT 1 FROM contacts WHERE user_id=? AND tag=?', (g.user['id'],name,g.user['id'],name)).fetchone():
             abort(409,'Tên nhóm đã tồn tại.')
-        cursor=db().execute('INSERT INTO data_groups(user_id,name,data_type,color,created_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)', (g.user['id'],name,kind,color.lower()))
+        group_id=insert_data_group(db,g.user['id'],name,kind,color.lower())
         db().commit()
-        return result(dict(id=cursor.lastrowid,name=name,data_type=kind,color=color.lower()),201)
+        return result(dict(id=group_id,name=name,data_type=kind,color=color.lower()),201)
 
     @api.get('/data-groups/<int:group_id>/members')
     @scope('data:read')

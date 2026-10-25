@@ -15,6 +15,7 @@ def exclusion_predicate(person='p', campaign='c', resolved_uid="''"):
             WHERE ec.user_id={person}.user_id AND es.contact_id={person}.id AND es.campaign_id!={campaign}.id AND es.friend_state='friend_requested')) OR
           (r.renamed=1 AND EXISTS (SELECT 1 FROM message_sends es JOIN campaigns ec ON ec.id=es.campaign_id
             WHERE ec.user_id={person}.user_id AND es.contact_id={person}.id AND es.campaign_id!={campaign}.id AND es.alias_state='renamed')) OR
+          EXISTS (SELECT 1 FROM exclusion_rule_contacts erc WHERE erc.rule_group_id=r.id AND erc.contact_id={person}.id) OR
           (r.data_group_id IS NOT NULL AND EXISTS (SELECT 1 FROM data_groups ed JOIN contact_group_memberships em
             ON em.user_id=ed.user_id AND em.group_name=ed.name WHERE ed.id=r.data_group_id AND ed.user_id={person}.user_id AND em.contact_id={person}.id))
         )) OR EXISTS (SELECT 1 FROM campaign_exclusion_lists x JOIN exclusion_lists l ON l.id=x.list_id
@@ -59,6 +60,10 @@ def register_campaign_exclusions(app, db, login_required, manager, parse_phones)
             id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),name TEXT NOT NULL,
             sent INTEGER NOT NULL DEFAULT 0,friend_requested INTEGER NOT NULL DEFAULT 0,renamed INTEGER NOT NULL DEFAULT 0,
             data_group_id INTEGER REFERENCES data_groups(id),UNIQUE(user_id,name));
+            CREATE TABLE IF NOT EXISTS exclusion_rule_contacts (
+            rule_group_id INTEGER NOT NULL REFERENCES exclusion_rule_groups(id) ON DELETE CASCADE,
+            contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+            PRIMARY KEY(rule_group_id,contact_id));
             CREATE TABLE IF NOT EXISTS exclusion_lists (
             id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),name TEXT NOT NULL,UNIQUE(user_id,name));
             CREATE TABLE IF NOT EXISTS exclusion_list_entries (
