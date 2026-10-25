@@ -123,6 +123,11 @@ class CampaignManager:
                 return False
             if guard is not None:
                 guard(campaign,row)
+            elif campaign['schedule_enabled']:
+                from campaign_schedule import manual_schedule_block
+                schedule_error=manual_schedule_block(campaign)
+                if schedule_error:
+                    abort(409,schedule_error)
             snapshot_fields = ('contact_id', 'account_id', 'recipient_id', 'message', 'friend_message', 'alias', 'media_id', 'message_styles', 'recipient_phone')
             if any(row[key] != expected[key] for key in snapshot_fields):
                 abort(409, 'Bản xem trước đã thay đổi trong tab khác. Tải lại để kiểm tra và xác nhận đúng nội dung.')
@@ -139,7 +144,8 @@ class CampaignManager:
             connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action) VALUES (?,?,?)',
                                (campaign_id, send_id, action))
             label = {'send': 'tin nhắn', 'friend': 'lời mời kết bạn', 'alias': 'đổi tên gợi nhớ'}[action]
-            self.event(campaign_id, action, f'Bắt đầu xử lý {label}, bản gửi #{send_id}.')
+            origin='Theo lịch tự động' if guard is not None else 'Xác nhận thủ công'
+            self.event(campaign_id, action, f'Bắt đầu xử lý {label}, bản gửi #{send_id}. Nguồn: {origin}.')
             connection.commit()
             return True
         except BaseException:
@@ -162,7 +168,8 @@ class CampaignManager:
             alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'] if send_message else None,json.dumps(styles),int(scheduled),person['phone'],skip_reason))
         if send_message:
             self.db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?',(campaign['id'],))
-        self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}.')
+        origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
+        self.event(campaign['id'],'schedule_preview' if scheduled else 'preview',f'Tạo bản xem trước cho khách hàng #{person["id"]}. Nguồn: {origin}.')
         return row.lastrowid
 
     def skip_duplicate_message(self,campaign_id,send_id):

@@ -88,6 +88,22 @@ def save_schedule(db, campaign_id, form, account_id):
         schedule_first_day=?,schedule_carry=?,schedule_error='',schedule_revision=schedule_revision+1,schedule_status=? WHERE id=?''',
         (*values.values(),old['schedule_first_day'] if unchanged else None,old['schedule_carry'] if unchanged else 0,
          'Chờ đến giờ chạy' if values['schedule_enabled'] else 'Chưa bật lịch',campaign_id))
+    if values['schedule_enabled']:
+        stop=values['schedule_stop'] if values['schedule_stop_enabled'] else '23:59'
+        kind={'daily':'Hằng ngày','weekly':'Theo tuần','monthly':'Theo tháng'}[values['schedule_kind']]
+        recurrence=''
+        if values['schedule_kind']=='weekly':
+            names=('Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7','Chủ nhật')
+            recurrence=' · '+', '.join(names[int(day)] for day in values['schedule_weekdays'].split(','))
+        elif values['schedule_kind']=='monthly':
+            recurrence=f" · Ngày {values['schedule_monthday']} mỗi tháng"
+        account=db().execute('SELECT name FROM zalo_accounts WHERE id=? AND user_id=?',(account_id,old['user_id'])).fetchone()
+        detail=f"Lưu lịch: {kind}{recurrence} · Từ {values['schedule_date']} · {values['schedule_time']}–{stop} (24 giờ, UTC+7) · Tài khoản: {account['name'] if account else account_id}."
+    elif old['schedule_enabled']:
+        detail='Tắt lịch chạy tự động. Các thao tác gửi thủ công vẫn cần xác nhận.'
+    else:
+        return
+    db().execute("INSERT INTO campaign_events(campaign_id,kind,detail) VALUES (?,'schedule',?)",(campaign_id,detail))
 
 
 def active_window(campaign, now):
@@ -114,6 +130,19 @@ def active_window(campaign, now):
         return True
     except (ValueError,TypeError):
         return False
+
+
+def manual_schedule_block(campaign, now=None):
+    """Manual confirmation must not bypass a campaign's enabled schedule."""
+    if not campaign['schedule_enabled']:
+        return ''
+    if campaign['schedule_error']:
+        return 'Lịch đang tạm dừng: '+campaign['schedule_error']+' Kiểm tra và lưu lại lịch trước khi thực hiện hành động.'
+    if active_window(campaign,now or local_now()):
+        return ''
+    stop=campaign['schedule_stop'] if campaign['schedule_stop_enabled'] else '23:59'
+    return (f"Ngoài lịch chạy đã lưu: {campaign['schedule_time']}–{stop}, từ {campaign['schedule_date']} "
+            '(giờ Việt Nam, UTC+7). Gửi tin, kết bạn và đổi tên chỉ được thực hiện trong lịch đã bật.')
 
 
 class CampaignScheduler:
@@ -307,6 +336,7 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
     scheduler=CampaignScheduler(app,db,manager,connector,audience)
     app.extensions['campaign_scheduler']=scheduler
     app.jinja_env.globals['schedule_today']=lambda: local_now().date().isoformat()
+    app.jinja_env.globals['manual_schedule_block']=manual_schedule_block
     def scheduler_online():
         try:
             return time.time()-Path(app.config['DATABASE']).with_suffix('.scheduler.heartbeat').stat().st_mtime<180
@@ -328,7 +358,6 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
                     raise ValueError('Tài khoản gửi không hợp lệ.')
                 save_schedule(db,campaign_id,request.form,account_id)
                 db().execute('UPDATE campaigns SET account_id=? WHERE id=?',(account_id,campaign_id))
-                manager.event(campaign_id,'schedule','Cập nhật lịch tự động (UTC+7).')
                 db().commit();flash('Đã lưu lịch chạy. Chỉ xử lý những khách hàng chưa gửi trong chiến dịch.','success')
                 return redirect(url_for('campaign_detail',campaign_id=campaign_id))
             except ValueError as error:

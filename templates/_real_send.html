@@ -1,5 +1,7 @@
+{% set schedule_block=manual_schedule_block(campaign) %}
 <section class="panel form-panel" id="real-send">
   <h2>Gửi tin qua tài khoản Zalo</h2>
+  {% if schedule_block %}<p class="notice">{{ schedule_block }} <a href="{{ url_for('campaign_schedule',campaign_id=campaign.id) }}">Cài đặt lịch chạy</a></p>{% endif %}
   <p>Gửi từng tin sau khi kiểm tra người nhận. Mỗi khách hàng được gửi một lần trong chiến dịch. Zalo tiếp nhận tin không có nghĩa người nhận đã đọc.</p>
   {% if connected_accounts and recipients and not campaign.paused %}
   <form method="post" action="{{ url_for('prepare_send', campaign_id=campaign.id) }}">
@@ -30,7 +32,7 @@
       <form method="post" action="{{ url_for('send_friend_request',campaign_id=campaign.id,send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_friend" value="yes" required> Tôi xác nhận gửi lời mời này đến đúng người nhận Zalo.</label>
-        <button class="primary" {% if campaign.paused or blocked %}disabled{% endif %}>Gửi lời mời kết bạn</button>
+        <button class="primary" {% if campaign.paused or blocked or schedule_block %}disabled{% endif %}>Gửi lời mời kết bạn</button>
       </form>
     {% elif s.friend_state=='friend_requested' %}<p class="notice success">Zalo đã tiếp nhận lời mời · Chưa xác nhận đã chấp nhận kết bạn</p>
     {% elif s.friend_state=='failed' %}<p class="notice error">Không gửi được lời mời kết bạn.</p>
@@ -42,7 +44,7 @@
     <form method="post" action="{{ url_for('change_alias',campaign_id=campaign.id,send_id=s.id) }}">
       <input type="hidden" name="csrf" value="{{ session.csrf }}">
       <label class="send-confirm"><input type="checkbox" name="confirm_alias" value="yes" required> Tôi xác nhận đổi tên gợi nhớ của người nhận này.</label>
-      <button class="primary" {% if campaign.paused or blocked %}disabled{% endif %}>Đổi tên gợi nhớ</button>
+      <button class="primary" {% if campaign.paused or blocked or schedule_block %}disabled{% endif %}>Đổi tên gợi nhớ</button>
     </form>
     {% elif s.alias_state=='renamed' %}<p class="notice success">Zalo đã tiếp nhận đổi tên gợi nhớ.</p>
     {% elif s.alias_state=='failed' %}<p class="notice error">Không đổi được tên gợi nhớ. Kiểm tra quan hệ bạn bè và phiên đăng nhập.</p>
@@ -52,7 +54,7 @@
       <form method="post" action="{{ url_for('send_message', campaign_id=campaign.id, send_id=s.id) }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_send" value="yes" required> Tôi đã kiểm tra đúng người nhận và đồng ý gửi nội dung này qua Zalo.</label>
-        <button class="primary" {% if campaign.paused or blocked or recent_message %}disabled{% endif %}>Gửi tin thật</button>
+        <button class="primary" {% if campaign.paused or blocked or recent_message or schedule_block %}disabled{% endif %}>Gửi tin thật</button>
       </form>
     {% elif s.state=='sent' %}<p class="notice success">Zalo đã tiếp nhận · Mã tin: {{ s.message_id }} · Chưa xác nhận đã đọc</p>
     {% elif s.state=='failed' %}<p class="notice error">Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối.</p>
