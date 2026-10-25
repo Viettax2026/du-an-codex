@@ -1,4 +1,5 @@
 """Read saved per-action outcomes without dispatching or resolving recipients."""
+from campaign_errors import error_description
 
 RESULTS_SQL='''WITH source AS (
     SELECT s.id,s.recipient_name,s.recipient_phone,s.recipient_id,s.created_at,s.lookup_state,
@@ -12,13 +13,13 @@ RESULTS_SQL='''WITH source AS (
         CASE WHEN lookup_state<>'' THEN lookup_state WHEN recipient_id<>'' THEN 'resolved'
              WHEN message_skip_reason='Bỏ qua ' || recipient_phone || ': không tìm thấy Zalo từ số điện thoại này.'
              THEN 'not_found' ELSE 'unavailable' END AS outcome,
-        created_at AS occurred_at,0 AS approximate FROM source
+        created_at AS occurred_at,0 AS approximate,'' AS error_reason,'' AS error_code FROM source
     UNION ALL
-    SELECT id,'send',1,'skipped',created_at,0 FROM source
+    SELECT id,'send',1,'skipped',created_at,0,'','' FROM source
         WHERE state='not_requested' AND recipient_id<>'' AND message_skip_reason<>''
 '''+''.join(f'''
     UNION ALL SELECT s.id,'{action}',{rank},s.{column},
-        coalesce(a.completed_at,a.created_at,s.created_at),a.completed_at IS NULL
+        coalesce(a.completed_at,a.created_at,s.created_at),a.completed_at IS NULL,a.error_reason,a.error_code
         FROM source s LEFT JOIN campaign_attempts a ON a.send_id=s.id AND a.action='{action}'
         WHERE s.{column} NOT IN ('prepared','not_requested')
 ''' for action,column,rank in [('send','state',1),('friend','friend_state',2),('alias','alias_state',3)])+''')
@@ -50,6 +51,8 @@ def result_rows(db,owner,campaign,limit,offset):
                          'alias':f'Đã đổi tên {name} thành "{row["alias"]}".'}[action]
         elif state=='not_found':
             status,description='Không tồn tại','Không tìm thấy Zalo từ số điện thoại này.'
+        elif state=='blocked':
+            status,description='Bị Zalo chặn',row['message_skip_reason'] or 'Người nhận bị Zalo chặn (mã 210).'
         elif state=='cached':
             status,tone,description='Đã lưu','neutral','Dùng Zalo đã lưu từ lần tra cứu trước; không tra cứu lại.'
         elif state=='unavailable':
@@ -62,6 +65,8 @@ def result_rows(db,owner,campaign,limit,offset):
             status,description='Đang xử lý / cần kiểm tra','Chưa có kết quả xác nhận. Không tự thực hiện lại hành động.'
         else:
             description='Chưa xác định kết quả. Kiểm tra hội thoại Zalo trước khi tiếp tục.'
+        if state in ('failed','unknown') and error_description(item):
+            description=error_description(item)
         if row['schedule_skip_reason'] and state in ('unknown','failed','sending'):
             description+=' '+row['schedule_skip_reason']
         item.update(name=name,phone=phone,label=LABELS[action],status=status,tone=tone,description=description)

@@ -454,7 +454,7 @@ def create_app(test_config=None):
                 sum(schedule_skip_reason='' AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared')) AS waiting,
                 sum(schedule_skip_reason='' AND (state='sending' OR friend_state='sending' OR alias_state='sending')) AS sending,
                 sum(schedule_skip_reason='' AND (state='unknown' OR friend_state='unknown' OR alias_state='unknown')) AS uncertain,
-                sum(schedule_skip_reason='' AND (state='failed' OR friend_state='failed' OR alias_state='failed')) AS failed
+                sum(schedule_skip_reason='' AND ((state='failed' AND NOT EXISTS (SELECT 1 FROM campaign_attempts ca WHERE ca.send_id=message_sends.id AND ca.action='send' AND ca.error_reason='stranger_messages_blocked')) OR friend_state='failed' OR alias_state='failed')) AS failed
                 FROM message_sends GROUP BY campaign_id) r ON r.campaign_id=c.id
             WHERE c.user_id=? AND c.name LIKE ?
               AND ((?='deleted' AND c.deleted_at IS NOT NULL) OR (?!='deleted' AND c.deleted_at IS NULL))
@@ -687,7 +687,7 @@ def create_app(test_config=None):
         state = result.get('state') if result.get('state') in ('sent', 'failed', 'unknown') else 'unknown'
         db().execute('UPDATE message_sends SET state=?, message_id=? WHERE id=?',
                      (state, str(result.get('message_id', ''))[:100] if state == 'sent' else '', send_id))
-        manager.result(campaign_id, 'send', send_id, state)
+        manager.result(campaign_id, 'send', send_id, state,result)
         db().commit()
         flash({'sent': 'Zalo đã tiếp nhận tin nhắn. Chưa xác nhận người nhận đã đọc.',
                'failed': 'Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối VPS.',
@@ -720,7 +720,7 @@ def create_app(test_config=None):
             result = {'state': 'unknown'}
         state = result.get('state') if result.get('state') in ('friend_requested', 'failed', 'unknown') else 'unknown'
         db().execute('UPDATE message_sends SET friend_state=? WHERE id=?', (state, send_id))
-        manager.result(campaign_id, 'friend', send_id, state)
+        manager.result(campaign_id, 'friend', send_id, state,result)
         db().commit()
         flash({'friend_requested': 'Zalo đã tiếp nhận lời mời. Chưa xác nhận người nhận chấp nhận kết bạn.',
                'failed': 'Không gửi được lời mời. Kiểm tra phiên đăng nhập.',
@@ -750,7 +750,7 @@ def create_app(test_config=None):
                 result = {'state':'unknown'}
             state = result.get('state') if result.get('state') in ('renamed','failed','unknown') else 'unknown'
             db().execute('UPDATE message_sends SET alias_state=? WHERE id=?',(state,send_id))
-            manager.result(campaign_id, 'alias', send_id, state)
+            manager.result(campaign_id, 'alias', send_id, state,result)
             db().commit()
         return redirect(url_for('campaign_detail',campaign_id=campaign_id))
 

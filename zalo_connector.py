@@ -117,12 +117,15 @@ class QRConnector:
             public={key: output[key] for key in ('state', 'uid', 'name', 'original_name', 'gender', 'message_id') if key in output}
             if action=='resolve':
                 import re
-                reasons={'session','network','rate_limited','invalid_response','connector_unavailable','unavailable'}
+                reasons={'session','network','rate_limited','invalid_response','connector_unavailable','unavailable','recipient_blocked'}
                 if output.get('lookup_reason') in reasons:
                     public['lookup_reason']=output['lookup_reason']
                 code=str(output.get('lookup_code',''))
                 if re.fullmatch(r'-?\d{1,8}|[A-Z][A-Z0-9_]{0,31}',code):
                     public['lookup_code']=code
+            else:
+                from campaign_errors import diagnostics
+                public.update(diagnostics(output))
             return public
         except subprocess.TimeoutExpired:
             if action=='resolve':

@@ -3,10 +3,11 @@ import { Zalo } from 'zca-js';
 import { decryptCredentials } from './state.mjs';
 import { executeMessageAction } from './message-action.mjs';
 import { lookupFailure } from './lookup-errors.mjs';
+import { actionFailure } from './action-errors.mjs';
 
-let sending = false, action='', stage='input';
+let sending = false, partial=false, action='', stage='input';
 const finish = value => { process.stdout.write(JSON.stringify(value)); process.exit(0); };
-setTimeout(() => finish(action==='resolve'?lookupFailure(new Error('timeout'),stage):{state: sending ? 'unknown' : 'failed'}), 40_000);
+setTimeout(() => finish(action==='resolve'?lookupFailure(new Error('timeout'),stage):actionFailure(new Error('timeout'),action,stage,sending,partial)), 40_000);
 try {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   action=input.action;
@@ -19,8 +20,8 @@ try {
   stage='session';
   const api = await new Zalo({logging: false, checkUpdate: false}).login(credentials);
   stage=action==='resolve'?'lookup':'dispatch';
-  finish(await executeMessageAction(api, input, () => { sending = true; }));
+  finish(await executeMessageAction(api, input, () => { sending = true; },()=>{partial=true;}));
 } catch (error) {
   // An error after dispatch may follow acceptance by Zalo. Never retry automatically.
-  finish(action==='resolve'?lookupFailure(error,stage):{state: sending ? 'unknown' : 'failed'});
+  finish(action==='resolve'?lookupFailure(error,stage):actionFailure(error,action,stage,sending,partial));
 }

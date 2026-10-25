@@ -275,6 +275,8 @@ class CampaignScheduler:
         self.db().execute('UPDATE message_sends SET schedule_turn_finished=1 WHERE id=?',(send_id,))
         phone=row['recipient_phone'] or self.db().execute('SELECT phone FROM contacts WHERE id=?',(row['contact_id'],)).fetchone()[0]
         if not pending:
+            if row['state']=='failed' and self.db().execute("SELECT 1 FROM campaign_attempts WHERE send_id=? AND action='send' AND error_reason='stranger_messages_blocked'",(send_id,)).fetchone():
+                self.db().execute("UPDATE message_sends SET schedule_skip_reason='Bỏ qua bước nhắn tin: người nhận chặn tin nhắn từ người lạ. Các bước còn lại đã được xử lý.' WHERE id=?",(send_id,))
             changed=self.db().execute('UPDATE message_sends SET schedule_completed_at=CURRENT_TIMESTAMP WHERE id=? AND schedule_completed_at IS NULL',(send_id,)).rowcount
             if changed:
                 note=' · Có hành động thất bại, xem kết quả chi tiết.' if 'failed' in states.values() else ' · Đã ghi nhận bỏ qua, chưa gửi tin.' if not row['recipient_id'] else ''
@@ -310,9 +312,10 @@ class CampaignScheduler:
         self.db().execute('BEGIN IMMEDIATE')
         try:
             campaign=self.manager.owned(campaign['id']);guard(campaign)
-            row=self.db().execute('''SELECT * FROM message_sends WHERE campaign_id=? AND scheduled=1 AND schedule_skip_reason=''
-                AND (state IN ('failed','unknown','sending') OR friend_state IN ('failed','unknown','sending')
-                     OR alias_state IN ('failed','unknown','sending')) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
+            row=self.db().execute('''SELECT * FROM message_sends s WHERE campaign_id=? AND scheduled=1 AND schedule_skip_reason=''
+                AND (state IN ('unknown','sending') OR (state='failed' AND NOT EXISTS (
+                    SELECT 1 FROM campaign_attempts a WHERE a.send_id=s.id AND a.action='send' AND a.error_reason='stranger_messages_blocked'))
+                     OR friend_state IN ('failed','unknown','sending') OR alias_state IN ('failed','unknown','sending')) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
             if row is None:
                 self.db().rollback();return False
             columns={'send':'state','friend':'friend_state','alias':'alias_state'}
@@ -352,9 +355,10 @@ class CampaignScheduler:
                 self.manager.event(campaign['id'],'schedule_lookup_result',message)
                 self.rest(campaign,now,message,seconds=delay)
                 self.db().commit();return
-            detail=f'Bỏ qua {person["phone"]}: tra cứu không tìm được người nhận Zalo'+code+'.'
-            self.manager.event(campaign['id'],'schedule_lookup_result',f'{self.prefix(campaign)} – Tìm SĐT: không tra cứu được {person["phone"]}{code}; đã ghi nhận bỏ qua.')
-            send_id=self.manager.store_lookup_skip(campaign,person,account,scheduled=True,reason=detail,lookup_state='unavailable')
+            label='Người nhận bị Zalo chặn' if reason=='recipient_blocked' else 'không tra cứu được người nhận Zalo'
+            detail=f'Bỏ qua {person["phone"]}: {label}{code}.'
+            self.manager.event(campaign['id'],'schedule_lookup_result',f'{self.prefix(campaign)} – Tìm SĐT: {label}{code} – {person["phone"]}; đã ghi nhận bỏ qua.')
+            send_id=self.manager.store_lookup_skip(campaign,person,account,scheduled=True,reason=detail,lookup_state='blocked' if reason=='recipient_blocked' else 'unavailable')
             self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign['id']))
             self.finish_turn(campaign,send_id,now)
             self.db().commit()
@@ -409,8 +413,8 @@ class CampaignScheduler:
             self.db().execute('UPDATE message_sends SET state=?,message_id=? WHERE id=?',(state,str(result.get('message_id',''))[:100] if state=='sent' else '',record['id']))
         else:
             self.db().execute(f'UPDATE message_sends SET {column}=? WHERE id=?',(state,record['id']))
-        self.manager.result(campaign['id'],action,record['id'],state)
-        if state in ('failed','unknown'):
+        self.manager.result(campaign['id'],action,record['id'],state,result)
+        if state in ('failed','unknown') and not (action=='send' and state=='failed' and result.get('error_reason')=='stranger_messages_blocked'):
             self.skip_problem(campaign,record['id'],now)
         else:
             self.finish_turn(campaign,record['id'],now)

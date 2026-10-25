@@ -18,6 +18,7 @@ from rich_message import read_message, display_message, parse_html, markup, rend
 from personalization import personalize
 from campaign_limits import enforce_limits, save_limits, LIMIT_COLUMNS
 from campaign_duplicates import DuplicateMessageBlocked, recent_for_record, DUPLICATE_COLUMNS
+from campaign_errors import diagnostics,error_description
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -61,6 +62,10 @@ def initialize_campaign_actions(db):
             size INTEGER NOT NULL, width INTEGER, height INTEGER,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     ''')
+    attempt_columns={row['name'] for row in db().execute('PRAGMA table_info(campaign_attempts)')}
+    for column in ('error_reason','error_code'):
+        if column not in attempt_columns:
+            db().execute(f"ALTER TABLE campaign_attempts ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
     # Preserve prior dispatches in the limit counters; never grant extra sends on upgrade.
     for action, (column, _) in ACTION_COLUMNS.items():
         db().execute(f'''INSERT OR IGNORE INTO campaign_attempts(campaign_id,send_id,action,created_at)
@@ -216,9 +221,10 @@ class CampaignManager:
         except BaseException:
             self.db().rollback();raise
 
-    def result(self, campaign_id, action, send_id, state):
-        self.db().execute('''UPDATE campaign_attempts SET completed_at=CURRENT_TIMESTAMP
-            WHERE campaign_id=? AND send_id=? AND action=?''',(campaign_id,send_id,action))
+    def result(self, campaign_id, action, send_id, state,details=None):
+        public=diagnostics(details) if state in ('failed','unknown') else {}
+        self.db().execute('''UPDATE campaign_attempts SET completed_at=CURRENT_TIMESTAMP,error_reason=?,error_code=?
+            WHERE campaign_id=? AND send_id=? AND action=?''',(public.get('error_reason',''),public.get('error_code',''),campaign_id,send_id,action))
         row=self.db().execute('''SELECT s.*,a.name AS account_name,c.name AS campaign_name FROM message_sends s
             JOIN campaigns c ON c.id=s.campaign_id JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=c.user_id
             WHERE s.id=? AND s.campaign_id=?''',(send_id,campaign_id)).fetchone()
@@ -227,6 +233,7 @@ class CampaignManager:
         description={'sent':f'Zalo đã tiếp nhận tin nhắn đến {name}',
             'friend_requested':f'Zalo đã tiếp nhận lời mời kết bạn đến {name}',
             'renamed':f'Đã đổi tên {name} thành "{row["alias"]}"'}.get(state,STATE_LABELS[state])
+        if error_description(public):description=error_description(public)
         self.event(campaign_id, action + '_result', f'{row["account_name"]} – {row["campaign_name"]} – {label}: {description}. · Bản gửi #{send_id}: {STATE_LABELS[state]}.')
 
     def media(self, media_id):

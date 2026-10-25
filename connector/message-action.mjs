@@ -1,6 +1,6 @@
 import { lookupFailure } from './lookup-errors.mjs';
 
-export async function executeMessageAction(api, input, onDispatch = () => {}) {
+export async function executeMessageAction(api, input, onDispatch = () => {},onPartial = () => {}) {
   if (input.action === 'resolve') {
     const phone = String(input.phone || '').replace(/[\s()+-]/g, '');
     if (!/^\d{8,15}$/.test(phone)) throw new Error('Invalid phone');
@@ -11,7 +11,7 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
       // SDK's profile lookup documents 216 as no matching user. Transport,
       // session and rate-limit failures must not discard a campaign's data.
       const outcome=lookupFailure(error);
-      if (outcome.state==='not_found') return outcome;
+      if (outcome.state==='not_found' || outcome.lookup_reason==='recipient_blocked') return outcome;
       throw error;
     }
     if (user === null || user === undefined) return {state:'not_found'};
@@ -60,10 +60,14 @@ export async function executeMessageAction(api, input, onDispatch = () => {}) {
     // This remains one claimed delivery; partial/uncertain results never retry.
     const imageResult = await api.sendMessage({msg:'', attachments:[attachment]}, input.uid, 0);
     if (!acceptedAttachments(imageResult)) return {state:'unknown'};
+    onPartial();
     const textResult = await api.sendMessage({msg:input.message, styles}, input.uid, 0);
     if (!textResult?.message?.msgId) return {state:'unknown'};
     return {state:'sent', message_id:[...imageResult.attachment.map(item => item.msgId), textResult.message.msgId].map(String).join(',')};
   }
+  // The SDK delivers document/video text and files separately. An exception
+  // cannot establish that neither part was accepted.
+  if(attachment && !imageAttachment)onPartial();
   const result = await api.sendMessage(attachment || styles.length ? {msg: input.message, ...(attachment ? {attachments:[attachment]} : {}), ...(styles.length ? {styles} : {})} : input.message, input.uid, 0); // ThreadType.User
   if (attachment) {
     // A caption/text acknowledgement alone does not prove that the attachment was accepted.
