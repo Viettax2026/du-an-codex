@@ -217,3 +217,42 @@ if(detailResizer && detailSection && campaignMain) {
   document.querySelector('[data-toggle-campaign-detail]')?.addEventListener('click',syncHeight);
   syncHeight();
 }
+
+// POST the intended pause state once; render only the state confirmed by the server.
+const pendingRunUpdates=new Set();
+document.addEventListener('submit',async event=>{
+  const form=event.target.closest('[data-inline-campaign-pause]');
+  if(!form)return;
+  event.preventDefault();
+  const row=form.closest('[data-campaign-id]'),id=row.dataset.campaignId;
+  if(pendingRunUpdates.has(id))return;
+  pendingRunUpdates.add(id);
+  const button=form.querySelector('button'),notice=document.querySelector('#campaign-run-status');
+  button.disabled=true;button.setAttribute('aria-busy','true');
+  notice.hidden=false;notice.textContent='Đang cập nhật trạng thái chiến dịch…';
+  try {
+    const response=await fetch(form.action,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body:new URLSearchParams(new FormData(form))});
+    if(!response.ok || response.redirected)throw new Error();
+    const result=await response.json();
+    if(typeof result.paused!=='boolean')throw new Error();
+    const refreshed=await fetch(location.href,{credentials:'same-origin',cache:'no-store'});
+    if(!refreshed.ok || refreshed.redirected)throw new Error();
+    const doc=new DOMParser().parseFromString(await refreshed.text(),'text/html');
+    const next=doc.querySelector(`[data-campaign-id="${CSS.escape(id)}"]`);
+    // A pause/resume may move this campaign outside the current status filter.
+    if(!next){location.assign(location.href);return;}
+    row.className=next.className;
+    row.classList.toggle('is-checked',row.querySelector('.row-checkbox').checked);
+    row.querySelector('.run-mode').replaceChildren(...next.querySelector('.run-mode').childNodes);
+    row.querySelector('.status-pill').closest('td').replaceChildren(...next.querySelector('.status-pill').closest('td').childNodes);
+    const action=row.querySelector('.campaign-action-menu a'),nextAction=next.querySelector('.campaign-action-menu a');
+    if(action && nextAction)action.replaceChildren(...nextAction.childNodes);
+    notice.textContent=result.paused?'Đã tạm ngưng chiến dịch.':'Đã tiếp tục chiến dịch theo cấu hình đã lưu.';
+    if(new URL(location.href).searchParams.get('selected')===id)loadDetail(location.href,true);
+    row.querySelector('.campaign-run-button')?.focus({preventScroll:true});
+  } catch {
+    notice.textContent='Chưa xác nhận được trạng thái. Làm mới trang để kiểm tra trước khi bấm lại.';
+  } finally {
+    pendingRunUpdates.delete(id);button.disabled=false;button.removeAttribute('aria-busy');
+  }
+});

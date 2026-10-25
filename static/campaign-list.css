@@ -188,3 +188,13 @@
 .campaign-list-screen .campaign-inline-detail.has-detail-height:not(.is-collapsed){flex:0 0 var(--campaign-detail-height);min-height:0;max-height:none}
 .campaign-main:has(.campaign-inline-detail.is-collapsed) .campaign-detail-resizer{display:none}
 .campaign-detail-resizing,.campaign-detail-resizing *{cursor:row-resize!important;user-select:none!important}
+
+.campaign-run-form{display:inline-flex;margin:0}
+.campaign-run-form .campaign-run-button{border:0;background:transparent;padding:0;cursor:pointer}
+.campaign-run-form .campaign-run-button:hover{background:#dce5fb;color:#655cf6}
+.campaign-run-form .campaign-run-button:focus-visible{outline:2px solid #695fff;outline-offset:2px}
+.campaign-run-form .campaign-run-button:disabled{cursor:wait;opacity:.5}
+.campaign-list-screen .campaign-table .campaign-row.is-paused>td{background:#f6e5eb}
+.campaign-list-screen .campaign-row.is-paused .status-pill.paused{background:#f7cdd4;color:#c23850}
+.campaign-run-status{margin:0;padding:8px 14px;color:#526b8b;background:#eef3fc;font-size:12px}
+.campaign-run-status[hidden]{display:none}

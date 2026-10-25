@@ -7,8 +7,9 @@ import re
 import uuid
 import warnings
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from flask import abort, flash, g, redirect, render_template, request, send_file, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
 from PIL import Image
 from data_import import read_contacts, insert_contact
 from campaign_exclusions import contact_is_excluded
@@ -366,12 +367,23 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
         if request.method == 'POST':
             if request.form.get('paused') not in ('0', '1'):
                 abort(400)
+            return_to=request.form.get('return_to','')
+            if return_to:
+                try:
+                    target=urlsplit(return_to)
+                except ValueError:
+                    abort(400)
+                if target.scheme or target.netloc or target.path!=url_for('campaigns') or '\\' in return_to or any(ord(char)<32 for char in return_to):
+                    abort(400)
             paused = int(request.form['paused'])
-            db().execute('UPDATE campaigns SET paused=? WHERE id=?', (paused, campaign_id))
-            manager.event(campaign_id, 'pause' if paused else 'resume', 'Tạm ngưng chiến dịch.' if paused else 'Tiếp tục chiến dịch.')
+            if campaign['paused']!=paused:
+                db().execute('UPDATE campaigns SET paused=? WHERE id=?', (paused, campaign_id))
+                manager.event(campaign_id, 'pause' if paused else 'resume', 'Tạm ngưng chiến dịch.' if paused else 'Tiếp tục chiến dịch.')
             db().commit()
+            if request.form.get('inline')=='yes' and request.accept_mimetypes.best=='application/json':
+                return jsonify(paused=bool(paused))
             flash('Đã tạm ngưng các hành động tiếp theo.' if paused else 'Đã mở lại chiến dịch. Các lần đã xử lý không tự chạy lại.', 'success')
-            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
+            return redirect(return_to or url_for('campaign_detail', campaign_id=campaign_id))
         return render_template('campaign_action.html', campaign=campaign, action='pause', page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>/duplicate', methods=['GET', 'POST'])
