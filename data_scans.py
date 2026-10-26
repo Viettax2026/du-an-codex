@@ -1,5 +1,6 @@
 """Private, persisted, read-only Zalo scans with explicit phone-only imports."""
 import io
+import hashlib
 import json
 import re
 from urllib.parse import urlsplit
@@ -24,14 +25,16 @@ def scan_diagnostics(value):
     """Keep structural counts and fixed outcomes, never SDK payloads or identifiers."""
     if not isinstance(value,dict) or not value:return {}
     result={'version':1}
-    for key in ('group_info_ids','mem_ver_count','member_id_count','preview_count','link_page','link_raw_count','link_valid_count'):
+    for key in ('group_info_ids','mem_ver_count','member_id_count','preview_count','link_page','link_raw_count','link_valid_count','merged_first_page_count'):
         count=value.get(key)
         if type(count) is int and 0<=count<=1000000:result[key]=count
     if type(value.get('group_type')) is int and value['group_type'] in (0,1,2):result['group_type']=value['group_type']
     if isinstance(value.get('link_status'),str) and value['link_status'] in LINK_STATUSES:result['link_status']=value['link_status']
     if type(value.get('link_more')) is bool:result['link_more']=value['link_more']
-    code=value.get('error_code')
-    if isinstance(code,str) and re.fullmatch(r'-?\d{1,8}',code):result['error_code']=code
+    if isinstance(value.get('profile_status'),str) and value['profile_status'] in ('ok','error','unavailable'):result['profile_status']=value['profile_status']
+    for key in ('error_code','profile_error_code'):
+        code=value.get(key)
+        if isinstance(code,str) and re.fullmatch(r'-?\d{1,8}',code):result[key]=code
     return result
 
 
@@ -140,7 +143,8 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
         if not updated:abort(409,'Lượt quét này đang tải dữ liệu. Chờ hoàn tất trước khi tải tiếp.')
         try:
             try:
-                cursor=member_cursor(json.loads(scan['scan_cursor']))
+                saved_cursor=json.loads(scan['scan_cursor'])
+                cursor=member_cursor(saved_cursor)
                 result=history_page(scan) if scan['kind']=='history' else connector.scan_action(g.user['id'],scan['account_id'],scan['kind'],offset=scan['next_offset'],group_id=scan['remote_group'],**({'cursor':cursor} if cursor else {}))
             except Exception:
                 result={'state':'error','reason':'network'}
@@ -158,7 +162,10 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
                 inserted+=db().execute('''INSERT OR IGNORE INTO data_scan_rows(scan_id,uid,name,phone,avatar,role,kind,member_count)
                     VALUES (?,?,?,?,?,?,?,?)''',(scan_id,*[row[key] for key in ('uid','name','phone','avatar','role','kind','member_count')])).rowcount
             has_more=bool(result.get('has_more')) and offset<10000
-            stalled=has_more and not inserted
+            digest=hashlib.sha256(','.join(sorted({row['uid'] for row in rows})).encode()).hexdigest()
+            # A merged first page can contain IDs that appear again in later link
+            # pages. Stop only a repeated page, not every page with known IDs.
+            stalled=has_more and not inserted and (not linked or saved_cursor.get('_page_digest')==digest)
             total=result.get('total')
             total=total if isinstance(total,int) and 0<=total<=1000000 else None
             accessible=result.get('accessible_total')
@@ -175,10 +182,11 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
                     limited=limited or partial
                     if partial and reason!='scan_limit':reason='hidden_members' if result.get('members_hidden') is True else 'incomplete_members'
             source=result.get('member_source') if result.get('member_source') in ('group_link','group_info') else ''
+            stored_cursor={**cursor,'_page_digest':digest} if linked and has_more and not stalled else {}
             db().execute('''UPDATE data_scans SET status='ready',loading_at='',next_offset=?,has_more=?,total=?,limited=?,source_name=?,
                 accessible_total=?,limit_reason=?,viewer_role=?,scan_cursor=?,member_source=?,scan_diagnostics=? WHERE id=?''',
                 (offset,int(has_more and not stalled),total,int(limited),str(result.get('source_name') or KINDS[scan['kind']])[:100],
-                 accessible,reason,role,json.dumps(cursor if has_more and not stalled else {}),source,json.dumps(scan_diagnostics(result.get('diagnostics'))),scan_id))
+                 accessible,reason,role,json.dumps(stored_cursor),source,json.dumps(scan_diagnostics(result.get('diagnostics'))),scan_id))
             db().commit()
         except Exception as error:
             db().rollback()

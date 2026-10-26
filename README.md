@@ -326,6 +326,8 @@ Mỗi lượt đọc tối đa 100 dòng; bạn bè/group dùng **Tải tiếp**
 
 Nếu quét thiếu hoặc trả về 0 hồ sơ, vai trò thành viên và cài đặt ẩn danh sách chưa đủ để kết luận nguyên nhân. Bấm **Tải chẩn đoán** trong kết quả quét thành viên để tải JSON gồm số lượng ID từ từng phần phản hồi, trạng thái lấy link/đọc trang và mã lỗi số nếu có. Báo cáo không chứa tên nhóm, UID, SĐT, link mời hay thông tin đăng nhập. Kết quả cũ cần **Tải data** để tạo lượt quét mới có chẩn đoán. Link trả về rỗng hoặc bước đọc link lỗi không làm mất những hồ sơ lấy được từ thông tin nhóm; ứng dụng giữ phần đã đọc và báo chưa đầy đủ.
 
+Danh sách qua link được gộp theo UID với danh sách từ thông tin nhóm, kể cả khi link chỉ trả về một người và báo không còn trang. ID chỉ có ở thông tin nhóm được tải hồ sơ theo từng phần tối đa 100 người; nếu tải hồ sơ lỗi vẫn giữ UID đã nhận. Gộp dữ liệu không đồng nghĩa đã quét đủ số thành viên khai báo. Với cộng đồng (`group_type=2`), nếu cả hai nguồn đều trả về một phần và không có trang tiếp theo, ứng dụng báo rõ giới hạn của nguồn đang dùng; chưa có xác nhận lấy được đầy đủ thành viên ẩn như AkaBiz.
+
 ### Chiến dịch gửi tin vào group Zalo
 
 Trong **Thêm chiến dịch → Hành động**, chọn **Zalo – Gửi tin nhắn đến group**. Chọn tài khoản gửi, tải group tài khoản đã tham gia hoặc chọn từ kết quả quét group đã lưu của đúng tài khoản; thêm các group vào danh sách riêng. UID group được giữ riêng với SĐT/UID người dùng. Nội dung, biến thể, định dạng và một tệp đính kèm dùng chung được hỗ trợ; `{{name}}` chèn tên group.

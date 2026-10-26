@@ -232,3 +232,26 @@ def test_scan_diagnostics_handles_legacy_snapshots_and_rejects_unexpected_types(
     assert client.get('/data-scans/1/diagnostics').json['requires_new_scan']
     assert scan_diagnostics(dict(link_status={},error_code=['403'],link_more=1,preview_count=True,group_type=True))==dict(version=1)
     assert scan_diagnostics('PRIVATE_COOKIE')=={}
+
+
+def test_merged_member_pages_do_not_stop_at_overlapping_known_ids(app):
+    client,connector=setup_scan(app)
+    calls=[]
+    def page(owner,account,kind,offset=0,group_id='',cursor=None):
+        calls.append(cursor)
+        number=cursor['member_page'] if cursor else 1
+        ids={1:['1','2','3','4'],2:['3','4'],3:['5']}[number]
+        return scan_page(rows=[dict(uid=uid,name='Member '+uid,kind='user') for uid in ids],next_offset=offset+len(ids),
+            total=645,has_more=number<3,limited=False,member_source='group_link',members_hidden=True,
+            diagnostics=dict(version=1,group_info_ids=4,link_valid_count=1,merged_first_page_count=4),
+            cursor=dict(source='group_link',member_page=number+1,member_offset=0) if number<3 else {})
+    connector.scan_action.side_effect=page
+    assert start(client,'members',remote_group='900').status_code==200
+    assert post(client,'/data-scans/1/more').status_code==200
+    assert client.get('/data-scans/1/rows').json['scan']['has_more']
+    assert post(client,'/data-scans/1/more').status_code==200
+    result=client.get('/data-scans/1/rows').json
+    assert result['loaded']==5 and result['scan']['limited'] and not result['scan']['has_more']
+    assert result['scan']['accessible_total']==5
+    assert all('_page_digest' not in (cursor or {}) for cursor in calls)
+    assert client.get('/data-scans/1/diagnostics').json['diagnostics']['merged_first_page_count']==4

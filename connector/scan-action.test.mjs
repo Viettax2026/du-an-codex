@@ -132,3 +132,37 @@ test('failed or empty link lookup preserves group-info profiles and reports only
   // An interrupted later page must remain retryable, rather than silently changing sources.
   await assert.rejects(executeScan(api,{kind:'members',group_id:'900',offset:50,cursor:{source:'group_link',member_page:2,member_offset:0}}));
 });
+
+test('community with four info IDs and a one-person link retains the union, not just the link preview',async()=>{
+  const requested=[];
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getOwnId:()=> '2',
+    getGroupInfo:async()=>({gridInfoMap:{'900':{type:2,name:'Community',creatorId:'1',adminIds:['3'],
+      memVerList:['1_0','2_0','3_0','4_0'],currentMems:[],totalMember:645,setting:{lockViewMember:1}}}}),
+    getGroupLinkDetail:async()=>({enabled:1,link:'https://zalo.me/g/test'}),
+    getGroupLinkInfo:async({memberPage})=>{assert.equal(memberPage,1);return {groupId:'900',currentMems:[{id:'2',dName:'Self'}],hasMoreMember:0,totalMember:645};},
+    getGroupMembersInfo:async ids=>{requested.push(...ids);return {profiles:{'1_0':{displayName:'Owner'},'3':{displayName:'Admin'},'4':{displayName:'Other',cookie:'PRIVATE'}}};}};
+  const result=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.deepEqual(new Set(result.rows.map(row=>row.uid)),new Set(['1','2','3','4']));
+  assert.deepEqual(requested,['1','3','4']);assert.equal(result.rows.find(row=>row.uid==='3').role,'admin');
+  assert.equal(result.rows.find(row=>row.uid==='1').name,'Owner');assert.equal(result.total,645);
+  assert.equal(result.diagnostics.link_valid_count,1);assert.equal(result.diagnostics.merged_first_page_count,4);
+  assert.equal(result.has_more,false);assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+  api.getGroupMembersInfo=async()=>{throw Object.assign(new Error('PRIVATE'),{code:403});};
+  const partial=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.equal(partial.rows.length,4);assert.equal(partial.diagnostics.profile_error_code,'403');
+});
+
+test('merged first native page keeps its overflow and later link pages without losing unique IDs',async()=>{
+  const ids=Array.from({length:150},(_,i)=>String(i+1));
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getGroupInfo:async()=>({gridInfoMap:{'900':{memVerList:ids.map(id=>id+'_0'),totalMember:645}}}),
+    getGroupLinkDetail:async()=>({enabled:1,link:'https://zalo.me/g/test'}),
+    getGroupLinkInfo:async({memberPage})=>({groupId:'900',currentMems:[{id:memberPage===1?'2':'151',dName:'Link member'}],hasMoreMember:memberPage===1?1:0,totalMember:645}),
+    getGroupMembersInfo:async()=>({profiles:{}})};
+  let offset=0,cursor={},found=[];
+  for(let index=0;index<3;index++){
+    const result=await executeScan(api,{kind:'members',group_id:'900',offset,cursor});
+    found.push(...result.rows.map(row=>row.uid));offset=result.next_offset;cursor=result.cursor;
+    assert.equal(result.has_more,index<2);assert.ok(result.rows.length<=100);
+  }
+  assert.equal(found.length,151);assert.equal(new Set(found).size,151);
+});

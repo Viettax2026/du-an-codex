@@ -23,7 +23,7 @@ function errorCode(error) {
   const code=String(error?.code ?? error?.cause?.code ?? '');
   return /^-?\d{1,8}$/.test(code)?code:'';
 }
-async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics) {
+async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers) {
   const cursor=input.cursor || {},continuing=cursor.source==='group_link';
   if(typeof api.getGroupLinkDetail!=='function' || typeof api.getGroupLinkInfo!=='function'){
     diagnostics.link_status='sdk_unavailable';
@@ -53,17 +53,36 @@ async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics
   if(String(data?.groupId)!==String(input.group_id) || !Array.isArray(data.currentMems))throw new Error('Invalid linked group response');
   const profiles=new Map();
   for(const member of data.currentMems){const id=uid(member?.id);if(ID.test(id))profiles.set(id,member);}
-  const list=[...profiles.entries()];
-  Object.assign(diagnostics,{link_status:list.length?'ok':'empty',link_raw_count:data.currentMems.length,link_valid_count:list.length,link_more:flag(data.hasMoreMember)});
+  const linkIds=new Set(profiles.keys());
+  Object.assign(diagnostics,{link_status:profiles.size?'ok':'empty',link_raw_count:data.currentMems.length,link_valid_count:profiles.size,link_more:flag(data.hasMoreMember)});
   // An empty link preview must not discard profiles available in group info.
-  if(!continuing && !list.length && diagnostics.group_info_ids>0)return null;
+  if(!continuing && !profiles.size && diagnostics.group_info_ids>0)return null;
+  // Merge known IDs into the first native page, including its continuation chunks.
+  // A smaller link preview must never replace the group-info member list.
+  if(memberPage===1){
+    for(const id of [...knownMembers.keys()].sort())if(!profiles.has(id))profiles.set(id,knownMembers.get(id));
+    diagnostics.merged_first_page_count=profiles.size;
+  }
+  const list=[...profiles.entries()];
   if(start>list.length)throw new Error('Invalid linked group cursor');
   const page=list.slice(start,start+100),withinPage=start+100<list.length;
+  const missing=page.map(([id])=>id).filter(id=>!linkIds.has(id));
+  let details={};
+  if(missing.length){
+    diagnostics.profile_status='unavailable';
+    if(typeof api.getGroupMembersInfo==='function'){
+      try {
+        const response=await api.getGroupMembersInfo(missing);
+        if(!response?.profiles || typeof response.profiles!=='object' || Array.isArray(response.profiles))throw new Error('Invalid member profiles');
+        details=response.profiles;diagnostics.profile_status='ok';
+      } catch(error){diagnostics.profile_status='error';diagnostics.profile_error_code=errorCode(error);}
+    }
+  }
   const hasMore=withinPage || flag(data.hasMoreMember);
   const offset=Number(input.offset || 0)+Math.max(1,page.length),atLimit=hasMore && offset>=10000;
   const admins=new Set((data.adminIds || group.adminIds || []).map(String));
   const sourceTotal=Number(data.totalMember);
-  return {state:'ok',rows:page.map(([id,member])=>profile(member,id,String(data.creatorId || group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
+  return {state:'ok',rows:page.map(([id,member])=>profile(details[id] || details[`${id}_0`] || member,id,String(data.creatorId || group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
     next_offset:offset,has_more:hasMore && !atLimit,total:Math.max(total,Number.isFinite(sourceTotal)?Math.max(0,Math.floor(sourceTotal)):0),
     source_name:text(group.name || input.group_id),accessible_total:null,limited:atLimit,
     limit_reason:atLimit?'scan_limit':'',viewer_role:viewerRole,member_source:'group_link',members_hidden:hidden,
@@ -115,7 +134,7 @@ export async function executeScan(api,input) {
     member_id_count:Array.isArray(group.memberIds)?group.memberIds.length:0,preview_count:Array.isArray(group.currentMems)?group.currentMems.length:0,
     link_status:'not_needed'};
   if(incomplete || fromLink){
-    const linked=await linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics);
+    const linked=await linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics,members);
     if(linked)return linked;
   }
   const details=page.length?await api.getGroupMembersInfo(page):{profiles:{}};
