@@ -637,16 +637,11 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
     @click.option('--once',is_flag=True,help='Check one cycle and exit.')
     def run_scheduler(once):
         """Run the automatic schedule worker; one process per database."""
-        try:
-            import fcntl
-        except ImportError:
-            raise click.ClickException('Chạy bộ lịch trên VPS Linux.') from None
+        from runtime_lock import RuntimeLock
         path=Path(app.config['DATABASE']).with_suffix('.scheduler.lock')
-        with path.open('a') as lock:
-            try:
-                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise click.ClickException('Bộ chạy lịch đang hoạt động ở tiến trình khác.') from None
+        try:lock=RuntimeLock(path).acquire()
+        except RuntimeError as error:raise click.ClickException(str(error)) from None
+        try:
             stopping=Event()
             def stop(signum,frame):
                 scheduler.stopping=True
@@ -667,3 +662,5 @@ def register_campaign_schedule(app,db,login_required,manager,connector,audience)
                 if previous is not None:
                     signal.signal(signal.SIGTERM,previous)
                 Path(app.config['DATABASE']).with_suffix('.scheduler.heartbeat').unlink(missing_ok=True)
+        finally:
+            lock.release()

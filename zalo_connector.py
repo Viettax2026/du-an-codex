@@ -10,19 +10,39 @@ from pathlib import Path
 
 
 class QRConnector:
-    def __init__(self, instance_path, source_path):
+    def __init__(self, instance_path, source_path,node_binary=None):
         self.root = Path(instance_path) / 'zalo'
         self.worker = Path(source_path) / 'connector' / 'qr-login.mjs'
         self.lock = threading.Lock()
         self.jobs = {}
+        self.node_binary=node_binary
+
+    def node(self):
+        bundled=self.worker.parent.parent/'runtime'/'node.exe'
+        return str(self.node_binary or bundled) if self.node_binary or bundled.is_file() else shutil.which('node')
+
+    def worker_options(self):
+        environment={key:os.environ[key] for key in ('PATH','SystemRoot','SYSTEMROOT','WINDIR','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA') if key in os.environ}
+        environment.setdefault('PATH','/usr/bin:/bin');environment['NODE_ENV']='production'
+        return dict(env=environment,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+
+    def stop_workers(self):
+        """Stop QR workers on desktop close without deleting saved sessions."""
+        with self.lock:
+            jobs=list(self.jobs.values());self.jobs.clear()
+        for process in jobs:
+            if process.poll() is None:
+                process.terminate()
+                try:process.wait(timeout=3)
+                except subprocess.TimeoutExpired:process.kill();process.wait()
 
     def available(self):
-        return bool(shutil.which('node') and (self.worker.parent / 'node_modules' / 'zca-js').is_dir())
+        return bool(self.node() and (self.worker.parent / 'node_modules' / 'zca-js').is_dir())
 
     @staticmethod
     def write_json(path, data):
         temporary = path.with_name(path.name + '.tmp')
-        with open(temporary, 'w', opener=lambda p, f: os.open(p, f, 0o600)) as stream:
+        with open(temporary, 'w', encoding='utf-8', opener=lambda p, f: os.open(p, f, 0o600)) as stream:
             json.dump(data, stream)
         temporary.replace(path)
 
@@ -32,9 +52,9 @@ class QRConnector:
     def status(self, user_id, account_id):
         base = self.account_path(user_id, account_id)
         try:
-            pointer = json.loads((base / 'current.json').read_text())
+            pointer = json.loads((base / 'current.json').read_text(encoding='utf-8'))
             run_id = str(uuid.UUID(pointer['run_id']))
-            result = json.loads((base / run_id / 'status.json').read_text())
+            result = json.loads((base / run_id / 'status.json').read_text(encoding='utf-8'))
             if result.get('state') in ('loading', 'qr', 'scanned'):
                 if time.time() - result.get('updated_at', 0) > 180:
                     return {'state': 'error', 'message': 'Phiên đăng nhập đã dừng. Vui lòng tạo mã mới.'}
@@ -73,11 +93,10 @@ class QRConnector:
             initial = {'state': 'loading', 'updated_at': time.time()}
             self.write_json(directory / 'status.json', initial)
             # The child only writes its own run directory, preventing old status races.
-            process = subprocess.Popen([shutil.which('node'), str(self.worker), str(directory), str(key_path)],
+            process = subprocess.Popen([self.node(), str(self.worker), str(directory), str(key_path)],
                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                        stderr=subprocess.DEVNULL, close_fds=True,
-                                       env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
-                                            'NODE_ENV': 'production'})
+                                       **self.worker_options())
             self.jobs[account] = process
             self.write_json(base / 'current.json', {'run_id': run_id})
             return {'state': 'loading'}
@@ -105,12 +124,12 @@ class QRConnector:
             return {'state': 'failed'}
         try:
             base = self.account_path(user_id, account_id)
-            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text())['run_id']))
+            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text(encoding='utf-8'))['run_id']))
             payload = {'action': action, 'session': str(base / run_id / 'session.enc.json'),
                        'key': str(self.root / 'auth.key'), **data}
-            result = subprocess.run([shutil.which('node'), str(self.worker.parent / 'message.mjs')],
+            result = subprocess.run([self.node(), str(self.worker.parent / 'message.mjs')],
                 input=json.dumps(payload), text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                timeout=45, env={'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'NODE_ENV': 'production'})
+                timeout=45, encoding='utf-8',**self.worker_options())
             output = json.loads(result.stdout)
             if not isinstance(output,dict):
                 raise ValueError('Invalid response')
@@ -142,10 +161,10 @@ class QRConnector:
         if not self.available() or self.status(user_id,account_id).get('state')!='connected':return unknown
         try:
             base=self.account_path(user_id,account_id)
-            run_id=str(uuid.UUID(json.loads((base/'current.json').read_text())['run_id']))
+            run_id=str(uuid.UUID(json.loads((base/'current.json').read_text(encoding='utf-8'))['run_id']))
             payload=dict(group_ids=group_ids,message=message,session=str(base/run_id/'session.enc.json'),key=str(self.root/'auth.key'))
-            result=subprocess.run([shutil.which('node'),str(self.worker.parent/'forward-groups.mjs')],input=json.dumps(payload),text=True,
-                stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=45,env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'NODE_ENV':'production'})
+            result=subprocess.run([self.node(),str(self.worker.parent/'forward-groups.mjs')],input=json.dumps(payload),text=True,
+                stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=45,encoding='utf-8',**self.worker_options())
             output=json.loads(result.stdout)
             if not isinstance(output,dict) or output.get('state')!='ok' or not isinstance(output.get('rows'),list):return unknown
             rows={}
@@ -166,12 +185,12 @@ class QRConnector:
             return {'state':'error','reason':'session'}
         try:
             base = self.account_path(user_id, account_id)
-            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text())['run_id']))
+            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text(encoding='utf-8'))['run_id']))
             payload = dict(kind=kind, offset=offset, group_id=group_id, cursor=cursor or {},
                 session=str(base / run_id / 'session.enc.json'), key=str(self.root / 'auth.key'))
-            result = subprocess.run([shutil.which('node'), str(self.worker.parent / 'scan.mjs')],
+            result = subprocess.run([self.node(), str(self.worker.parent / 'scan.mjs')],
                 input=json.dumps(payload),text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
-                timeout=45,env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'NODE_ENV':'production'})
+                timeout=45,encoding='utf-8',**self.worker_options())
             output = json.loads(result.stdout)
             if not isinstance(output,dict) or output.get('state') != 'ok':
                 reason=output.get('reason') if isinstance(output,dict) else ''

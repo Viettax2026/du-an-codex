@@ -4,3 +4,5 @@ __pycache__/
 instance/
 *.pyc
 node_modules/
+desktop/build/
+desktop/dist/

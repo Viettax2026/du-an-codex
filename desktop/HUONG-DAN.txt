@@ -1,0 +1,29 @@
+ZALOFLOW CHO WINDOWS 10/11 x64
+
+1. Giải nén toàn bộ gói ZIP vào một thư mục. Giữ _internal cạnh ZaloFlow.exe.
+2. Mở ZaloFlow.exe. Lần đầu tạo tài khoản quản trị trong cửa sổ ứng dụng, rồi đăng nhập Zalo bằng QR.
+3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
+4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
+5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
+
+Cần có Internet để kết nối Zalo. Máy ngủ/tắt hoặc tool đóng thì không chạy lịch. Không cài dịch vụ chạy nền hoặc tự khởi động Windows.
+
+Dữ liệu riêng của máy tính lưu ở:
+%LOCALAPPDATA%\ZaloFlow\instance
+Nhật ký chẩn đoán:
+%LOCALAPPDATA%\ZaloFlow\desktop.log
+
+Nâng cấp: đóng tool, giải nén gói mới vào thư mục chương trình; dữ liệu nằm ngoài thư mục chương trình nên được giữ lại. Không xóa thư mục dữ liệu.
+
+CHUYỂN DỮ LIỆU TỪ VPS
+- Tool Windows không đồng bộ tự động với VPS.
+- Dừng bộ lịch VPS trước để không có hai nơi gửi cùng một chiến dịch:
+  sudo systemctl stop zaloflow-scheduler
+- Lấy bản sao lưu đầy đủ, nhất quán của thư mục instance khi web và bộ lịch VPS đã dừng; gồm database, media, zalo/auth.key và các phiên QR.
+- Đóng tool Windows; sao lưu thư mục instance hiện tại nếu có, rồi chép bản instance từ VPS vào vị trí dữ liệu trên.
+- Mở lại, kiểm tra tài khoản/nội dung/lịch và đăng nhập Zalo lại nếu phiên không còn hiệu lực.
+- Chỉ chạy chiến dịch ở một nơi. Không bật đồng thời bộ lịch VPS và tool Windows khi dùng bản sao cùng chiến dịch.
+
+Nếu cửa sổ không mở: cài Microsoft Edge WebView2 Runtime từ trang Microsoft:
+https://developer.microsoft.com/microsoft-edge/webview2/
+Ứng dụng chưa được ký chứng thư nhà phát hành. Chỉ dùng gói được tạo từ kho GitHub Viettax2026/du-an-codex của bạn.

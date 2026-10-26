@@ -27,8 +27,8 @@ from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
 
 
-def create_app(test_config=None):
-    app = Flask(__name__, instance_relative_config=True)
+def create_app(test_config=None,instance_path=None):
+    app = Flask(__name__, instance_relative_config=True,**({'instance_path':str(Path(instance_path).resolve())} if instance_path else {}))
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     key_path = Path(app.instance_path) / 'session.key'
     if not key_path.exists():
@@ -47,7 +47,7 @@ def create_app(test_config=None):
                       PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
     if test_config:
         app.config.update(test_config)
-    connector = QRConnector(app.instance_path, app.root_path)
+    connector = QRConnector(app.instance_path, app.root_path,app.config.get('NODE_BINARY'))
     app.extensions['zalo_connector'] = connector
 
     @app.template_filter('localtime')

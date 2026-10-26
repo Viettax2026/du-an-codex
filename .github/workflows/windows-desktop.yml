@@ -1,0 +1,68 @@
+name: Build Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'runtime_lock.py'
+      - '.github/workflows/windows-desktop.yml'
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: connector/package-lock.json
+      - name: Install desktop dependencies and test Windows lifecycle
+        shell: pwsh
+        run: |
+          python -m pip install -r desktop/requirements.txt pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests/test_desktop_runtime.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build native Windows package
+        shell: pwsh
+        run: ./desktop/build-windows.ps1
+      - name: Smoke test packaged web server, scheduler and bundled Node
+        shell: pwsh
+        run: |
+          $reportPath = Join-Path $env:RUNNER_TEMP 'zaloflow-smoke.json'
+          $process = Start-Process desktop/dist/ZaloFlow/ZaloFlow.exe -ArgumentList @('--smoke-test', '--smoke-report', $reportPath) -PassThru
+          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Packaged smoke test timed out.' }
+          if ($process.ExitCode -ne 0) { throw 'Packaged smoke test failed.' }
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          if (-not $report.ok -or -not $report.stopped -or -not $report.node_available) { throw 'Incomplete smoke test.' }
+          Get-Content $reportPath
+      - name: Smoke test native Edge WebView2 window
+        shell: pwsh
+        run: |
+          $runtimePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/EdgeWebView/Application'
+          if (-not (Test-Path $runtimePath)) {
+            choco install webview2-runtime --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot install WebView2 for GUI smoke test.' }
+          }
+          $reportPath = Join-Path $env:RUNNER_TEMP 'zaloflow-gui-smoke.json'
+          $process = Start-Process desktop/dist/ZaloFlow/ZaloFlow.exe -ArgumentList @('--smoke-test', '--smoke-gui', '--smoke-report', $reportPath) -PassThru
+          if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw 'Native window did not close.' }
+          if ($process.ExitCode -ne 0) { throw 'Native Windows GUI smoke test failed.' }
+          $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+          if (-not $report.ok -or -not $report.gui -or -not $report.stopped) { throw 'Incomplete GUI smoke test.' }
+          Get-Content $reportPath
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZaloFlow-Windows-x64
+          path: desktop/dist/ZaloFlow/
+          if-no-files-found: error
+          retention-days: 30

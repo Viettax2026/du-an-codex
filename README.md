@@ -359,3 +359,10 @@ Bản xem trước chưa có lượt gửi được chuyển vào **Lịch sử 
 Bước chờ trên data đã chạy một phần có bản nội dung riêng và mã xác nhận riêng. Tab xác nhận cũ không gửi được nội dung mới. Đổi tài khoản cho bước chờ cần tra cứu lại người nhận bằng tài khoản mới: bộ lịch thực hiện tra cứu trước lượt gửi; gửi thủ công bấm **Tải người nhận cho bước…** rồi kiểm tra và xác nhận. Báo cáo và CSV ghi tài khoản theo từng bước. Cập nhật/sửa cấu hình không gọi gửi tin, kết bạn hay đổi tên.
 
 Bản cập nhật sửa lỗi `edit_started_recipient` của phiên bản `56516f0`: khi khởi động, ứng dụng đối chiếu đúng nhật ký hủy bước do phiên bản đó tạo, chỉ khôi phục các bước vẫn được chọn, có nội dung cũ và chưa có bất kỳ lượt thực hiện nào. Giữ nguyên bước đã có lượt chạy, bỏ qua hợp lệ, sự đồng ý nhận tin, hạn mức và thời gian nghỉ. Việc khôi phục tự nó không gọi Zalo; bước chờ tiếp tục khi chủ tài khoản cho chạy và đủ điều kiện lịch/hạn mức. Mỗi nhật ký được xử lý một lần. Trường hợp thiếu thông tin cá nhân hóa/tài khoản được ghi cần kiểm tra, không tự tạo dữ liệu hay gửi lại bước cũ.
+
+
+### Ứng dụng Windows: mở tool mới chạy
+
+Bản Windows có cửa sổ riêng, bộ web nội bộ và bộ lịch hoạt động theo vòng đời cửa sổ. Chỉ bắt đầu lịch khi cửa sổ hiện ra; bấm X chặn lượt mới, chờ lượt đang xử lý kết thúc rồi dừng. Dữ liệu/tiến độ lưu riêng trong `%LOCALAPPDATA%\ZaloFlow\instance`, mở lại tiếp tục bước chờ, không đặt lại lịch sử/hạn mức. Không cài dịch vụ hay tác vụ tự khởi động Windows. Thu nhỏ vẫn chạy; đóng tool/máy ngủ/tắt thì không chạy lịch.
+
+Tải gói **ZaloFlow-Windows-x64** từ artifact của [Build Windows desktop](https://github.com/Viettax2026/du-an-codex/actions/workflows/windows-desktop.yml). Giải nén cả gói và mở `ZaloFlow.exe`. Bộ kết nối Node/SDK được đóng gói cùng ứng dụng. Cần Windows 10/11 x64, Microsoft Edge WebView2 Runtime và Internet. [Hướng dẫn sử dụng, dựng lại và chuyển dữ liệu VPS](desktop/README.md). Bản Windows không tự sao chép hoặc đồng bộ dữ liệu VPS; nếu chuyển cùng chiến dịch sang PC, dừng bộ lịch VPS trước để tránh hai nơi cùng gửi.

@@ -108,7 +108,7 @@ def parse_phones(raw):
 
 class CampaignManager:
     def __init__(self, app, db, audience):
-        self.db, self.audience = db, audience
+        self.app,self.db, self.audience = app,db, audience
         self.pending = PendingActions(self)
         self.media_root = Path(app.config.get('MEDIA_ROOT') or Path(app.config['DATABASE']).parent / 'media')
 
@@ -124,6 +124,8 @@ class CampaignManager:
                           (campaign_id, kind, detail))
 
     def require_active(self, campaign):
+        stop=self.app.config.get('DESKTOP_STOP_EVENT')
+        if stop is not None and stop.is_set():abort(409,'Tool đang đóng; không nhận thêm lượt mới.')
         if campaign['paused'] or campaign['deleted_at']:
             abort(409, 'Chiến dịch đã dừng hoặc đã xóa. Không thực hiện thêm hành động.')
 
