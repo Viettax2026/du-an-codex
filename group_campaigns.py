@@ -10,6 +10,7 @@ from campaign_schedule import active_window, local_now, manual_schedule_block, s
 from rich_message import read_message, render_message, load_styles
 from personalization import TOKEN
 from group_data import initialize_group_data,register_group_data,owned_group_rows,collection_rows
+from campaign_edits import edit_remaining,next_send_id
 
 
 def initialize_group_campaigns(db):
@@ -100,8 +101,8 @@ class GroupCampaignRunner:
             message,styles=shared if shared is not None else render_message(current['message'],current['message_html'],dict(name=target['name'],phone='',zalo_id=target['group_id']),
                 dict(name=target['name'],uid=target['group_id']),variant_index=current['next_message_variant'])
             mode='share' if current['group_send_mode']=='share' and not styles and not current['media_id'] else 'normal'
-            cur=self.db().execute('''INSERT INTO group_message_sends(campaign_id,target_id,account_id,group_id,group_name,message,message_styles,media_id,send_mode,tag_names)
-                VALUES (?,?,?,?,?,?,?,?,?,?)''',(current['id'],target['id'],current['account_id'],target['group_id'],target['name'],message,json.dumps(styles),current['media_id'],mode,current['group_tag_names']))
+            cur=self.db().execute('''INSERT INTO group_message_sends(id,campaign_id,target_id,account_id,group_id,group_name,message,message_styles,media_id,send_mode,tag_names)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)''',(next_send_id(self.db,'group_message_sends'),current['id'],target['id'],current['account_id'],target['group_id'],target['name'],message,json.dumps(styles),current['media_id'],mode,current['group_tag_names']))
             if shared is None:self.db().execute('UPDATE campaigns SET next_message_variant=next_message_variant+1 WHERE id=?',(current['id'],))
             self.manager.event(current['id'],'group_preview',f'Tạo bản xem trước gửi group {target["name"]} ({target["group_id"]}). Chưa gửi tin.')
             self.db().commit()
@@ -120,6 +121,7 @@ class GroupCampaignRunner:
             if campaign['group_is_draft']:raise ValueError('Chiến dịch đang là bản nháp.')
             self.sync_targets(campaign)
             record=self.db().execute('SELECT * FROM group_message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
+            if not record:self.db().commit();return False
             self.manager.require_account(record['account_id'])
             if record['account_id']!=campaign['account_id']:raise ValueError('Bản xem trước thuộc tài khoản cũ. Không gửi bằng tài khoản khác.')
             if scheduled and (self.app.extensions['campaign_scheduler'].stopping or campaign['schedule_revision']!=current['schedule_revision'] or not active_window(campaign,now())):
@@ -325,19 +327,19 @@ def register_group_campaigns(app,db,login_required,manager,connector):
             for target in by_uid.values():render_message(message,html,dict(name=target['name'],phone='',zalo_id=target['uid']),dict(name=target['name'],uid=target['uid']),variant_index=0)
         if campaign_id:
             runner.own(campaign_id)
-            if db().execute('SELECT 1 FROM group_message_sends WHERE campaign_id=? AND claimed_at IS NOT NULL',(campaign_id,)).fetchone():raise ValueError('Chiến dịch đã có lượt gửi. Nhân bản để thay nội dung hoặc danh sách; lịch và giới hạn vẫn có thể chỉnh riêng.')
-            if db().execute('SELECT 1 FROM group_message_sends WHERE campaign_id=?',(campaign_id,)).fetchone():raise ValueError('Chiến dịch đã có bản xem trước. Nhân bản để thay nội dung hoặc danh sách; giữ nguyên nội dung đã chốt cho tab đang mở.')
-            db().execute('DELETE FROM group_message_sends WHERE campaign_id=?',(campaign_id,));db().execute('DELETE FROM group_campaign_targets WHERE campaign_id=?',(campaign_id,))
+            db().execute('UPDATE group_campaign_targets SET active=0 WHERE campaign_id=?',(campaign_id,))
             db().execute('UPDATE campaigns SET name=?,message=?,message_html=?,account_id=? WHERE id=?',(name,message,html,account_id,campaign_id))
         else:
             campaign_id=db().execute("INSERT INTO campaigns(user_id,name,message,message_html,account_id,campaign_type,audience_mode,send_message,send_friend) VALUES (?,?,?,?,?,'zalo_group','list',1,0)",(g.user['id'],name,message,html,account_id)).lastrowid
-        for target in by_uid.values():db().execute('INSERT INTO group_campaign_targets(campaign_id,source_row_id,group_id,name) VALUES (?,?,?,?)',(campaign_id,target['id'],target['uid'],target['name']))
+        for target in by_uid.values():db().execute('''INSERT INTO group_campaign_targets(campaign_id,source_row_id,group_id,name) VALUES (?,?,?,?)
+            ON CONFLICT(campaign_id,group_id) DO UPDATE SET active=1,source_row_id=excluded.source_row_id,name=excluded.name''',(campaign_id,target['id'],target['uid'],target['name']))
         db().execute('''UPDATE campaigns SET group_send_mode=?,group_tag_names=?,group_data_mode=?,group_data_id=?,group_is_draft=?,
             paused=CASE WHEN ?=1 THEN 1 WHEN group_is_draft=1 THEN 0 ELSE paused END WHERE id=?''',
             (mode,json.dumps(tags,ensure_ascii=False),data_mode,data_group_id,int(draft),int(draft),campaign_id))
         manager.set_media(campaign_id);save_limits(db,campaign_id,request.form)
         if draft:db().execute("UPDATE campaigns SET schedule_enabled=0,schedule_error='',schedule_status='Bản nháp' WHERE id=?",(campaign_id,))
         else:save_schedule(db,campaign_id,request.form,account_id)
+        if old and old['id']==campaign_id:edit_remaining(db,manager,old)
         manager.event(campaign_id,'group_config',f'Lưu {"nháp" if draft else "chiến dịch"} gửi group: {len(by_uid)} group · {"Chia sẻ theo lô tối đa 50 group" if mode=="share" else "Gửi từng group"}.')
         return campaign_id
 
@@ -414,6 +416,9 @@ def register_group_campaigns(app,db,login_required,manager,connector):
         campaign=runner.own(campaign_id)
         preview=db().execute('SELECT * FROM group_message_batches WHERE id=? AND campaign_id=?',(batch_id,campaign_id)).fetchone()
         if not preview or not preview['preview_ids'] or preview['preview_ids']=='[]':abort(404)
+        if preview['state']=='superseded':
+            flash('Bản xem trước đã hết hiệu lực sau khi sửa chiến dịch. Tạo bản mới trước khi xác nhận.','error')
+            return redirect(url_for('group_campaign_detail',campaign_id=campaign_id))
         ids=json.loads(preview['preview_ids'])
         records=db().execute('SELECT * FROM group_message_sends WHERE campaign_id=? AND id IN ('+','.join('?' for _ in ids)+') ORDER BY id',(campaign_id,*ids)).fetchall()
         if request.method=='POST':

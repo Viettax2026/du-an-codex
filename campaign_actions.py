@@ -20,6 +20,7 @@ from personalization import personalize
 from campaign_limits import enforce_limits, save_limits, LIMIT_COLUMNS
 from campaign_duplicates import DuplicateMessageBlocked, recent_for_record, DUPLICATE_COLUMNS
 from campaign_errors import diagnostics,error_description
+from campaign_edits import initialize_edits,next_send_id
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -31,6 +32,7 @@ STATE_LABELS = {'prepared': 'Chờ xác nhận', 'sending': 'Đang xử lý / c�
 
 
 def initialize_campaign_actions(db):
+    initialize_edits(db)
     columns = {
         'campaigns': {'next_message_variant': 'INTEGER NOT NULL DEFAULT 0', 'message_html': "TEXT NOT NULL DEFAULT ''", 'paused': 'INTEGER NOT NULL DEFAULT 0', 'deleted_at': 'TEXT',
                       'audience_mode': "TEXT NOT NULL DEFAULT 'group'", 'media_id': 'INTEGER',
@@ -186,8 +188,8 @@ class CampaignManager:
             raise ValueError('Lời mời sau khi chèn tên vượt 150 ký tự. Rút ngắn lời mời trước khi tạo bản xem trước.')
         send_message=campaign['send_message'] and not skip_message
         message,styles=render_message(campaign['message'],campaign['message_html'],person,resolved,variant_index=campaign['next_message_variant']) if send_message else ('',[])
-        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles,scheduled,recipient_phone,message_skip_reason)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
+        row=self.db().execute('''INSERT INTO message_sends(id,campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_message,friend_state,alias,alias_state,media_id,message_styles,scheduled,recipient_phone,message_skip_reason)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(next_send_id(self.db,'message_sends'),campaign['id'],person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],message,
             'prepared' if send_message else 'not_requested',invitation,'prepared' if campaign['send_friend'] else 'not_requested',
             alias,'prepared' if campaign['rename_enabled'] else 'not_requested',campaign['media_id'] if send_message else None,json.dumps(styles),int(scheduled),person['phone'],skip_reason))
         self.db().execute('UPDATE message_sends SET lookup_state=? WHERE id=?',(lookup_state,row.lastrowid))
@@ -201,10 +203,10 @@ class CampaignManager:
         """Record a skipped lookup and its classification without fabricating a Zalo identity."""
         self.require_account(account['id'])
         reason=reason or f'Bỏ qua {person["phone"]}: không tìm thấy Zalo từ số điện thoại này.'
-        row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,
+        row=self.db().execute('''INSERT INTO message_sends(id,campaign_id,contact_id,account_id,
             recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,message_skip_reason)
-            VALUES (?,?,?,'','','','not_requested','not_requested','not_requested',?,?,?)''',
-            (campaign['id'],person['id'],account['id'],int(scheduled),person['phone'],reason))
+            VALUES (?,?,?,?,'','','','not_requested','not_requested','not_requested',?,?,?)''',
+            (next_send_id(self.db,'message_sends'),campaign['id'],person['id'],account['id'],int(scheduled),person['phone'],reason))
         self.db().execute('UPDATE message_sends SET lookup_state=? WHERE id=?',(lookup_state,row.lastrowid))
         origin='Theo lịch tự động' if scheduled else 'Thao tác thủ công'
         self.event(campaign['id'],'lookup_skip',reason+f' Nguồn: {origin}. Tiếp tục số điện thoại kế tiếp.')

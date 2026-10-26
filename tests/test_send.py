@@ -26,8 +26,7 @@ def test_preview_confirmation_and_duplicate_delivery(app):
     response = prepare(client)
     assert 'Lan Zalo' in response.text and 'Xin chào Lan' in response.text
     assert 'Gửi tin thật' in response.text
-    blocked = post(client, '/campaigns/1/edit', {'name': 'Changed', 'message': 'Changed'})
-    assert 'Không sửa để giữ nguyên nội dung nhật ký' in blocked.text
+    assert client.get('/campaigns/1/edit').status_code==200
     assert connector.message_action.call_args.args[-1] == 'resolve'
     assert client.post('/campaigns/1/send/1', data={'csrf': token(client)}).status_code == 400
     connector.message_action.reset_mock()
@@ -63,11 +62,11 @@ def test_uncertain_send_never_retried_and_preview_cancellable(app):
     prepare(client)
     connector.message_action.reset_mock()
     connector.message_action.side_effect = RuntimeError('private upstream details')
-    response = post(client, '/campaigns/1/send/1', {'confirm_send': 'yes'})
+    response = post(client, '/campaigns/1/send/2', {'confirm_send': 'yes'})
     assert 'Chưa xác định' in response.text
     assert 'private upstream' not in response.text
-    post(client, '/campaigns/1/send/1', {'confirm_send': 'yes'})
-    post(client, '/campaigns/1/cancel-send/1')
+    post(client, '/campaigns/1/send/2', {'confirm_send': 'yes'})
+    post(client, '/campaigns/1/cancel-send/2')
     assert connector.message_action.call_count == 1
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT state FROM message_sends').fetchone()[0] == 'unknown'

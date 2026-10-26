@@ -24,6 +24,7 @@
 <a href="#group-step-{{ key }}" data-group-wizard-step="{{ key }}" class="{{ 'is-active' if loop.first }}" {% if loop.first %}aria-current="step"{% endif %}><span class="wizard-step-marker" data-step-number="{{ loop.index }}">{{ loop.index }}</span><b>{{ title }}</b><em class="wizard-step-count" data-step-count>0 / {{ items|length }}</em><ul>{% for item,label in items %}<li data-group-wizard-check="{{ item }}">{{ label }}</li>{% endfor %}</ul></a>
 {% endfor %}</aside>
 <div class="wizard-sections">
+{% if campaign and not duplicating %}<p class="notice">Thay đổi áp dụng cho data chưa bắt đầu. Data đã xử lý không chạy lại; lượt đang gửi vẫn hoàn tất với nội dung cũ. Bản xem trước chưa gửi sẽ hết hiệu lực và cần tạo lại.</p>{% endif %}
 {% call card('general',1,'Cài đặt chung') %}
 <div class="wizard-platform"><i aria-hidden="true"></i>Zalo</div>
 <label>Hành động <strong class="wizard-required">*</strong><select name="action" data-group-action><option value="group_message">Zalo – Gửi tin nhắn đến group</option><option value="phone_actions">Zalo – Nhắn tin, kết bạn đến SĐT</option></select></label>

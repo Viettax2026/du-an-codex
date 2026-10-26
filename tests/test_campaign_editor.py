@@ -44,4 +44,5 @@ def test_editor_validation_and_ownership(app):
     post(owner, '/campaigns/1')
     post(owner, '/campaigns/1/edit', {'name': 'Bad', 'message': 'Bad'})
     with sqlite3.connect(app.config['DATABASE']) as db:
-        assert db.execute('SELECT name FROM campaigns').fetchone()[0] == 'Updated'
+        assert db.execute('SELECT name FROM campaigns').fetchone()[0] == 'Bad'
+        assert db.execute('SELECT message FROM deliveries').fetchone()[0] == 'Xin chào'

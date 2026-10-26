@@ -16,6 +16,7 @@ from campaign_exclusions import contact_is_excluded
 from rich_message import load_styles
 from campaign_limits import usage, available_actions
 from campaign_duplicates import recent_message, DuplicateMessageBlocked
+from campaign_edits import next_send_id
 
 TZ = ZoneInfo('Asia/Ho_Chi_Minh')
 ACTION_RECOVERY_GRACE_SECONDS=90  # Longer than the connector's 45-second process timeout.
@@ -538,8 +539,8 @@ class CampaignScheduler:
                 self.db().commit();return
             self.manager.event(campaign_id,'schedule_lookup_result',f'{self.prefix(campaign)} – Tìm SĐT: Đã tìm thấy SĐT {person["phone"]}: {str(resolved.get("name",""))[:100]}.')
             if contact_is_excluded(self.db,g.user['id'],campaign_id,person['id'],resolved['uid']):
-                row=self.db().execute('''INSERT INTO message_sends(campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,lookup_state,message_skip_reason)
-                    VALUES (?,?,?,?,?,'','not_requested','not_requested','not_requested',1,?,'resolved','Zalo thuộc danh sách loại trừ.')''',(campaign_id,person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],person['phone']))
+                row=self.db().execute('''INSERT INTO message_sends(id,campaign_id,contact_id,account_id,recipient_id,recipient_name,message,state,friend_state,alias_state,scheduled,recipient_phone,lookup_state,message_skip_reason)
+                    VALUES (?,?,?,?,?,?,'','not_requested','not_requested','not_requested',1,?,'resolved','Zalo thuộc danh sách loại trừ.')''',(next_send_id(self.db,'message_sends'),campaign_id,person['id'],account['id'],resolved['uid'],str(resolved.get('name',''))[:100],person['phone']))
                 self.db().execute('UPDATE campaigns SET schedule_first_day=coalesce(schedule_first_day,?),schedule_carry=1 WHERE id=?',(now().astimezone(TZ).date().isoformat(),campaign_id))
                 self.manager.event(campaign_id,'schedule_skip',f'Bỏ qua khách hàng #{person["id"]}: Zalo thuộc danh sách loại trừ.')
                 self.finish_turn(campaign,row.lastrowid,now)
@@ -569,6 +570,9 @@ class CampaignScheduler:
                 self.tick_campaign(row['id'],now)
             except HTTPException as error:
                 self.db().rollback()
+                current=self.manager.owned(row['id'],include_deleted=True)
+                if current['schedule_revision']!=row['schedule_revision'] or not current['schedule_enabled'] or current['paused'] or current['deleted_at']:
+                    continue  # An edit/stop superseded this tick; do not block the new configuration.
                 # Quotas/spacing are temporary waits; no new attempts have been claimed.
                 if error.code==409:
                     self.status(row['id'],'Đang chờ giới hạn gửi / khoảng nghỉ')
@@ -576,7 +580,7 @@ class CampaignScheduler:
                     self.block(row['id'],error.description)
             except ValueError as error:
                 self.db().rollback()
-                current=self.manager.owned(row['id'])
+                current=self.manager.owned(row['id'],include_deleted=True)
                 if str(error)!='Lịch đã dừng hoặc ngoài giờ chạy.' and current['schedule_enabled'] and not current['paused'] and not current['deleted_at'] and current['schedule_revision']==row['schedule_revision']:
                     self.block(row['id'],str(error))
             finally:

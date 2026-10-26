@@ -34,7 +34,8 @@ def test_group_campaign_creation_is_read_only_and_manual_send_is_confirmed_immut
     post(client,'/group-campaigns/1/send/1',{'confirm_send':'yes'})
     assert connector.message_action.call_count==1
     response=post(client,'/group-campaigns/1/edit',{'name':'Changed','message':'Changed','account_id':'1','group_scan_row_ids':'[1,2]'})
-    assert 'Chiến dịch đã có lượt gửi' in response.text
+    assert 'Đã lưu chiến dịch' in response.text
+    assert query(app,'SELECT message FROM campaigns')==[('Changed',)]
     assert query(app,'SELECT message,state,message_id FROM group_message_sends')==[('Chào Group A','sent','group-ack')]
 
 
@@ -154,11 +155,14 @@ def test_group_styles_and_media_snapshot_remain_frozen_after_campaign_changes(ap
 def test_prepared_group_preview_cannot_be_replaced_under_an_old_confirmation_tab(app):
     client,connector=setup_groups(app)
     post(client,'/group-campaigns/1/prepare/1')
-    original=query(app,'SELECT id,group_id,message,account_id FROM group_message_sends')
     response=post(client,'/group-campaigns/1/edit',{'name':'Replacement','message':'Changed without review',
         'account_id':'1','group_scan_row_ids':'[2]'})
-    assert 'Chiến dịch đã có bản xem trước' in response.text
-    assert query(app,'SELECT id,group_id,message,account_id FROM group_message_sends')==original
-    post(client,'/group-campaigns/1/send/1',{'confirm_send':'yes'})
-    assert connector.message_action.call_args.kwargs['message']=='Chào Group A'
-    assert connector.message_action.call_args.kwargs['uid']=='900'
+    assert 'Đã lưu chiến dịch' in response.text
+    assert query(app,'SELECT id FROM group_message_sends')==[]
+    assert post(client,'/group-campaigns/1/send/1',{'confirm_send':'yes'}).status_code==404
+    assert not connector.message_action.called
+    post(client,'/group-campaigns/1/prepare/2')
+    assert query(app,'SELECT id,message FROM group_message_sends')==[(2,'Changed without review')]
+    post(client,'/group-campaigns/1/send/2',{'confirm_send':'yes'})
+    assert connector.message_action.call_args.kwargs['message']=='Changed without review'
+    assert connector.message_action.call_args.kwargs['uid']=='901'

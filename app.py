@@ -24,6 +24,7 @@ from campaign_schedule import save_schedule
 from campaign_limits import save_limits
 from campaign_duplicates import save_duplicate_check
 from campaign_details import inline_detail, TABS as DETAIL_TABS
+from campaign_edits import edit_remaining
 
 
 def create_app(test_config=None):
@@ -549,17 +550,14 @@ def create_app(test_config=None):
         if request.method == 'POST':
             db().execute('BEGIN IMMEDIATE')
         campaign = manager.owned(campaign_id)
-        if campaign['status'] != 'draft' or db().execute('SELECT 1 FROM message_sends WHERE campaign_id=?', (campaign_id,)).fetchone():
-            flash('Chiến dịch đã mô phỏng hoặc có lần gửi/xem trước. Không sửa để giữ nguyên nội dung nhật ký.', 'error')
-            return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         if request.method == 'POST':
             try:
                 name, message, tag, account_id, phones = campaign_fields()
                 db().execute('UPDATE campaigns SET name=?,message=?,tag=?,account_id=? WHERE id=?', (name, message, tag, account_id, campaign_id))
                 save_campaign_phones(campaign_id, phones)
-                manager.event(campaign_id, 'edit', 'Sửa cài đặt chiến dịch.')
+                edit_remaining(db,manager,campaign)
                 db().commit()
-                flash('Đã lưu chiến dịch. Chưa gửi tin.', 'success')
+                flash('Đã lưu thay đổi cho data chưa xử lý. Giữ nguyên kết quả đã chạy; không gửi lại data cũ.', 'success')
                 return redirect(url_for('campaign_detail', campaign_id=campaign_id))
             except ValueError as error:
                 db().rollback()
@@ -569,6 +567,16 @@ def create_app(test_config=None):
         return render_template('campaign_edit.html', campaign=campaign, phones='' if snapshot else '\n'.join(p['phone'] for p in members), snapshot_contacts=snapshot,
             accounts=db().execute('SELECT * FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name', (g.user['id'],)).fetchall(),
             tags=db().execute('SELECT DISTINCT group_name AS tag FROM contact_group_memberships WHERE user_id=? ORDER BY tag', (g.user['id'],)).fetchall(), page='campaigns')
+
+    @app.get('/campaigns/<int:campaign_id>/preview-history')
+    @login_required
+    def campaign_preview_history(campaign_id):
+        campaign=manager.owned(campaign_id,include_deleted=True)
+        number=max(1,request.args.get('p',1,type=int))
+        rows=db().execute('SELECT * FROM campaign_preview_archive WHERE campaign_id=? ORDER BY id DESC LIMIT 51 OFFSET ?',
+            (campaign_id,(number-1)*50)).fetchall()
+        items=[dict(row,payload=json.loads(row['snapshot'])) for row in rows[:50]]
+        return render_template('campaign_preview_history.html',campaign=campaign,items=items,number=number,has_next=len(rows)>50,page='campaigns')
 
     @app.route('/campaigns/<int:campaign_id>', methods=['GET', 'POST'])
     @login_required
@@ -618,6 +626,7 @@ def create_app(test_config=None):
     @login_required
     def prepare_send(campaign_id):
         campaign = manager.owned(campaign_id)
+        edit_revision=campaign['edit_revision']
         manager.require_active(campaign)
         person = next((p for p in audience(campaign) if str(p['id']) == request.form.get('contact_id')), None)
         account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
@@ -639,6 +648,10 @@ def create_app(test_config=None):
             return redirect(url_for('campaign_detail', campaign_id=campaign_id))
         db().execute('BEGIN IMMEDIATE')
         campaign = manager.owned(campaign_id)
+        if campaign['edit_revision']!=edit_revision:
+            db().rollback()
+            flash('Chiến dịch vừa được sửa. Tải lại để tạo bản xem trước theo cấu hình mới.','error')
+            return redirect(url_for('campaign_detail',campaign_id=campaign_id))
         manager.require_active(campaign)
         person = next((p for p in audience(campaign) if p['id'] == person['id']), None)
         if person is None:
