@@ -5,6 +5,7 @@
 {% endfor %}
 </nav>
 <div id="detail-tab-panel" class="campaign-detail-panel" role="tabpanel" aria-labelledby="detail-tab-{{ detail.tab }}" data-detail-current="{{ detail.tab }}">
+{% if selected.campaign_type=='zalo_group' %}{% include '_group_campaign_inline_detail.html' %}{% else %}
 {% if detail.tab=='info' %}
   <div class="inline-campaign-info">
     <dl>
@@ -45,6 +46,7 @@
   <table class="inline-detail-table inline-history-table"><thead><tr><th>Thời gian (UTC+7)</th><th>Nội dung</th></tr></thead><tbody>
   {% for event in detail.rows %}<tr><td>{{ event.created_at|localtime_seconds }}</td><td>{{ event.detail }}</td></tr>{% else %}<tr><td colspan="2">Chưa ghi nhận lịch sử chạy.</td></tr>{% endfor %}
   </tbody></table>
+{% endif %}
 {% endif %}
 </div>
 <div class="inline-detail-footer"><span>{% if detail.tab in ('data','results','history','accounts') %}{{ detail.offset+1 if detail.total else 0 }}–{{ [detail.offset+detail.per_page,detail.total]|min }} / {{ detail.total }}{% else %}{{ selected.name }}{% endif %}</span><div>{% if detail.pages>1 %}{% if detail.number>1 %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number-1) }}">‹ Trước</a>{% endif %}<span>Trang {{ detail.number }}/{{ detail.pages }}</span>{% if detail.number<detail.pages %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number+1) }}">Sau ›</a>{% endif %}{% endif %}<a data-detail-load href="{{ campaign_link(detail_page=detail.number) }}" aria-label="Làm mới chi tiết chiến dịch">↻ Làm mới</a><span data-detail-status role="status" aria-live="polite"></span></div></div>

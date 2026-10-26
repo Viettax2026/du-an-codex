@@ -15,6 +15,9 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
         abort(404)
     if tab not in TABS:
         abort(400)
+    if campaign['campaign_type']=='zalo_group':
+        from group_campaigns import group_inline_detail
+        return group_inline_detail(db,campaign,tab,number,connector)
     user_id,campaign_id=campaign['user_id'],campaign['id']
     if campaign['audience_mode']=='list':
         data_where='p.user_id=? AND p.id IN (SELECT contact_id FROM campaign_contacts WHERE campaign_id=?)'

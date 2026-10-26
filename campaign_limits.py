@@ -66,17 +66,19 @@ def usage(db,campaign,now=None):
     day_start=(now.astimezone(TZ).replace(hour=0,minute=0,second=0,microsecond=0).astimezone(timezone.utc)
                if campaign['limits_day_mode']=='calendar' else now-timedelta(hours=24))
     stamp=lambda value:value.strftime('%Y-%m-%d %H:%M:%S')
+    group_mode=campaign['campaign_type']=='zalo_group'
+    attempts="SELECT claimed_at AS created_at,'send' AS action,campaign_id FROM group_message_sends WHERE claimed_at IS NOT NULL" if group_mode else 'SELECT created_at,action,campaign_id FROM campaign_attempts'
     result={}
     for action,(day_field,hour_field,window_field,_) in ACTIONS.items():
         minutes=campaign[window_field] if window_field else 60
         hour_start=now-timedelta(minutes=minutes)
         row=db().execute('''SELECT coalesce(sum(created_at>=?),0),coalesce(sum(created_at>=?),0)
-            FROM campaign_attempts WHERE campaign_id=? AND action=? AND created_at>=? AND created_at<=?''',
+            FROM ('''+attempts+''') WHERE campaign_id=? AND action=? AND created_at>=? AND created_at<=?''',
             (stamp(day_start),stamp(hour_start),campaign['id'],action,stamp(min(day_start,hour_start)),stamp(now))).fetchone()
         day_cap=campaign[day_field];hour_cap=campaign[hour_field] if hour_field else 0
         result[action]=dict(day_used=int(row[0]),hour_used=int(row[1]),day_limit=day_cap,hour_limit=hour_cap,
             minutes=minutes,blocked=bool(day_cap and row[0]>=day_cap or hour_cap and row[1]>=hour_cap))
-    recent=db().execute('SELECT max(created_at) FROM campaign_attempts WHERE campaign_id=? AND created_at<=?',(campaign['id'],stamp(now))).fetchone()[0]
+    recent=db().execute('SELECT max(created_at) FROM ('+attempts+') WHERE campaign_id=? AND created_at<=?',(campaign['id'],stamp(now))).fetchone()[0]
     elapsed=(now-datetime.fromisoformat(recent).replace(tzinfo=timezone.utc)).total_seconds() if recent else 0
     result['interval_wait']=max(0,int(campaign['interval_seconds']-elapsed)) if recent else 0
     return result

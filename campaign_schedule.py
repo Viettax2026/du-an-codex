@@ -445,6 +445,8 @@ class CampaignScheduler:
 
     def tick_campaign(self,campaign_id,now):
         campaign=self.manager.owned(campaign_id)
+        if campaign['campaign_type']=='zalo_group':
+            return self.app.extensions['group_campaign_runner'].tick(campaign_id,now)
         if not active_window(campaign,now()):
             return
         stamp=now().astimezone(timezone.utc).replace(tzinfo=None,microsecond=0).isoformat(' ')

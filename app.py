@@ -246,7 +246,9 @@ def create_app(test_config=None):
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
         response.headers['Content-Security-Policy'] = "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
-        if request.endpoint in ('campaigns', 'edit_campaign', 'campaign_content'):
+        if request.endpoint == 'data_groups':
+            response.headers['Content-Security-Policy'] = response.headers['Content-Security-Policy'].replace("img-src 'self' data:", "img-src 'self' data: https://*.zadn.vn https://*.zaloapp.com https://*.zalo.me")
+        if request.endpoint in ('campaigns', 'edit_campaign', 'campaign_content','new_group_campaign','edit_group_campaign','duplicate_group_campaign'):
             response.headers['Content-Security-Policy'] += "; media-src 'self' blob:; img-src-elem 'self' data: blob:"
         if request.endpoint == 'preview_library_media' and response.mimetype == 'application/pdf':
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
@@ -468,6 +470,9 @@ def create_app(test_config=None):
              days, '-' + (days or '0') + ' days', account_id, account_id, kind, kind, kind, kind)).fetchall()
         rows = [dict(row) for row in rows]
         for row in rows:
+            if row['campaign_type']=='zalo_group':
+                from group_campaigns import group_counts
+                row.update(group_counts(db,row['id']))
             if row['deleted_at']:
                 state, label, tone = 'deleted', 'Đã xóa', 'muted'
             elif row['paused']:
@@ -515,6 +520,15 @@ def create_app(test_config=None):
             logs.extend(dict(row, log_type='zalo') for row in db().execute('''SELECT s.*,a.name AS account_name FROM message_sends s
                 JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=? WHERE s.campaign_id=? AND (?='' OR s.account_id=?)
                 ORDER BY s.id DESC LIMIT 100''', (g.user['id'],selected['id'],log_account_id,log_account_id)))
+            if selected['campaign_type']=='zalo_group':
+                logs.extend(dict(row,log_type='zalo') for row in db().execute("""SELECT s.id,s.created_at,s.group_name AS name,
+                    s.group_name AS recipient_name,s.group_id AS recipient_phone,s.message,s.message_styles,s.state,
+                    'not_requested' AS friend_state,'not_requested' AS alias_state,
+                    CASE WHEN s.state IN ('failed','unknown') THEN s.detail ELSE '' END AS schedule_skip_reason,
+                    '' AS message_skip_reason,a.name AS account_name FROM group_message_sends s
+                    JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=?
+                    WHERE s.campaign_id=? AND (?='' OR s.account_id=?) ORDER BY s.id DESC LIMIT 100""",
+                    (g.user['id'],selected['id'],log_account_id,log_account_id)))
             logs = sorted(logs,key=lambda item:(item['created_at'],item['id']),reverse=True)[:100]
         def campaign_link(**changes):
             values=dict(q=query,days=days,status=status,tag=tag,account_id=account_id,kind=kind,log_account_id=log_account_id,detail_tab=detail_tab)
@@ -932,6 +946,10 @@ def create_app(test_config=None):
     register_message_composer(app, db, login_required, manager)
     from public_api import register_public_api
     register_public_api(app, db, login_required, manager, parse_phones)
+    from data_scans import register_data_scans
+    register_data_scans(app, db, login_required, connector, parse_phones)
+    from group_campaigns import register_group_campaigns
+    register_group_campaigns(app, db, login_required, manager, connector)
     from data_groups import purge_archived_groups
     purge_archived_groups(app, db)
     return app

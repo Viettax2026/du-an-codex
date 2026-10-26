@@ -47,7 +47,7 @@ def record_contact_source(db, user_id, contact_id, batch_id):
     batch = db().execute('SELECT * FROM data_import_batches WHERE id=? AND user_id=?', (batch_id,user_id)).fetchone()
     if not contact or not batch:
         raise ValueError('Nguồn data không thuộc tài khoản hiện tại.')
-    label = ('API · ' + batch['filename'] if batch['filename'] else 'Nhập qua API') if batch['source_type']=='api' else ('Tải file lên · ' + batch['filename'] if batch['filename'] else 'Nhập trực tiếp')
+    label = ('Quét Zalo · ' + batch['filename']) if batch['source_type']=='scan' else ('API · ' + batch['filename'] if batch['filename'] else 'Nhập qua API') if batch['source_type']=='api' else ('Tải file lên · ' + batch['filename'] if batch['filename'] else 'Nhập trực tiếp')
     db().execute('''INSERT OR IGNORE INTO contact_data_sources(user_id,contact_id,batch_id,group_id,source_type,filename,label,created_at)
         VALUES (?,?,?,?,?,?,?,?)''', (user_id,contact_id,batch_id,batch['group_id'],batch['source_type'],batch['filename'],label,batch['created_at']))
     if not contact['data_source']:

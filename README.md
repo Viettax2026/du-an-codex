@@ -315,3 +315,19 @@ Kiểm tra lịch sử nhắn tin trong mọi chiến dịch của người dùn
 Gửi thủ công hiển thị lý do và khóa nút gửi khi phát hiện trùng; máy chủ kiểm tra lại trong khóa ghi SQLite ngay trước khi tạo lượt gửi. Hai tab/chiến dịch chốt đồng thời không thể vượt kiểm tra; lượt đang gửi ở chiến dịch kia cũng được tính. Bị chặn không tăng hạn mức hoặc ghi thêm lượt gọi Zalo.
 
 Bộ chạy lịch bỏ qua riêng tin nhắn trùng, ghi lý do trong lịch sử và tiếp tục các hành động kết bạn/đổi tên đã chọn. Tin đã chuẩn bị từ trước vẫn được kiểm tra lại khi chốt gửi. Người trùng số đã biết và chỉ có hành động nhắn tin được bỏ qua trước bước tìm Zalo. Bỏ qua không làm tăng lượt biến thể mới. Lượt đã bỏ qua không tự được gửi lại khi tắt kiểm tra hoặc hết số ngày; quy tắc mỗi người chỉ có một bản gửi trong chiến dịch vẫn giữ nguyên. Tạo chiến dịch mới khi cần một đợt liên hệ tiếp theo.
+
+### Quét data Zalo và lưu kết quả
+
+Trong **Nhóm data → Quét data** hoặc **Thêm data vào nhóm → Thêm từ dữ liệu quét**, chọn tài khoản Zalo và nguồn: bạn bè, group đã tham gia, thành viên group, hoặc khách đã gửi tin thành công trong ZaloFlow. Nguồn cuối lấy từ nhật ký của ứng dụng; không đọc toàn bộ lịch sử trò chuyện Zalo. Quét từ Zalo yêu cầu tài khoản còn đăng nhập và chỉ đọc dữ liệu được quyền xem; không tự tham gia group, gửi tin hay kết bạn.
+
+Mỗi lần tải tối đa 100 dòng; **Tải tiếp** để đọc trang sau, tối đa 10.000 dòng mỗi kết quả. Kết quả được lưu trong SQLite, có tìm kiếm, lọc SĐT/vai trò, chọn nhiều trang và xuất Excel. Nếu Zalo giới hạn danh sách thành viên hoặc quyền xem, giao diện thông báo kết quả chưa đầy đủ. SĐT bị ẩn/không hợp lệ để trống; không suy ra SĐT từ UID. **Kiểm tra SĐT có Zalo** chỉ tra cứu các số đã có và đối chiếu UID, không tìm số ẩn.
+
+**Thêm vào nhóm** chỉ thêm các SĐT hợp lệ đã chọn; UID không có SĐT vẫn nằm trong kết quả quét để xuất Excel. Không chuyển danh sách group thành khách hàng theo SĐT. Hồ sơ đã có giữ thông tin và đồng ý nhận tin; hồ sơ mới mặc định chưa đánh dấu đồng ý trừ khi người dùng tích ô xác nhận. Quét, xuất Excel và tạo bản xem trước không gửi tin thật.
+
+### Chiến dịch gửi tin vào group Zalo
+
+Trong **Thêm chiến dịch → Hành động**, chọn **Zalo – Gửi tin nhắn đến group**. Chọn tài khoản gửi, tải group tài khoản đã tham gia hoặc chọn từ kết quả quét group đã lưu của đúng tài khoản; thêm các group vào danh sách riêng. UID group được giữ riêng với SĐT/UID người dùng. Nội dung, biến thể, định dạng và một tệp đính kèm dùng chung được hỗ trợ; `{{name}}` chèn tên group.
+
+Khi lịch tắt, tạo bản xem trước rồi xác nhận từng group. Khi bật lịch, bộ `zaloflow-scheduler` dùng cùng khung giờ Việt Nam, nghỉ giữa hai group, hạn mức ngày/khung giờ và tùy chọn không chạy Chủ nhật. Hạn mức tính cả lượt đã bắt đầu, lỗi hoặc chưa xác định. Lượt gửi được chốt trước khi gọi Zalo, một group chỉ được xử lý một lần trong chiến dịch; lượt lỗi/chưa xác định được ghi rõ và bỏ qua để chạy group tiếp theo, không tự thử lại. Claim bị gián đoạn được giữ tối thiểu 90 giây trước khi đánh dấu chưa xác định, nghỉ rồi tiếp tục. Cần kiểm tra hội thoại khi chưa xác định kết quả.
+
+SDK gửi bằng `ThreadType.Group` và kiểm tra lại tài khoản còn tham gia group trước khi gửi. Không dùng UID group để nhắn riêng cho thành viên. Giữ lịch sử, tiến độ, pause/resume và bản xem trước sau khởi động lại; xóa tài khoản gửi tạm ngưng chiến dịch liên quan. Khi đã tạo bản xem trước hoặc bắt đầu gửi, muốn thay nội dung/danh sách hãy nhân bản chiến dịch; có thể sửa lịch và giới hạn riêng.

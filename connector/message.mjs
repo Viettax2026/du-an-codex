@@ -4,6 +4,7 @@ import { decryptCredentials } from './state.mjs';
 import { executeMessageAction } from './message-action.mjs';
 import { lookupFailure } from './lookup-errors.mjs';
 import { actionFailure } from './action-errors.mjs';
+import {assertJoinedGroup} from './scan-action.mjs';
 
 let sending = false, partial=false, action='', stage='input';
 const finish = value => { process.stdout.write(JSON.stringify(value)); process.exit(0); };
@@ -19,6 +20,7 @@ try {
   const credentials = decryptCredentials(JSON.parse(readFileSync(input.session)), readFileSync(input.key));
   stage='session';
   const api = await new Zalo({logging: false, checkUpdate: false}).login(credentials);
+  if(input.thread_type===1){stage='lookup';await assertJoinedGroup(api,String(input.uid));}
   stage=action==='resolve'?'lookup':'dispatch';
   finish(await executeMessageAction(api, input, () => { sending = true; },()=>{partial=true;}));
 } catch (error) {

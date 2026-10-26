@@ -136,3 +136,25 @@ class QRConnector:
                 reason='session' if isinstance(error,KeyError) else 'connector_unavailable' if isinstance(error,OSError) else 'invalid_response'
                 return {'state':'lookup_failed','lookup_reason':reason}
             return {'state': 'unknown' if action in ('send', 'friend', 'alias') else 'failed'}
+
+    def scan_action(self, user_id, account_id, kind, offset=0, group_id=''):
+        if not self.available():
+            return {'state':'error','reason':'connector_unavailable'}
+        if self.status(user_id, account_id).get('state') != 'connected':
+            return {'state':'error','reason':'session'}
+        try:
+            base = self.account_path(user_id, account_id)
+            run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text())['run_id']))
+            payload = dict(kind=kind, offset=offset, group_id=group_id,
+                session=str(base / run_id / 'session.enc.json'), key=str(self.root / 'auth.key'))
+            result = subprocess.run([shutil.which('node'), str(self.worker.parent / 'scan.mjs')],
+                input=json.dumps(payload),text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+                timeout=45,env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'NODE_ENV':'production'})
+            output = json.loads(result.stdout)
+            if not isinstance(output,dict) or output.get('state') != 'ok':
+                reason=output.get('reason') if isinstance(output,dict) else ''
+                return {'state':'error','reason':reason if reason in ('session','network','rate_limited','connector_unavailable') else 'unavailable'}
+            # Further row validation and allowlisting happens before persistence.
+            return {key:output[key] for key in ('state','rows','has_more','next_offset','total','limited','source_name') if key in output}
+        except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):
+            return {'state':'error','reason':'network'}

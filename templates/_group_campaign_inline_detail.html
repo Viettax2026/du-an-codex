@@ -1,0 +1,15 @@
+{% if detail.tab=='info' %}
+<div class="inline-campaign-info"><dl><dt>Hành động</dt><dd>Zalo – Gửi tin nhắn đến group</dd><dt>Tài khoản</dt><dd>{{ selected.account_name or 'Cần chọn lại tài khoản' }}</dd><dt>Danh sách</dt><dd>{{ detail.counts.data }} group đã lưu riêng. Không gửi tin nhắn riêng cho thành viên.</dd><dt>Khoảng nghỉ</dt><dd>{{ selected.interval_seconds }} giây giữa hai group</dd><dt>Trạng thái</dt><dd>{{ selected.display_status }} · {{ selected.schedule_status }}</dd></dl>
+{% if selected.schedule_error %}<p class="notice error">{{ selected.schedule_error }}</p>{% endif %}
+<a href="{{ url_for('group_campaign_detail',campaign_id=selected.id) }}">Mở chi tiết, xem trước và xác nhận gửi group →</a></div>
+{% elif detail.tab=='data' %}
+<table class="inline-detail-table"><thead><tr><th>STT</th><th>Group Zalo</th><th>UID group</th><th>Thành viên khi quét</th></tr></thead><tbody>{% for row in detail.rows %}<tr><td>{{ detail.offset+loop.index }}</td><td>{{ row.name }}</td><td>{{ row.group_id }}</td><td>{{ row.member_count }}</td></tr>{% else %}<tr><td colspan="4">Chưa chọn group.</td></tr>{% endfor %}</tbody></table>
+{% elif detail.tab=='accounts' %}
+<table class="inline-detail-table"><thead><tr><th>Tài khoản</th><th>Kết nối</th></tr></thead><tbody>{% for row in detail.rows %}<tr><td>{{ row.name }}</td><td>{{ 'Đã xóa' if row.deleted_at else 'Đã đăng nhập' if row.connection.state=='connected' else 'Chưa đăng nhập' }}</td></tr>{% endfor %}</tbody></table>
+{% elif detail.tab=='history' %}
+<table class="inline-detail-table inline-history-table"><thead><tr><th>Thời gian · UTC+7</th><th>Nội dung</th></tr></thead><tbody>{% for row in detail.rows %}<tr><td>{{ row.created_at|localtime_seconds }}</td><td>{{ row.detail }}</td></tr>{% endfor %}</tbody></table>
+{% elif detail.tab=='preview' %}
+{% for row in detail.rows %}<article class="delivery-log"><b>{{ row.group_name }}</b><p>{{ display_message(row.message,row.message_styles) }}</p></article>{% else %}<article class="delivery-log"><b>Nội dung mẫu · tên group được chèn khi tạo bản xem trước</b><p>{{ campaign_message(selected) }}</p></article>{% endfor %}
+{% elif detail.tab=='results' %}
+<table class="inline-detail-table"><thead><tr><th>Thời gian · UTC+7</th><th>Group</th><th>UID</th><th>Hành động</th><th>Trạng thái</th><th>Kết quả</th></tr></thead><tbody>{% for row in detail.rows %}<tr><td>{{ (row.finished_at or row.claimed_at)|localtime_seconds }}</td><td>{{ row.group_name }}</td><td>{{ row.group_id }}</td><td>Gửi tin đến group</td><td>{{ {'sending':'Đang gửi','sent':'Thành công','failed':'Lỗi · bỏ qua','unknown':'Chưa xác định · bỏ qua','skipped':'Bỏ qua'}.get(row.state,row.state) }}</td><td>{{ row.detail or 'Đang xử lý' }}</td></tr>{% else %}<tr><td colspan="6">Chưa có lượt gửi group.</td></tr>{% endfor %}</tbody></table>
+{% endif %}
