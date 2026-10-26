@@ -52,7 +52,7 @@ def test_scan_retains_uid_only_scrubs_fields_and_does_not_send_or_import(app):
 def test_scan_owner_csrf_and_account_boundaries(app):
     client,connector=setup_scan(app);start(client)
     other=app.test_client();register(other,'other')
-    for path in ('/data-scans/1/rows','/data-scans/1/ids','/data-scans/1/phone-ids'):
+    for path in ('/data-scans/1/rows','/data-scans/1/ids','/data-scans/1/phone-ids','/data-scans/1/diagnostics'):
         assert other.get(path).status_code==404
     for path in ('/data-scans/1/export','/data-scans/1/import','/data-scans/1/more','/data-scans/1/check-phone'):
         assert post(other,path,{'row_id':'1','group_id':'1'}).status_code==404
@@ -206,3 +206,29 @@ def test_group_link_repeated_page_stops_without_claiming_full_group(app):
     assert data['loaded']==1 and data['scan']['limited']
     assert data['scan']['limit_reason']=='hidden_members' and not data['scan']['has_more']
     assert data['scan']['scan_cursor']=='{}'
+
+
+def test_scan_diagnostic_download_contains_counts_and_outcomes_without_customer_data(app):
+    client,connector=setup_scan(app)
+    connector.scan_action.side_effect=None
+    connector.scan_action.return_value=scan_page(total=648,limited=True,accessible_total=2,
+        source_name='PRIVATE_GROUP_NAME',member_source='group_info',limit_reason='hidden_members',viewer_role='member',
+        diagnostics=dict(version=1,group_type=2,group_info_ids=2,preview_count=2,link_status='detail_error',error_code='403',
+                         cookie='PRIVATE_COOKIE',uid='123',phone='0901234567',link='https://zalo.me/g/PRIVATE_LINK'))
+    assert start(client,'members',remote_group='900').status_code==200
+    response=client.get('/data-scans/1/diagnostics')
+    assert response.status_code==200 and 'attachment;' in response.headers['Content-Disposition']
+    report=json.loads(response.data)
+    assert report['total']==648 and report['loaded']==2 and not report['requires_new_scan']
+    assert report['diagnostics']==dict(version=1,group_type=2,group_info_ids=2,preview_count=2,link_status='detail_error',error_code='403')
+    assert 'PRIVATE_' not in response.text and '0901234567' not in response.text
+    assert 'PRIVATE_COOKIE' not in client.get('/data-scans/1/rows').text
+    assert not connector.message_action.called
+
+
+def test_scan_diagnostics_handles_legacy_snapshots_and_rejects_unexpected_types(app):
+    from data_scans import scan_diagnostics
+    client,_=setup_scan(app);start(client,'members',remote_group='900')
+    assert client.get('/data-scans/1/diagnostics').json['requires_new_scan']
+    assert scan_diagnostics(dict(link_status={},error_code=['403'],link_more=1,preview_count=True,group_type=True))==dict(version=1)
+    assert scan_diagnostics('PRIVATE_COOKIE')=={}

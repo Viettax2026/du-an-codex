@@ -324,6 +324,8 @@ Mỗi lượt đọc tối đa 100 dòng; bạn bè/group dùng **Tải tiếp**
 
 **Thêm vào nhóm** chỉ thêm các SĐT hợp lệ đã chọn; UID không có SĐT vẫn nằm trong kết quả quét để xuất Excel. Không chuyển danh sách group thành khách hàng theo SĐT. Hồ sơ đã có giữ thông tin và đồng ý nhận tin; hồ sơ mới mặc định chưa đánh dấu đồng ý trừ khi người dùng tích ô xác nhận. Quét, xuất Excel và tạo bản xem trước không gửi tin thật.
 
+Nếu quét thiếu hoặc trả về 0 hồ sơ, vai trò thành viên và cài đặt ẩn danh sách chưa đủ để kết luận nguyên nhân. Bấm **Tải chẩn đoán** trong kết quả quét thành viên để tải JSON gồm số lượng ID từ từng phần phản hồi, trạng thái lấy link/đọc trang và mã lỗi số nếu có. Báo cáo không chứa tên nhóm, UID, SĐT, link mời hay thông tin đăng nhập. Kết quả cũ cần **Tải data** để tạo lượt quét mới có chẩn đoán. Link trả về rỗng hoặc bước đọc link lỗi không làm mất những hồ sơ lấy được từ thông tin nhóm; ứng dụng giữ phần đã đọc và báo chưa đầy đủ.
+
 ### Chiến dịch gửi tin vào group Zalo
 
 Trong **Thêm chiến dịch → Hành động**, chọn **Zalo – Gửi tin nhắn đến group**. Chọn tài khoản gửi, tải group tài khoản đã tham gia hoặc chọn từ kết quả quét group đã lưu của đúng tài khoản; thêm các group vào danh sách riêng. UID group được giữ riêng với SĐT/UID người dùng. Nội dung, biến thể, định dạng và một tệp đính kèm dùng chung được hỗ trợ; `{{name}}` chèn tên group.

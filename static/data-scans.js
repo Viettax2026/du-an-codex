@@ -10,6 +10,7 @@
     $('import').disabled=busy || !selection.size || $('kind').value==='groups' || !$('destination').value;
     $('check').disabled=busy || !scanId || !rows.some(row=>row.phone);
     $('export').disabled=busy || !scanId;
+    $('diagnostics').disabled=busy || !scanId;
     $('select-page').checked=rows.length>0 && rows.every(row=>selection.has(row.id));
     $('select-page').indeterminate=rows.some(row=>selection.has(row.id)) && !$('select-page').checked;
   }
@@ -43,9 +44,7 @@
     const count=available!==null && available!==undefined?available:loaded;
     const detail=`Zalo trả về ${count}${reported!==null?' / '+reported:''} hồ sơ thành viên cho tài khoản quét.`;
     if(scan.limit_reason==='hidden_members'){
-      const role=scan.viewer_role==='owner'?'trưởng nhóm':scan.viewer_role==='admin'?'phó nhóm':scan.viewer_role==='member'?'thành viên':'';
-      if(['owner','admin'].includes(scan.viewer_role))return `Nhóm đang bật ẩn thành viên. ${detail} Tài khoản được ghi nhận là ${role}, nhưng phản hồi vẫn thiếu danh sách. Kiểm tra quyền xem trong Zalo và tải lại; chưa thể xác nhận đã quét đủ nhóm.`;
-      return `Nhóm đang bật ẩn thành viên. ${detail}${role?' Tài khoản đang quét là thành viên.':''} Chọn tài khoản trưởng/phó nhóm được quyền xem đầy đủ, hoặc nhờ quản trị viên mở quyền xem rồi quét lại.`;
+      return `Nhóm đang bật ẩn thành viên. ${detail} Kết nối hiện tại chưa tải đủ danh sách; chưa xác định nguyên nhân. Vai trò thành viên không đủ để kết luận tài khoản không quét được. Bấm “Tải chẩn đoán” để kiểm tra bước tải bị thiếu.`;
     }
     if(scan.limit_reason==='scan_limit')return 'Đã đạt giới hạn 10.000 hồ sơ cho một kết quả quét. Danh sách nhóm chưa được tải đầy đủ.';
     if(scan.has_more)return `${detail} Còn trang dữ liệu đã được trả về; bấm Tải tiếp. Chưa thể xác nhận danh sách đầy đủ.`;
@@ -59,17 +58,22 @@
     rows=data.rows;page=data.page;pages=data.pages;
     const savedOption=$('saved').selectedOptions[0];
     if(savedOption?.value===String(id))savedOption.textContent=savedOption.textContent.replace(/\(\d+\)$/,`(${data.loaded})`);
-    $('total').textContent=data.scan.kind==='members' && data.scan.accessible_total!==null
-      ?`Đã tải ${data.loaded}/${data.scan.accessible_total} hồ sơ được Zalo trả về · Tổng thành viên nhóm: ${data.scan.total ?? 'chưa rõ'}`
+    $('total').textContent=data.scan.kind==='members'
+      ?`Đã lưu ${data.loaded} hồ sơ · Tổng thành viên nhóm: ${data.scan.total ?? 'chưa rõ'}`
       :`Tổng ${data.loaded} data${data.scan.total!==null?' / '+data.scan.total+' từ nguồn':''}`;
     const visibility=visibilityMessage(data.scan,data.loaded);
     $('visibility').hidden=!visibility;$('visibility').textContent=visibility;
+    $('diagnostics').hidden=data.scan.kind!=='members';
     $('range').textContent=`Hiển thị ${data.total?(page-1)*100+1:0}–${Math.min(page*100,data.total)}/${data.total} data`;
     $('page').textContent=`Trang ${page}/${pages}`;$('prev').disabled=page<=1;$('next').disabled=page>=pages;
     $('more').hidden=!data.scan.has_more;
     $('more').textContent=data.scan.member_source==='group_link'?'Tải tiếp thành viên nhóm':'Tải tiếp 100 data';
     if(data.scan.error)message(data.scan.error,true);
-    else if(visibility)message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Có thể tải tiếp phần danh sách được trả về.':' Đã lưu hết phần danh sách Zalo trả về; chưa quét đủ thành viên nhóm.'}`);
+    else if(visibility){
+      let diagnostics={};try{diagnostics=JSON.parse(data.scan.scan_diagnostics || '{}');}catch{}
+      const outcomes={sdk_unavailable:'Kết nối chưa hỗ trợ đọc qua link nhóm.',detail_error:'Chưa lấy được link nhóm từ Zalo.',disabled:'Link nhóm đang tắt.',missing_link:'Zalo chưa trả về link nhóm.',invalid_link:'Link nhóm trả về không đúng định dạng.',page_error:'Chưa đọc được trang thành viên qua link nhóm.',empty:'Trang thành viên qua link nhóm trả về rỗng.'};
+      message(`Đã lưu kết quả: ${data.scan.source_name}. Chưa quét đủ thành viên nhóm.${outcomes[diagnostics.link_status]?' '+outcomes[diagnostics.link_status]:''}${!diagnostics.version?' Quét mới để ghi chẩn đoán cho kết quả này.':''}`);
+    }
     else if(data.scan.limited)message('Đã lưu phần dữ liệu Zalo cho phép xem. Danh sách có thể chưa đầy đủ hoặc đã chạm giới hạn 10.000 dòng.');
     else message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Bấm Tải tiếp để đọc thêm.':' Đã tải hết dữ liệu nguồn trả về.'}${data.scan.member_source==='group_link'?' Nguồn thành viên: phân trang link nhóm.':''}`);
     renderRows();return data;
@@ -134,6 +138,10 @@
     try{const data=await request(`/data-scans/${scanId}/ids?${new URLSearchParams(filters())}`);selection=new Set(data.ids);renderRows();}catch(error){message(error.message,true);}finally{setBusy(false);}
   });
   $('destination').addEventListener('change',updateSelection);
+  $('diagnostics').addEventListener('click',()=>{
+    if(busy || !scanId)return;
+    const link=document.createElement('a');link.href=`/data-scans/${scanId}/diagnostics`;link.download='chan-doan-quet-group.json';link.click();
+  });
   $('export').addEventListener('click',async()=>{
     if(busy || !scanId)return;setBusy(true);
     try{const response=await fetch(`/data-scans/${scanId}/export`,{method:'POST',body:new URLSearchParams({csrf,...actionData()})});

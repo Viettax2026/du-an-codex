@@ -111,3 +111,24 @@ test('large group-link pages are chunked without dropping members',async()=>{
   }
   assert.equal(new Set(found).size,250);assert.deepEqual(requested,[1,1,1]);
 });
+
+test('failed or empty link lookup preserves group-info profiles and reports only safe diagnostics',async()=>{
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getOwnId:()=> '2',
+    getGroupInfo:async()=>({gridInfoMap:{'900':{type:2,currentMems:[{id:'1',dName:'Owner'},{id:'2',dName:'Self'}],totalMember:648,setting:{lockViewMember:1}}}}),
+    getGroupMembersInfo:async()=>({profiles:{}}),
+    getGroupLinkDetail:async()=>{throw Object.assign(new Error('SECRET_SESSION https://zalo.me/g/PRIVATE'),{code:403});},
+    getGroupLinkInfo:async()=>({groupId:'900',currentMems:[],hasMoreMember:0,totalMember:648})};
+  const first=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.equal(first.rows.length,2);assert.equal(first.limited,true);
+  assert.equal(first.diagnostics.link_status,'detail_error');assert.equal(first.diagnostics.error_code,'403');
+  assert.equal(first.diagnostics.group_type,2);assert.equal(first.diagnostics.group_info_ids,2);
+  assert.ok(!JSON.stringify(first.diagnostics).includes('SECRET'));assert.ok(!JSON.stringify(first.diagnostics).includes('900'));
+  api.getGroupLinkDetail=async()=>({enabled:1,link:'https://zalo.me/g/PRIVATE'});
+  const empty=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.equal(empty.rows.length,2);assert.equal(empty.diagnostics.link_status,'empty');assert.equal(empty.member_source,'group_info');
+  api.getGroupLinkInfo=async()=>{throw Object.assign(new Error('SECRET_SESSION'),{code:'SECRET_CODE'});};
+  const failed=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.equal(failed.rows.length,2);assert.equal(failed.diagnostics.link_status,'page_error');assert.equal(failed.diagnostics.error_code,'');
+  // An interrupted later page must remain retryable, rather than silently changing sources.
+  await assert.rejects(executeScan(api,{kind:'members',group_id:'900',offset:50,cursor:{source:'group_link',member_page:2,member_offset:0}}));
+});

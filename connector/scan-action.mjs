@@ -19,27 +19,44 @@ export async function joinedGroupIds(api) {
 export async function assertJoinedGroup(api,id) {
   if(!ID.test(String(id)) || !(await joinedGroupIds(api)).includes(String(id)))throw new Error('Group not joined');
 }
-async function linkedMembers(api,input,group,total,viewerRole,hidden) {
+function errorCode(error) {
+  const code=String(error?.code ?? error?.cause?.code ?? '');
+  return /^-?\d{1,8}$/.test(code)?code:'';
+}
+async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics) {
   const cursor=input.cursor || {},continuing=cursor.source==='group_link';
   if(typeof api.getGroupLinkDetail!=='function' || typeof api.getGroupLinkInfo!=='function'){
+    diagnostics.link_status='sdk_unavailable';
     if(continuing)throw new Error('Group link reading unavailable');
     return null;
   }
   let detail;
   try {detail=await api.getGroupLinkDetail(String(input.group_id));}
-  catch(error){if(continuing)throw error;return null;}
+  catch(error){diagnostics.link_status='detail_error';diagnostics.error_code=errorCode(error);if(continuing)throw error;return null;}
   let link;
-  try {link=new URL(detail?.link);}catch {if(continuing)throw new Error('Group link unavailable');return null;}
-  if(!flag(detail.enabled) || link.protocol!=='https:' || link.hostname!=='zalo.me' || link.port || link.username || link.password || !/^\/g\/[a-z0-9]+\/?$/i.test(link.pathname)){
+  if(!flag(detail?.enabled)){
+    diagnostics.link_status=[0,'0',false].includes(detail?.enabled)?'disabled':'missing_link';
+    if(continuing)throw new Error('Group link unavailable');
+    return null;
+  }
+  try {link=new URL(detail?.link);}catch {diagnostics.link_status='missing_link';if(continuing)throw new Error('Group link unavailable');return null;}
+  if(link.protocol!=='https:' || link.hostname!=='zalo.me' || link.port || link.username || link.password || !/^\/g\/[a-z0-9]+\/?$/i.test(link.pathname)){
+    diagnostics.link_status='invalid_link';
     if(continuing)throw new Error('Group link unavailable');
     return null;
   }
   const memberPage=continuing?cursor.member_page:1,start=continuing?cursor.member_offset:0;
-  const data=await api.getGroupLinkInfo({link:link.href,memberPage});
+  diagnostics.link_page=memberPage;
+  let data;
+  try {data=await api.getGroupLinkInfo({link:link.href,memberPage});}
+  catch(error){diagnostics.link_status='page_error';diagnostics.error_code=errorCode(error);if(continuing)throw error;return null;}
   if(String(data?.groupId)!==String(input.group_id) || !Array.isArray(data.currentMems))throw new Error('Invalid linked group response');
   const profiles=new Map();
   for(const member of data.currentMems){const id=uid(member?.id);if(ID.test(id))profiles.set(id,member);}
   const list=[...profiles.entries()];
+  Object.assign(diagnostics,{link_status:list.length?'ok':'empty',link_raw_count:data.currentMems.length,link_valid_count:list.length,link_more:flag(data.hasMoreMember)});
+  // An empty link preview must not discard profiles available in group info.
+  if(!continuing && !list.length && diagnostics.group_info_ids>0)return null;
   if(start>list.length)throw new Error('Invalid linked group cursor');
   const page=list.slice(start,start+100),withinPage=start+100<list.length;
   const hasMore=withinPage || flag(data.hasMoreMember);
@@ -50,7 +67,7 @@ async function linkedMembers(api,input,group,total,viewerRole,hidden) {
     next_offset:offset,has_more:hasMore && !atLimit,total:Math.max(total,Number.isFinite(sourceTotal)?Math.max(0,Math.floor(sourceTotal)):0),
     source_name:text(group.name || input.group_id),accessible_total:null,limited:atLimit,
     limit_reason:atLimit?'scan_limit':'',viewer_role:viewerRole,member_source:'group_link',members_hidden:hidden,
-    cursor:hasMore && !atLimit?{source:'group_link',member_page:withinPage?memberPage:memberPage+1,member_offset:withinPage?start+100:0}:{}};
+    cursor:hasMore && !atLimit?{source:'group_link',member_page:withinPage?memberPage:memberPage+1,member_offset:withinPage?start+100:0}:{},diagnostics};
 }
 export async function executeScan(api,input) {
   const offset=Number(input.offset || 0),size=100;
@@ -93,8 +110,12 @@ export async function executeScan(api,input) {
   const total=Math.max(all.length,Number.isFinite(reported)?Math.max(0,Math.floor(reported)):0);
   const incomplete=total>all.length || (!Number.isFinite(reported) || reported<=0) && flag(group.hasMoreMember);
   const hidden=flag(group.setting?.lockViewMember);
+  const diagnostics={version:1,group_type:group.type===1 || group.type===2?group.type:0,
+    group_info_ids:all.length,mem_ver_count:Array.isArray(group.memVerList)?group.memVerList.length:0,
+    member_id_count:Array.isArray(group.memberIds)?group.memberIds.length:0,preview_count:Array.isArray(group.currentMems)?group.currentMems.length:0,
+    link_status:'not_needed'};
   if(incomplete || fromLink){
-    const linked=await linkedMembers(api,input,group,total,viewerRole,hidden);
+    const linked=await linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics);
     if(linked)return linked;
   }
   const details=page.length?await api.getGroupMembersInfo(page):{profiles:{}};
@@ -104,5 +125,5 @@ export async function executeScan(api,input) {
     String(group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
     has_more:offset+size<Math.min(all.length,10000),next_offset:offset+size,
     total,source_name:text(group.name || groupId),accessible_total:all.length,
-    limited:Boolean(limitReason),limit_reason:limitReason,viewer_role:viewerRole,member_source:'group_info',members_hidden:hidden,cursor:{}};
+    limited:Boolean(limitReason),limit_reason:limitReason,viewer_role:viewerRole,member_source:'group_info',members_hidden:hidden,cursor:{},diagnostics};
 }

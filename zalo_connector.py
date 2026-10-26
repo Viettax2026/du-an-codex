@@ -155,6 +155,6 @@ class QRConnector:
                 reason=output.get('reason') if isinstance(output,dict) else ''
                 return {'state':'error','reason':reason if reason in ('session','network','rate_limited','connector_unavailable') else 'unavailable'}
             # Further row validation and allowlisting happens before persistence.
-            return {key:output[key] for key in ('state','rows','has_more','next_offset','total','limited','source_name','accessible_total','limit_reason','viewer_role','member_source','members_hidden','cursor') if key in output}
+            return {key:output[key] for key in ('state','rows','has_more','next_offset','total','limited','source_name','accessible_total','limit_reason','viewer_role','member_source','members_hidden','cursor','diagnostics') if key in output}
         except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):
             return {'state':'error','reason':'network'}

@@ -17,6 +17,22 @@ ERRORS={'session':'Tài khoản chưa đăng nhập hoặc phiên đã hết h�
         'rate_limited':'Zalo đang giới hạn tra cứu. Chờ rồi thử lại.',
         'connector_unavailable':'VPS chưa sẵn sàng kết nối Zalo.'}
 ID=re.compile(r'\d{1,30}\Z')
+LINK_STATUSES={'not_needed','sdk_unavailable','detail_error','disabled','missing_link','invalid_link','page_error','empty','ok'}
+
+
+def scan_diagnostics(value):
+    """Keep structural counts and fixed outcomes, never SDK payloads or identifiers."""
+    if not isinstance(value,dict) or not value:return {}
+    result={'version':1}
+    for key in ('group_info_ids','mem_ver_count','member_id_count','preview_count','link_page','link_raw_count','link_valid_count'):
+        count=value.get(key)
+        if type(count) is int and 0<=count<=1000000:result[key]=count
+    if type(value.get('group_type')) is int and value['group_type'] in (0,1,2):result['group_type']=value['group_type']
+    if isinstance(value.get('link_status'),str) and value['link_status'] in LINK_STATUSES:result['link_status']=value['link_status']
+    if type(value.get('link_more')) is bool:result['link_more']=value['link_more']
+    code=value.get('error_code')
+    if isinstance(code,str) and re.fullmatch(r'-?\d{1,8}',code):result['error_code']=code
+    return result
 
 
 def public_avatar(value):
@@ -66,7 +82,8 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
         columns={row['name'] for row in db().execute('PRAGMA table_info(data_scans)')}
         for name,declaration in {'loading_at':"TEXT NOT NULL DEFAULT ''",'accessible_total':'INTEGER',
                 'limit_reason':"TEXT NOT NULL DEFAULT ''",'viewer_role':"TEXT NOT NULL DEFAULT 'unknown'",
-                'scan_cursor':"TEXT NOT NULL DEFAULT '{}'",'member_source':"TEXT NOT NULL DEFAULT ''"}.items():
+                'scan_cursor':"TEXT NOT NULL DEFAULT '{}'",'member_source':"TEXT NOT NULL DEFAULT ''",
+                'scan_diagnostics':"TEXT NOT NULL DEFAULT '{}'"}.items():
             if name not in columns:db().execute(f'ALTER TABLE data_scans ADD COLUMN {name} {declaration}')
         db().commit()
 
@@ -159,9 +176,9 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
                     if partial and reason!='scan_limit':reason='hidden_members' if result.get('members_hidden') is True else 'incomplete_members'
             source=result.get('member_source') if result.get('member_source') in ('group_link','group_info') else ''
             db().execute('''UPDATE data_scans SET status='ready',loading_at='',next_offset=?,has_more=?,total=?,limited=?,source_name=?,
-                accessible_total=?,limit_reason=?,viewer_role=?,scan_cursor=?,member_source=? WHERE id=?''',
+                accessible_total=?,limit_reason=?,viewer_role=?,scan_cursor=?,member_source=?,scan_diagnostics=? WHERE id=?''',
                 (offset,int(has_more and not stalled),total,int(limited),str(result.get('source_name') or KINDS[scan['kind']])[:100],
-                 accessible,reason,role,json.dumps(cursor if has_more and not stalled else {}),source,scan_id))
+                 accessible,reason,role,json.dumps(cursor if has_more and not stalled else {}),source,json.dumps(scan_diagnostics(result.get('diagnostics'))),scan_id))
             db().commit()
         except Exception as error:
             db().rollback()
@@ -269,6 +286,20 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
         where,args=filtered_rows(scan_id,request.args)
         if request.path.endswith('/phone-ids'):where+=" AND r.phone!='' AND r.kind='user'"
         return jsonify(ids=[row['id'] for row in db().execute('SELECT r.id FROM data_scan_rows r WHERE '+where+' ORDER BY r.id LIMIT 10000',args)])
+
+    @app.get('/data-scans/<int:scan_id>/diagnostics')
+    @login_required
+    def export_scan_diagnostics(scan_id):
+        scan=own_scan(scan_id)
+        loaded=db().execute('SELECT count(*) FROM data_scan_rows WHERE scan_id=?',(scan_id,)).fetchone()[0]
+        try:details=scan_diagnostics(json.loads(scan['scan_diagnostics']))
+        except (ValueError,TypeError):details={}
+        report=dict(report_version=1,kind=scan['kind'],loaded=loaded,total=scan['total'],
+                    accessible_total=scan['accessible_total'],limited=bool(scan['limited']),has_more=bool(scan['has_more']),
+                    viewer_role=scan['viewer_role'],member_source=scan['member_source'],limit_reason=scan['limit_reason'],
+                    diagnostics=details,requires_new_scan=not bool(details))
+        output=io.BytesIO(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'))
+        return send_file(output,mimetype='application/json',as_attachment=True,download_name='chan-doan-quet-group.json')
 
     @app.post('/data-scans/<int:scan_id>/export')
     @login_required
