@@ -7,7 +7,8 @@ from html.parser import HTMLParser
 
 from personalization import TOKEN, personalize
 
-STYLES = {'b', 'i', 'u', 's', 'f_18', 'lst_1', 'lst_2', 'ind_$'}
+COLORS = {'c_db342e', 'c_f27806', 'c_f7b503', 'c_15a85f'}
+STYLES = {'b', 'i', 'u', 's', 'f_18', 'lst_1', 'lst_2', 'ind_$'} | COLORS
 TAGS = {'b':'b', 'strong':'b', 'i':'i', 'em':'i', 'u':'u', 's':'s', 'strike':'s',
         'h1':'f_18', 'h2':'f_18', 'h3':'f_18', 'blockquote':'ind_$'}
 BLOCKS = {'p', 'div', 'h1', 'h2', 'h3', 'blockquote', 'ul', 'ol', 'li'}
@@ -48,7 +49,7 @@ class MessageParser(HTMLParser):
             style = 'lst_2' if any(t == 'ol' for t, _, _ in self.stack) else 'lst_1'
         if tag == 'span':
             style = dict(attrs).get('data-style')
-            if style not in STYLES:
+            if style not in STYLES and style != 'c_default':
                 style = None
         self.stack.append((tag, len(self.text), style))
 
@@ -88,6 +89,23 @@ class MessageParser(HTMLParser):
         text = self.text.strip()
         ranges = sorted({(max(0,a-left), min(len(text),b-left), st) for a,b,st in self.ranges
                          if min(len(text),b-left) > max(0,a-left)})
+        # Inner colors override outer ones. The editor's default-color marker
+        # removes inherited color without emitting an unsupported SDK style.
+        colors = [(max(0,a-left),min(len(text),b-left),st) for a,b,st in self.ranges
+                  if st in COLORS or st == 'c_default']
+        if len(colors) > 400:
+            raise ValueError('Nội dung có quá nhiều vùng màu. Vui lòng đơn giản hóa định dạng.')
+        ranges = [item for item in ranges if item[2] not in COLORS and item[2] != 'c_default']
+        points = sorted({0,len(text),*(a for a,_,_ in colors),*(b for _,b,_ in colors)})
+        colored = []
+        for a,b in zip(points,points[1:]):
+            if b <= a:continue
+            style = next((st for start,end,st in colors if start <= a and end >= b),None)
+            if style in COLORS:
+                if colored and colored[-1][1] == a and colored[-1][2] == style:
+                    colored[-1] = (colored[-1][0],b,style)
+                else:colored.append((a,b,style))
+        ranges = sorted(ranges + colored)
         if len(ranges) > 400:
             raise ValueError('Nội dung có quá nhiều vùng định dạng. Vui lòng đơn giản hóa định dạng.')
         return text, ranges

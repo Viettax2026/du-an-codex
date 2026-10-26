@@ -141,3 +141,44 @@ def test_invalid_snapshot_styles_block_before_claim(app):
     assert not connector.message_action.called
     assert query(app,'SELECT state FROM message_sends')[0][0]=='prepared'
     assert query(app,'SELECT id FROM campaign_attempts')==[]
+
+
+@pytest.mark.parametrize('color',['c_db342e','c_f27806','c_f7b503','c_15a85f'])
+def test_supported_colors_survive_sanitization_personalization_and_utf16(color):
+    message,html=read_message(rich(f'😊 <span data-style="{color}" onclick="bad()"><b>Chào {{{{name}}}}</b></span>'))
+    text,styles=render_message(message,html,{'name':'Lan 😊'})
+    assert text=='😊 Chào Lan 😊'
+    assert {'start':3,'len':11,'st':color} in styles
+    assert {'start':3,'len':11,'st':'b'} in styles
+    assert 'onclick' not in html
+    assert read_message(rich(html))==(message,html)
+    assert color in display_message(text,json.dumps(styles))
+
+
+def test_nested_colors_replace_outer_color_and_default_only_removes_color():
+    message,html=read_message(rich('<span data-style="c_db342e"><b>A<span data-style="c_15a85f">B<span data-style="c_default">C</span>D</span>E</b></span>'))
+    text,styles=render_message(message,html,{})
+    assert text=='ABCDE'
+    assert [s for s in styles if s['st'].startswith('c_')]==[
+        {'start':0,'len':1,'st':'c_db342e'},{'start':1,'len':1,'st':'c_15a85f'},
+        {'start':3,'len':1,'st':'c_15a85f'},{'start':4,'len':1,'st':'c_db342e'}]
+    assert all(any(s['st']=='b' and s['start']<=i<s['start']+s['len'] for s in styles) for i in range(5))
+    assert 'c_default' not in html and read_message(rich(html))==(message,html)
+    for value in ['c_ffffff','c_default','url(javascript:bad)']:
+        with pytest.raises(ValueError):load_styles(json.dumps([dict(start=0,len=1,st=value)]),'A')
+    assert read_message(rich('<span data-style="c_bad" style="color:red" onmouseover="bad()">A</span>'))==('A','A')
+    with pytest.raises(ValueError):parse_html('<span data-style="c_db342e">'*401+'A'+'</span>'*401)
+
+
+def test_colored_template_preview_and_frozen_send_keep_original_color(app):
+    client,connector=setup_send(app)
+    original='<span data-style="c_db342e">Chào {{name}}</span>'
+    template=post(client,'/message-templates',rich(original,name='Tin màu'))
+    assert template.status_code==200
+    assert 'c_db342e' in client.get('/message-templates').json['items'][0]['message_html']
+    assert 'c_db342e' in post(client,'/composer/preview',rich(original)).json['html']
+    post(client,'/campaigns/1/content',rich(original));prepare(client)
+    post(client,'/campaigns/1/content',rich('<span data-style="c_15a85f">Khác</span>'))
+    connector.message_action.reset_mock();connector.message_action.return_value={'state':'sent','message_id':'123'}
+    post(client,'/campaigns/1/send/1',{'confirm_send':'yes'})
+    assert connector.message_action.call_args.kwargs['styles']==[{'start':0,'len':8,'st':'c_db342e'}]

@@ -18,7 +18,12 @@
   const blocks = new Set(['P','DIV','H1','H2','H3','BLOCKQUOTE','UL','OL','LI']);
   const dropped = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','SVG','MATH','TEMPLATE']);
   const allowed = new Set(['STRONG','B','EM','I','U','S','STRIKE','BR',...blocks]);
-  const styles = new Set(['b','i','u','s','f_18','lst_1','lst_2','ind_$']);
+  const colorValues = ['db342e','f27806','f7b503','15a85f'];
+  const colors = new Map(colorValues.map(value=>['#'+value,'c_'+value]));
+  colors.set('#152b45','c_default');colors.set('#000000','c_default');colors.set('black','c_default');
+  for(const [hex,style] of [...colors])if(hex.startsWith('#'))colors.set(`rgb(${[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)).join(',')})`,style);
+  const colorStyle = value=>colors.get(String(value || '').toLowerCase().replace(/\s/g,''));
+  const styles = new Set(['b','i','u','s','f_18','lst_1','lst_2','ind_$','c_default',...colorValues.map(value=>'c_'+value)]);
   function cleanHTML(html) {
     const template = document.createElement('template');
     template.innerHTML = html;
@@ -30,7 +35,9 @@
       else if (node.tagName === 'SPAN' && styles.has(node.dataset.style)) {
         target = document.createElement('span'); target.dataset.style = node.dataset.style; parent.append(target);
       }
-      // Preserve only the text emphasis from pasted office/web content; never copy CSS or event handlers.
+      // Keep only supported text colors and emphasis, never arbitrary CSS or handlers.
+      const color=colorStyle(node.style.color || (node.tagName==='FONT'?node.getAttribute('color'):''));
+      if(color){const wrap=document.createElement('span');wrap.dataset.style=color;target.append(wrap);target=wrap;}
       const emphasis = [];
       if (node.style.fontWeight === 'bold' || Number(node.style.fontWeight) >= 600) emphasis.push('strong');
       if (node.style.fontStyle === 'italic') emphasis.push('em');
@@ -133,7 +140,7 @@
     return {count:parts.length,max:Math.max(...lengths),error};
   }
   function sync() {
-    if (rich.checked) { textarea.value = plainText(editor); htmlField.value = editor.innerHTML; richField.value = 'yes'; }
+    if (rich.checked) { textarea.value = plainText(editor); htmlField.value = cleanHTML(editor.innerHTML); richField.value = 'yes'; }
     else { htmlField.value = ''; richField.value = 'no'; }
     textarea.required = false;
     const info=variantInfo();
@@ -195,9 +202,24 @@
       if (button.dataset.format==='link') { remember(); linkDialog.showModal(); return; }
       restore(); document.execCommand('styleWithCSS',false,false);
       document.execCommand(button.dataset.format,false,button.dataset.value || null);
+      if(button.dataset.format==='removeFormat')document.execCommand('foreColor',false,'#152b45');
       sync(); remember(); refreshFormat();
     });
   });
+  const colorToggle=root.querySelector('[data-color-toggle]'),colorPalette=root.querySelector('[data-color-palette]');
+  function closeColors(){colorPalette.hidden=true;colorToggle.setAttribute('aria-expanded','false');}
+  colorToggle.addEventListener('mousedown',event=>{event.preventDefault();remember();});
+  colorToggle.addEventListener('click',()=>{remember();colorPalette.hidden=!colorPalette.hidden;colorToggle.setAttribute('aria-expanded',String(!colorPalette.hidden));});
+  colorPalette.querySelectorAll('[data-text-color]').forEach(button=>{
+    button.addEventListener('mousedown',event=>event.preventDefault());
+    button.addEventListener('click',()=>{
+      restore();document.execCommand('styleWithCSS',false,false);document.execCommand('foreColor',false,'#'+button.dataset.textColor);
+      colorPalette.querySelectorAll('[data-text-color]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+      closeColors();sync();remember();refreshFormat();
+    });
+  });
+  document.addEventListener('click',event=>{if(!event.target.closest('.composer-colors'))closeColors();});
+  root.addEventListener('keydown',event=>{if(event.key==='Escape' && !colorPalette.hidden){event.preventDefault();closeColors();colorToggle.focus();}});
   root.querySelector('[data-composer-basic]').addEventListener('click', () => { (rich.checked ? editor : textarea).focus(); });
   form.addEventListener('submit',event => {
     sync();

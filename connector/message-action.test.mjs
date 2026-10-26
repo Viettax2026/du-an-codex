@@ -154,3 +154,14 @@ test('plain image keeps its single caption and non-image attachments require tex
   assert.deepEqual(await executeMessageAction({sendMessage:async()=>({attachment:[{msgId:10}]})},
     {action:'send',uid:'123',message:'Chào Lan',attachment:{...attachment,filename:'quote.pdf'}}),{state:'unknown'});
 });
+
+test('supported Zalo text colors reach user and group sends, unsupported colors do not dispatch', async()=>{
+  for(const type of [0,1])for(const st of ['c_db342e','c_f27806','c_f7b503','c_15a85f']){
+    const styles=[{start:3,len:3,st}],calls=[];
+    const api={sendMessage:async(...args)=>{calls.push(args);return {message:{msgId:1}};}};
+    assert.equal((await executeMessageAction(api,{action:'send',uid:'123',message:'😊 ABC',styles,thread_type:type})).state,'sent');
+    assert.deepEqual(calls,[[{msg:'😊 ABC',styles},'123',type]]);
+    for(const invalid of ['c_ffffff','c_default','color:red','c_db342e;bad'])await assert.rejects(executeMessageAction(api,{action:'send',uid:'123',message:'ABC',styles:[{start:0,len:3,st:invalid}]}));
+    assert.equal(calls.length,1);
+  }
+});

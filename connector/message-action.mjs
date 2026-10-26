@@ -36,7 +36,7 @@ export async function executeMessageAction(api, input, onDispatch = () => {},onP
          attachment.metadata.width * attachment.metadata.height > 25_000_000)) throw new Error('Invalid image dimensions');
   }
   const styles = input.styles === undefined ? [] : input.styles;
-  const supported = new Set(['b','i','u','s','f_18','lst_1','lst_2','ind_$']);
+  const supported = new Set(['b','i','u','s','f_18','lst_1','lst_2','ind_$','c_db342e','c_f27806','c_f7b503','c_15a85f']);
   const boundaries = new Set([0]);
   let position = 0;
   for (const char of input.message) { position += char.length; boundaries.add(position); }

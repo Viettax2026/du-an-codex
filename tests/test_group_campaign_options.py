@@ -223,3 +223,11 @@ def test_refresh_and_batch_confirmation_exclude_removed_group_without_sending_it
     assert query(app,'SELECT state,claimed_at FROM group_message_sends')==[('skipped',None),('skipped',None)]
     assert query(app,'SELECT state FROM group_message_batches WHERE id=1')==[('confirmed',)]
     assert not connector.forward_group_messages.called
+
+
+def test_colored_group_message_preserves_color_and_uses_individual_send(app):
+    _,connector=setup_options(app,message='Thông báo',rich_message='yes',message_html='<span data-style="c_f27806">Thông báo</span>')
+    configure_schedule(app);tick(app,datetime(2026,10,26,10,tzinfo=ZoneInfo('Asia/Ho_Chi_Minh')))
+    assert not connector.forward_group_messages.called
+    assert connector.message_action.call_args.kwargs['thread_type']==1
+    assert connector.message_action.call_args.kwargs['styles']==[dict(start=0,len=9,st='c_f27806')]
