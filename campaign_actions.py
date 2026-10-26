@@ -9,7 +9,7 @@ import warnings
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, send_file, url_for,has_request_context
 from PIL import Image
 from data_import import read_contacts, insert_contact
 from campaign_exclusions import contact_is_excluded
@@ -21,6 +21,7 @@ from campaign_limits import enforce_limits, save_limits, LIMIT_COLUMNS
 from campaign_duplicates import DuplicateMessageBlocked, recent_for_record, DUPLICATE_COLUMNS
 from campaign_errors import diagnostics,error_description
 from campaign_edits import initialize_edits,next_send_id
+from campaign_pending import initialize_pending,PendingActions
 
 
 ACTION_COLUMNS = {'send': ('state', 'message_limit'), 'friend': ('friend_state', 'friend_limit'),
@@ -82,6 +83,7 @@ def initialize_campaign_actions(db):
                 SELECT e.created_at FROM campaign_events e WHERE e.campaign_id=campaign_attempts.campaign_id
                 AND e.kind=? AND e.detail LIKE '% · Bản gửi #' || campaign_attempts.send_id || ': %'
                 ORDER BY e.id DESC LIMIT 1) WHERE action=?''',(action+'_result',action))
+    initialize_pending(db)
     db().commit()
 
 
@@ -107,6 +109,7 @@ def parse_phones(raw):
 class CampaignManager:
     def __init__(self, app, db, audience):
         self.db, self.audience = db, audience
+        self.pending = PendingActions(self)
         self.media_root = Path(app.config.get('MEDIA_ROOT') or Path(app.config['DATABASE']).parent / 'media')
 
     def owned(self, campaign_id, include_deleted=False):
@@ -137,6 +140,10 @@ class CampaignManager:
             if row is None or row[column] != 'prepared' or row['schedule_skip_reason']:
                 connection.rollback()
                 return False
+            row=self.pending.record(row,action)
+            if row['needs_lookup']:abort(409,'Cần xác nhận người nhận bằng tài khoản mới trước khi gửi bước này.')
+            if row['action_payload_id']!=dict(expected).get('action_payload_id',0):abort(409,'Bước chờ đã thay đổi. Tải lại để xem và xác nhận nội dung mới.')
+            if guard is None and has_request_context() and request.form.get('action_payload_id','0')!=str(row['action_payload_id']):abort(409,'Bản xác nhận cũ đã hết hiệu lực. Tải lại để kiểm tra bước chờ mới.')
             if not connection.execute('SELECT 1 FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
                                       (row['account_id'], g.user['id'])).fetchone():
                 abort(409, 'Tài khoản gửi đã xóa. Chọn tài khoản khác trước khi tiếp tục.')
@@ -166,8 +173,8 @@ class CampaignManager:
                 connection.execute('UPDATE message_sends SET schedule_turn_finished=0 WHERE id=?',(send_id,))
                 if row['schedule_turn_finished']:
                     self.event(campaign_id,'schedule_recipient_resume',f'Tiếp tục xử lý {row["recipient_phone"]}: thực hiện hành động còn thiếu, dùng Zalo đã tìm thấy trước đó.')
-            connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action) VALUES (?,?,?)',
-                               (campaign_id, send_id, action))
+            connection.execute('INSERT INTO campaign_attempts(campaign_id,send_id,action,payload_id) VALUES (?,?,?,?)',
+                               (campaign_id, send_id, action,row['action_payload_id'] or None))
             label = {'send': 'tin nhắn', 'friend': 'lời mời kết bạn', 'alias': 'đổi tên gợi nhớ'}[action]
             origin='Theo lịch tự động' if guard is not None else 'Xác nhận thủ công'
             self.event(campaign_id, action, f'Bắt đầu xử lý {label}, bản gửi #{send_id}. Nguồn: {origin}.')
@@ -224,6 +231,7 @@ class CampaignManager:
             row=self.db().execute('SELECT * FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
             if not row or row['state']!='prepared':
                 self.db().rollback();return False
+            row=self.pending.record(row,'send')
             recent=recent_for_record(self.db,campaign,row)
             if recent is None:
                 self.db().rollback();return False
@@ -241,6 +249,7 @@ class CampaignManager:
         row=self.db().execute('''SELECT s.*,a.name AS account_name,c.name AS campaign_name FROM message_sends s
             JOIN campaigns c ON c.id=s.campaign_id JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=c.user_id
             WHERE s.id=? AND s.campaign_id=?''',(send_id,campaign_id)).fetchone()
+        row=self.pending.record(row,action)
         name=row['recipient_name'] or row['recipient_phone'] or row['recipient_id']
         label = {'send': 'Nhắn tin người lạ', 'friend': 'Kết bạn', 'alias': 'Đổi tên Zalo'}[action]
         description={'sent':f'Zalo đã tiếp nhận tin nhắn đến {name}',
@@ -590,6 +599,7 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
         sends = db().execute('''SELECT s.*,p.name,p.phone,a.name AS account_name FROM message_sends s
             JOIN contacts p ON p.id=s.contact_id JOIN zalo_accounts a ON a.id=s.account_id
             WHERE s.campaign_id=? ORDER BY s.id DESC''', (campaign_id,)).fetchall()
+        sends=[manager.pending.decorate(row) for row in sends]
         simulation_logs = db().execute('''SELECT d.*,p.name,p.phone FROM deliveries d
             JOIN contacts p ON p.id=d.contact_id WHERE d.campaign_id=? ORDER BY d.id DESC''', (campaign_id,)).fetchall()
         simulated = len(simulation_logs)
@@ -599,7 +609,8 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
             stream = io.StringIO()
             writer = csv.writer(stream)
             writer.writerow(['ID', 'Khách hàng', 'SĐT', 'Tài khoản', 'Nội dung', 'Tin nhắn', 'Kết bạn', 'Đổi tên', 'Mã tin', 'Thời gian UTC',
-                             'Zalo ID', 'Tên Zalo', 'Lời mời', 'Tên gợi nhớ', 'Media', 'Lý do bỏ qua'])
+                             'Zalo ID', 'Tên Zalo', 'Lời mời', 'Tên gợi nhớ', 'Media', 'Lý do bỏ qua',
+                             'Tài khoản nhắn tin','Tài khoản kết bạn','Tài khoản đổi tên'])
             def safe(value):
                 value = str(value or '')
                 return "'" + value if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')) else value
@@ -607,7 +618,8 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
                 media = manager.media(row['media_id'])
                 writer.writerow([safe(value) for value in (row['id'], row['name'], row['phone'], row['account_name'], row['message'],
                     STATE_LABELS[row['state']], STATE_LABELS[row['friend_state']], STATE_LABELS[row['alias_state']], row['message_id'], row['created_at'],
-                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '',' '.join(filter(None,(row['message_skip_reason'],row['schedule_skip_reason']))))])
+                    row['recipient_id'], row['recipient_name'], row['friend_message'], row['alias'], media['filename'] if media else '',' '.join(filter(None,(row['message_skip_reason'],row['schedule_skip_reason']))),
+                    *(row['action_details'][action].get('account_name',row['account_name']) for action in ('send','friend','alias')))])
             return send_file(io.BytesIO(('\ufeff'+stream.getvalue()).encode()), mimetype='text/csv', as_attachment=True,
                              download_name=f'chien-dich-{campaign_id}.csv')
         return render_template('campaign_report.html', campaign=campaign, sends=sends, counts=counts,
@@ -620,8 +632,10 @@ def register_campaign_actions(app, db, login_required, audience, connector, pers
         campaign = manager.owned(campaign_id)
         account = db().execute('SELECT * FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',
                                (campaign['account_id'], g.user['id'])).fetchone()
-        used_accounts = db().execute('''SELECT DISTINCT a.* FROM zalo_accounts a JOIN message_sends s ON s.account_id=a.id
-            WHERE s.campaign_id=? AND a.user_id=?''', (campaign_id, g.user['id'])).fetchall()
+        used_accounts = db().execute('''SELECT DISTINCT a.* FROM zalo_accounts a WHERE a.user_id=? AND
+            (EXISTS (SELECT 1 FROM message_sends s WHERE s.account_id=a.id AND s.campaign_id=?) OR
+             EXISTS (SELECT 1 FROM campaign_action_payloads p JOIN message_sends s ON s.id=p.send_id WHERE p.account_id=a.id AND s.campaign_id=?))''',
+             (g.user['id'],campaign_id,campaign_id)).fetchall()
         connection = connector.status(g.user['id'], account['id']) if account else None
         return render_template('campaign_account.html', campaign=campaign, account=account, used_accounts=used_accounts,
                                connection=connection, page='campaigns')

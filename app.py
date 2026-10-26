@@ -521,8 +521,8 @@ def create_app(test_config=None):
                     JOIN contacts p ON p.id=d.contact_id AND p.user_id=? WHERE d.campaign_id=?
                     ORDER BY d.id DESC LIMIT 100''', (g.user['id'],selected['id'])))
             logs.extend(dict(row, log_type='zalo') for row in db().execute('''SELECT s.*,a.name AS account_name FROM message_sends s
-                JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=? WHERE s.campaign_id=? AND (?='' OR s.account_id=?)
-                ORDER BY s.id DESC LIMIT 100''', (g.user['id'],selected['id'],log_account_id,log_account_id)))
+                JOIN zalo_accounts a ON a.id=s.account_id AND a.user_id=? WHERE s.campaign_id=? AND (?='' OR s.account_id=? OR EXISTS (SELECT 1 FROM campaign_action_payloads ap WHERE ap.send_id=s.id AND ap.account_id=?))
+                ORDER BY s.id DESC LIMIT 100''', (g.user['id'],selected['id'],log_account_id,log_account_id,log_account_id)))
             if selected['campaign_type']=='zalo_group':
                 logs.extend(dict(row,log_type='zalo') for row in db().execute("""SELECT s.id,s.created_at,s.group_name AS name,
                     s.group_name AS recipient_name,s.group_id AS recipient_phone,s.message,s.message_styles,s.state,
@@ -533,6 +533,8 @@ def create_app(test_config=None):
                     WHERE s.campaign_id=? AND (?='' OR s.account_id=?) ORDER BY s.id DESC LIMIT 100""",
                     (g.user['id'],selected['id'],log_account_id,log_account_id)))
             logs = sorted(logs,key=lambda item:(item['created_at'],item['id']),reverse=True)[:100]
+            if selected['campaign_type']!='zalo_group':
+                logs=[manager.pending.decorate(row) if row['log_type']=='zalo' else row for row in logs]
         def campaign_link(**changes):
             values=dict(q=query,days=days,status=status,tag=tag,account_id=account_id,kind=kind,log_account_id=log_account_id,detail_tab=detail_tab)
             if selected:
@@ -619,6 +621,7 @@ def create_app(test_config=None):
         sends = db().execute('''SELECT s.*, p.name AS contact_name, a.name AS account_name FROM message_sends s
             JOIN contacts p ON p.id=s.contact_id JOIN zalo_accounts a ON a.id=s.account_id
             WHERE s.campaign_id=? ORDER BY s.id DESC''', (campaign_id,)).fetchall()
+        sends=[manager.pending.decorate(row) for row in sends]
         return render_template('detail.html', campaign=campaign, recipients=recipients, logs=logs, preview=preview,
                                connected_accounts=connected, sends=sends, eligible_ids={p['id'] for p in recipients}, page='campaigns')
 
@@ -687,6 +690,7 @@ def create_app(test_config=None):
             AND p.user_id=c.user_id AND a.user_id=c.user_id''', (send_id, campaign_id, g.user['id'])).fetchone()
         if record is None:
             return 'Không tìm thấy lần gửi.', 404
+        record=manager.pending.record(record,'send')
         if request.form.get('confirm_send') != 'yes' or not record['consent']:
             return 'Cần xác nhận gửi và sự đồng ý của khách hàng.', 400
         campaign = db().execute('SELECT * FROM campaigns WHERE id=?', (campaign_id,)).fetchone()
@@ -736,6 +740,7 @@ def create_app(test_config=None):
             AND p.user_id=c.user_id AND a.user_id=c.user_id''', (send_id, campaign_id, g.user['id'])).fetchone()
         if record is None:
             return 'Không tìm thấy người nhận.', 404
+        record=manager.pending.record(record,'friend')
         campaign = db().execute('SELECT * FROM campaigns WHERE id=?', (campaign_id,)).fetchone()
         if request.form.get('confirm_friend') != 'yes' or not record['consent'] or record['contact_id'] not in {p['id'] for p in audience(campaign)}:
             return 'Cần xác nhận lời mời và người nhận hợp lệ.', 400
@@ -769,6 +774,7 @@ def create_app(test_config=None):
             AND p.user_id=c.user_id AND a.user_id=c.user_id""", (send_id,campaign_id,g.user['id'])).fetchone()
         if record is None:
             return 'Không tìm thấy người nhận.',404
+        record=manager.pending.record(record,'alias')
         campaign = db().execute('SELECT * FROM campaigns WHERE id=?',(campaign_id,)).fetchone()
         if request.form.get('confirm_alias') != 'yes' or not record['consent'] or record['contact_id'] not in {p['id'] for p in audience(campaign)}:
             return 'Cần xác nhận đổi tên và người nhận hợp lệ.',400
@@ -784,6 +790,20 @@ def create_app(test_config=None):
             db().execute('UPDATE message_sends SET alias_state=? WHERE id=?',(state,send_id))
             manager.result(campaign_id, 'alias', send_id, state,result)
             db().commit()
+        return redirect(url_for('campaign_detail',campaign_id=campaign_id))
+
+    @app.post('/campaigns/<int:campaign_id>/pending/<int:send_id>/<action>/resolve')
+    @login_required
+    def resolve_pending_action(campaign_id,send_id,action):
+        from campaign_pending import ACTIONS
+        campaign=manager.owned(campaign_id);manager.require_active(campaign)
+        if action not in ACTIONS:abort(404)
+        record=db().execute('SELECT * FROM message_sends WHERE id=? AND campaign_id=?',(send_id,campaign_id)).fetchone()
+        if not record or record[ACTIONS[action][0]]!='prepared':abort(404)
+        try:
+            manager.pending.resolve(campaign,record,action,connector)
+            flash('Đã tải người nhận cho bước chờ. Kiểm tra nội dung trước khi xác nhận gửi.','success')
+        except ValueError as error:flash(str(error),'error')
         return redirect(url_for('campaign_detail',campaign_id=campaign_id))
 
     @app.post('/campaigns/<int:campaign_id>/cancel-send/<int:send_id>')
@@ -965,6 +985,8 @@ def create_app(test_config=None):
     register_data_scans(app, db, login_required, connector, parse_phones)
     from group_campaigns import register_group_campaigns
     register_group_campaigns(app, db, login_required, manager, connector)
+    from campaign_pending import repair_canceled_steps
+    repair_canceled_steps(app,db,manager)
     from data_groups import purge_archived_groups
     purge_archived_groups(app, db)
     return app

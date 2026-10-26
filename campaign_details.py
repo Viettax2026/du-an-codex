@@ -25,8 +25,9 @@ def inline_detail(db,campaign,tab='info',number=1,connector=None):
     else:
         data_where="p.user_id=? AND p.deleted_at IS NULL AND (?='' OR p.id IN (SELECT contact_id FROM contact_group_memberships WHERE user_id=? AND group_name=?))"
         data_args=(user_id,campaign['tag'],user_id,campaign['tag'])
-    account_where='a.user_id=? AND (a.id=? OR EXISTS (SELECT 1 FROM message_sends s WHERE s.account_id=a.id AND s.campaign_id=?))'
-    account_args=(user_id,campaign['account_id'],campaign_id)
+    account_where='''a.user_id=? AND (a.id=? OR EXISTS (SELECT 1 FROM message_sends s WHERE s.account_id=a.id AND s.campaign_id=?)
+        OR EXISTS (SELECT 1 FROM campaign_action_payloads p JOIN message_sends s ON s.id=p.send_id WHERE p.account_id=a.id AND s.campaign_id=?))'''
+    account_args=(user_id,campaign['account_id'],campaign_id,campaign_id)
     totals=dict(data=db().execute('SELECT count(*) FROM contacts p WHERE '+data_where,data_args).fetchone()[0],
                 accounts=db().execute('SELECT count(*) FROM zalo_accounts a WHERE '+account_where,account_args).fetchone()[0],
                 results=result_count(db,user_id,campaign_id),

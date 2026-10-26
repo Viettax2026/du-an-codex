@@ -22,6 +22,7 @@
   {% set blocked=s.contact_id not in eligible_ids %}
   {% set recent_message=recent_message_for(campaign,s) if s.state=='prepared' else none %}
   <article class="real-send-record">
+    {% for action,title in [('send','Nhắn tin'),('friend','Kết bạn'),('alias','Đổi tên')] %}{% set step=s.action_details[action] %}{% if step.action_payload_id %}<p class="notice">{{ title }}: {{ step.account_name }} · {{ 'Cần tải người nhận bằng tài khoản mới' if step.needs_lookup else 'Nội dung riêng của bước này' }}.</p>{% if step.needs_lookup %}<form method="post" action="{{ url_for('resolve_pending_action',campaign_id=campaign.id,send_id=s.id,action=action) }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="ghost" {% if campaign.paused %}disabled{% endif %}>Tải người nhận cho bước {{ title }}</button></form>{% endif %}{% endif %}{% endfor %}
     {% if s.schedule_skip_reason %}<p class="notice">{{ s.schedule_skip_reason }}</p>{% endif %}{% if s.message_skip_reason %}<p class="duplicate-warning">{{ s.message_skip_reason }}</p>{% endif %}
     {% if recent_message %}<p class="duplicate-warning">Không gửi lại: người nhận có tin trong {{ campaign.duplicate_days }} ngày gần đây tại chiến dịch “{{ recent_message.campaign_name }}”, tài khoản {{ recent_message.account_name }} ({{ recent_message.sent_at|localtime }}).<a href="{{ url_for('campaign_duplicate_check',campaign_id=campaign.id) }}">Cài đặt kiểm tra trùng lặp</a></p>{% endif %}
     {% if s.scheduled and not s.message_skip_reason and s.state=='not_requested' and s.friend_state=='not_requested' and s.alias_state=='not_requested' %}<p class="notice">Đã bỏ qua theo điều kiện nhận tin/loại trừ; chưa gửi hành động nào.</p>{% endif %}
@@ -33,9 +34,10 @@
     <h4>Lời mời kết bạn</h4><p class="message-text">{{ s.friend_message }}</p>
     {% if s.friend_state=='prepared' %}
       <form method="post" action="{{ url_for('send_friend_request',campaign_id=campaign.id,send_id=s.id) }}">
+        <input type="hidden" name="action_payload_id" value="{{ s.action_details.friend.action_payload_id }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_friend" value="yes" required> Tôi xác nhận gửi lời mời này đến đúng người nhận Zalo.</label>
-        <button class="primary" {% if campaign.paused or blocked or schedule_block %}disabled{% endif %}>Gửi lời mời kết bạn</button>
+        <button class="primary" {% if campaign.paused or blocked or schedule_block or s.action_details.friend.needs_lookup %}disabled{% endif %}>Gửi lời mời kết bạn</button>
       </form>
     {% elif s.friend_state=='friend_requested' %}<p class="notice success">Zalo đã tiếp nhận lời mời · Chưa xác nhận đã chấp nhận kết bạn</p>
     {% elif s.friend_state=='failed' %}<p class="notice error">Không gửi được lời mời kết bạn.</p>
@@ -45,9 +47,10 @@
     <h4>Tên gợi nhớ trên Zalo</h4><p>{{ s.alias }}</p>
     {% if s.alias_state=='prepared' %}
     <form method="post" action="{{ url_for('change_alias',campaign_id=campaign.id,send_id=s.id) }}">
+        <input type="hidden" name="action_payload_id" value="{{ s.action_details.alias.action_payload_id }}">
       <input type="hidden" name="csrf" value="{{ session.csrf }}">
       <label class="send-confirm"><input type="checkbox" name="confirm_alias" value="yes" required> Tôi xác nhận đổi tên gợi nhớ của người nhận này.</label>
-      <button class="primary" {% if campaign.paused or blocked or schedule_block %}disabled{% endif %}>Đổi tên gợi nhớ</button>
+      <button class="primary" {% if campaign.paused or blocked or schedule_block or s.action_details.alias.needs_lookup %}disabled{% endif %}>Đổi tên gợi nhớ</button>
     </form>
     {% elif s.alias_state=='renamed' %}<p class="notice success">Zalo đã tiếp nhận đổi tên gợi nhớ.</p>
     {% elif s.alias_state=='failed' %}<p class="notice error">Không đổi được tên gợi nhớ. Kiểm tra quan hệ bạn bè và phiên đăng nhập.</p>
@@ -55,9 +58,10 @@
     {% endif %}
     {% if s.state=='prepared' %}
       <form method="post" action="{{ url_for('send_message', campaign_id=campaign.id, send_id=s.id) }}">
+        <input type="hidden" name="action_payload_id" value="{{ s.action_details.send.action_payload_id }}">
         <input type="hidden" name="csrf" value="{{ session.csrf }}">
         <label class="send-confirm"><input type="checkbox" name="confirm_send" value="yes" required> Tôi đã kiểm tra đúng người nhận và đồng ý gửi nội dung này qua Zalo.</label>
-        <button class="primary" {% if campaign.paused or blocked or recent_message or schedule_block %}disabled{% endif %}>Gửi tin thật</button>
+        <button class="primary" {% if campaign.paused or blocked or recent_message or schedule_block or s.action_details.send.needs_lookup %}disabled{% endif %}>Gửi tin thật</button>
       </form>
     {% elif s.state=='sent' %}<p class="notice success">Zalo đã tiếp nhận · Mã tin: {{ s.message_id }} · Chưa xác nhận đã đọc</p>
     {% elif s.state=='failed' %}<p class="notice error">Không gửi được tin. Kiểm tra phiên đăng nhập và kết nối.</p>

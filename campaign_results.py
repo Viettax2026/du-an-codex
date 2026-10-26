@@ -1,5 +1,6 @@
 """Read saved per-action outcomes without dispatching or resolving recipients."""
 from campaign_errors import error_description
+from flask import current_app
 
 RESULTS_SQL='''WITH source AS (
     SELECT s.id,s.recipient_name,s.recipient_phone,s.recipient_id,s.created_at,s.lookup_state,
@@ -40,7 +41,12 @@ def result_rows(db,owner,campaign,limit,offset):
     results=[]
     for row in rows:
         item=dict(row);state=row['outcome'];action=row['action']
-        name=row['recipient_name'] or row['recipient_phone'] or row['phone']
+        if action in ('send','friend','alias'):
+            base=db().execute('SELECT * FROM message_sends WHERE id=?',(row['id'],)).fetchone()
+            payload=current_app.extensions['campaign_manager'].pending.record(base,action)
+            if payload['action_payload_id']:
+                item.update(account_name=payload['account_name'],recipient_name=payload['recipient_name'],alias=payload['alias'])
+        name=item['recipient_name'] or row['recipient_phone'] or row['phone']
         phone=row['recipient_phone'] or row['phone']
         status,tone='Chưa xác định','warning'
         if state in ('resolved','sent','friend_requested','renamed'):
@@ -48,7 +54,7 @@ def result_rows(db,owner,campaign,limit,offset):
             description={'lookup':f'Đã tìm thấy SĐT {phone}: {name}.',
                          'send':f'Zalo đã tiếp nhận tin nhắn đến {name}.',
                          'friend':f'Zalo đã tiếp nhận lời mời kết bạn đến {name}.',
-                         'alias':f'Đã đổi tên {name} thành "{row["alias"]}".'}[action]
+                         'alias':f'Đã đổi tên {name} thành "{item["alias"]}".'}[action]
         elif state=='not_found':
             status,description='Không tồn tại','Không tìm thấy Zalo từ số điện thoại này.'
         elif state=='blocked':

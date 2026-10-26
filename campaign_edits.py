@@ -39,21 +39,18 @@ def edit_remaining(db,manager,campaign):
             AND state IN ('prepared','not_requested') AND friend_state IN ('prepared','not_requested') AND alias_state IN ('prepared','not_requested')
             AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared')
             AND NOT EXISTS (SELECT 1 FROM campaign_attempts a WHERE a.send_id=s.id)''',(cid,)).fetchall()
-        # A recipient with any claimed action has already started. Keep every
-        # payload/result/attempt; cancel its unclaimed steps, never retry it.
-        partial=db().execute('''SELECT s.id FROM message_sends s WHERE campaign_id=?
+        # Completed/claimed actions remain immutable. Only unclaimed actions
+        # receive a versioned payload, including their new sender if changed.
+        partial=db().execute('''SELECT s.* FROM message_sends s WHERE campaign_id=? AND schedule_skip_reason=''
             AND (state='prepared' OR friend_state='prepared' OR alias_state='prepared')
             AND (EXISTS (SELECT 1 FROM campaign_attempts a WHERE a.send_id=s.id)
                  OR state NOT IN ('prepared','not_requested') OR friend_state NOT IN ('prepared','not_requested') OR alias_state NOT IN ('prepared','not_requested'))''',(cid,)).fetchall()
         for row in partial:
-            db().execute('''UPDATE message_sends SET state=CASE WHEN state='prepared' THEN 'not_requested' ELSE state END,
-                friend_state=CASE WHEN friend_state='prepared' THEN 'not_requested' ELSE friend_state END,
-                alias_state=CASE WHEN alias_state='prepared' THEN 'not_requested' ELSE alias_state END WHERE id=?''',(row['id'],))
-            manager.event(cid,'edit_started_recipient',f'Giữ kết quả bản gửi #{row["id"]} đã bắt đầu; bỏ các bước chưa thực hiện sau khi sửa chiến dịch. Không chạy lại data này.')
+            manager.pending.stage(db().execute('SELECT * FROM campaigns WHERE id=?',(cid,)).fetchone(),row)
     for row in rows:
         db().execute('INSERT INTO campaign_preview_archive(campaign_id,source_table,send_id,snapshot,media_id) VALUES (?,?,?,?,?)',
             (cid,table,row['id'],json.dumps(dict(row),ensure_ascii=False),row['media_id']))
         db().execute(f'DELETE FROM {table} WHERE id=?',(row['id'],))
     db().execute('''UPDATE campaigns SET edit_revision=edit_revision+1,schedule_revision=schedule_revision+1,
         schedule_error='',schedule_status=CASE WHEN schedule_enabled=1 THEN 'Tiếp tục phần data chưa xử lý theo cấu hình mới' ELSE schedule_status END WHERE id=?''',(cid,))
-    manager.event(cid,'edit_remaining',f'Sửa chiến dịch: áp dụng cấu hình mới cho data chưa bắt đầu. Vô hiệu hóa {len(rows)} bản xem trước chưa gửi; lưu bản cũ vào lịch sử. Giữ kết quả, lượt hạn mức và thời gian nghỉ của data đã xử lý; không chạy lại.')
+    manager.event(cid,'edit_remaining',f'Sửa chiến dịch: áp dụng cấu hình mới cho các bước chưa thực hiện. Vô hiệu hóa {len(rows)} bản xem trước chưa gửi; lưu bản cũ vào lịch sử. Giữ kết quả, lượt hạn mức và thời gian nghỉ; không thực hiện lại hành động đã có lượt chạy.')

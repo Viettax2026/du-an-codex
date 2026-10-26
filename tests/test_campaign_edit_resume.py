@@ -66,7 +66,7 @@ def test_edit_after_partially_processed_recipient_never_restarts_that_recipient(
     for _ in range(6):tick(app)
     assert [call.args[2] for call in connector.message_action.call_args_list]==['resolve','send','resolve','send']
     assert query(app,'SELECT message FROM message_sends WHERE contact_id=2')==[('Mới',)]
-    assert 'bỏ các bước chưa thực hiện' in client.get('/campaigns/1/history').text
+    assert 'đã tắt trong cấu hình' in client.get('/campaigns/1/history').text
 
 
 @pytest.mark.parametrize('state',['failed','unknown'])

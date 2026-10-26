@@ -264,7 +264,7 @@ class CampaignScheduler:
         if row['schedule_skip_reason']:
             return False
         states={'send':row['state'],'friend':row['friend_state'],'alias':row['alias_state']}
-        if row['schedule_turn_finished'] or any(state in ('sending','unknown') for state in states.values()):
+        if row['schedule_turn_finished'] or 'sending' in states.values() or ('unknown' in states.values() and not row['continue_after_edit']):
             return False
         budgets=usage(self.db,campaign)
         self.limit_notice(campaign,budgets)
@@ -280,7 +280,7 @@ class CampaignScheduler:
                 self.db().execute("UPDATE message_sends SET schedule_skip_reason='Bỏ qua bước nhắn tin: người nhận chặn tin nhắn từ người lạ. Các bước còn lại đã được xử lý.' WHERE id=?",(send_id,))
             changed=self.db().execute('UPDATE message_sends SET schedule_completed_at=CURRENT_TIMESTAMP WHERE id=? AND schedule_completed_at IS NULL',(send_id,)).rowcount
             if changed:
-                note=' · Có hành động thất bại, xem kết quả chi tiết.' if 'failed' in states.values() else ' · Đã ghi nhận bỏ qua, chưa gửi tin.' if not row['recipient_id'] else ''
+                note=' · Có hành động chưa xác định, cần kiểm tra Zalo; không tự gửi lại.' if 'unknown' in states.values() else ' · Có hành động thất bại, xem kết quả chi tiết.' if 'failed' in states.values() else ' · Đã ghi nhận bỏ qua, chưa gửi tin.' if not row['recipient_id'] else ''
                 self.manager.event(campaign['id'],'schedule_complete',f'{self.prefix(campaign,row["account_id"])} – Hoàn thành xử lý {phone}{note}')
         else:
             self.manager.event(campaign['id'],'schedule_pending_limits',f'{self.prefix(campaign,row["account_id"])} – Đã xử lý các hành động còn hạn mức của {phone}; các hành động chưa thực hiện chờ hạn mức để chạy tiếp.')
@@ -296,6 +296,9 @@ class CampaignScheduler:
             (send_id,campaign['id'])).fetchone()
         if row is None or row['schedule_skip_reason']:
             return False
+        if row['continue_after_edit'] and 'prepared' in (row['state'],row['friend_state'],row['alias_state']):
+            self.manager.event(campaign['id'],'schedule_pending_after_error',f'Bản gửi #{send_id}: giữ kết quả bước lỗi/chưa xác định, tiếp tục các bước chưa thực hiện theo cấu hình đã sửa; không thử lại bước cũ.')
+            self.rest(campaign,now);return True
         phone=row['recipient_phone'] or self.db().execute('SELECT phone FROM contacts WHERE id=?',(row['contact_id'],)).fetchone()[0]
         unknown='unknown' in (row['state'],row['friend_state'],row['alias_state'])
         reason=f'Bỏ qua {phone}: '+('có hành động chưa xác định kết quả' if unknown else 'có hành động thất bại')+'. Không tự thực hiện lại; tiếp tục số điện thoại kế tiếp.'
@@ -314,6 +317,7 @@ class CampaignScheduler:
         try:
             campaign=self.manager.owned(campaign['id']);guard(campaign)
             row=self.db().execute('''SELECT * FROM message_sends s WHERE campaign_id=? AND scheduled=1 AND schedule_skip_reason=''
+                AND (continue_after_edit=0 OR state='sending' OR friend_state='sending' OR alias_state='sending')
                 AND (state IN ('unknown','sending') OR (state='failed' AND NOT EXISTS (
                     SELECT 1 FROM campaign_attempts a WHERE a.send_id=s.id AND a.action='send' AND a.error_reason='stranger_messages_blocked'))
                      OR friend_state IN ('failed','unknown','sending') OR alias_state IN ('failed','unknown','sending')) ORDER BY id LIMIT 1''',(campaign['id'],)).fetchone()
@@ -390,6 +394,7 @@ class CampaignScheduler:
         column={'send':'state','friend':'friend_state','alias':'alias_state'}[action]
         if record[column]!='prepared':
             return
+        record=self.manager.pending.resolve(campaign,record,action,self.connector,guard)
         # Check private ownership and payload before committing the dispatch claim.
         account=self.db().execute('SELECT id FROM zalo_accounts WHERE id=? AND user_id=? AND deleted_at IS NULL',(record['account_id'],g.user['id'])).fetchone()
         if not account or self.connector.status(g.user['id'],record['account_id']).get('state')!='connected':

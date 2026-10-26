@@ -34,7 +34,7 @@ def remove_library_media(db, manager, user_id, media_id):
     media = manager.media(media_id)
     if not media or media['library_deleted_at']:
         abort(404)
-    used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=? UNION SELECT 1 FROM group_message_sends WHERE media_id=? UNION SELECT 1 FROM campaign_preview_archive WHERE media_id=?', (media_id,media_id,media_id,media_id)).fetchone()
+    used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=? UNION SELECT 1 FROM group_message_sends WHERE media_id=? UNION SELECT 1 FROM campaign_preview_archive WHERE media_id=? UNION SELECT 1 FROM campaign_action_payloads WHERE media_id=?', (media_id,media_id,media_id,media_id,media_id)).fetchone()
     if used:
         db().execute('UPDATE campaign_media SET library_deleted_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?', (media_id,user_id))
     else:
@@ -173,7 +173,7 @@ def register_media_library(app, db, login_required, manager):
     @login_required
     def delete_library_media(media_id):
         media = owned(media_id)
-        used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=? UNION SELECT 1 FROM group_message_sends WHERE media_id=? UNION SELECT 1 FROM campaign_preview_archive WHERE media_id=?',(media_id,media_id,media_id,media_id)).fetchone()
+        used = db().execute('SELECT 1 FROM campaigns WHERE media_id=? UNION SELECT 1 FROM message_sends WHERE media_id=? UNION SELECT 1 FROM group_message_sends WHERE media_id=? UNION SELECT 1 FROM campaign_preview_archive WHERE media_id=? UNION SELECT 1 FROM campaign_action_payloads WHERE media_id=?',(media_id,media_id,media_id,media_id,media_id)).fetchone()
         if request.method=='POST':
             if request.form.get('confirm_delete')!='yes':
                 abort(400)
