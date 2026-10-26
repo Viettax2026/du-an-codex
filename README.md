@@ -328,6 +328,8 @@ Nếu quét thiếu hoặc trả về 0 hồ sơ, vai trò thành viên và cài
 
 Danh sách qua link được gộp theo UID với danh sách từ thông tin nhóm, kể cả khi link chỉ trả về một người và báo không còn trang. ID chỉ có ở thông tin nhóm được tải hồ sơ theo từng phần tối đa 100 người; nếu tải hồ sơ lỗi vẫn giữ UID đã nhận. Gộp dữ liệu không đồng nghĩa đã quét đủ số thành viên khai báo. Với cộng đồng (`group_type=2`), nếu cả hai nguồn đều trả về một phần và không có trang tiếp theo, ứng dụng báo rõ giới hạn của nguồn đang dùng; chưa có xác nhận lấy được đầy đủ thành viên ẩn như AkaBiz.
 
+Khi danh sách ban đầu chưa đầy đủ, phiên bản mới thử thêm nguồn **phân trang theo ID nhóm** (`getGroupInfoV2`, tham khảo mã công khai `@softtynet/zca-js` 2.3.7) trước nguồn link. Bộ đọc dùng nguyên phiên và cơ chế mã hóa/gửi yêu cầu của `zca-js` 2.2.0 đang cài; không thay thư viện đăng nhập/gửi tin. Giao diện ghi nguồn đang dùng; chẩn đoán thêm `paged_status`, `paged_page`, `paged_valid_count`, `paged_more` và mã lỗi số. Nguồn mới đã được kiểm thử ngoại tuyến, chưa xác minh trên nhóm Zalo thật. Xem [ghi nhận nghiên cứu](docs/group-member-pagination-research.md) và [ghi nhận giấy phép](connector/THIRD_PARTY_NOTICES.md).
+
 ### Chiến dịch gửi tin vào group Zalo
 
 Trong **Thêm chiến dịch → Hành động**, chọn **Zalo – Gửi tin nhắn đến group**. Chọn tài khoản gửi, tải group tài khoản đã tham gia hoặc chọn từ kết quả quét group đã lưu của đúng tài khoản; thêm các group vào danh sách riêng. UID group được giữ riêng với SĐT/UID người dùng. Nội dung, biến thể, định dạng và một tệp đính kèm dùng chung được hỗ trợ; `{{name}}` chèn tên group.

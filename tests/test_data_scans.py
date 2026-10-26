@@ -255,3 +255,42 @@ def test_merged_member_pages_do_not_stop_at_overlapping_known_ids(app):
     assert result['scan']['accessible_total']==5
     assert all('_page_digest' not in (cursor or {}) for cursor in calls)
     assert client.get('/data-scans/1/diagnostics').json['diagnostics']['merged_first_page_count']==4
+
+
+def test_id_based_group_pages_resume_after_failure_and_keep_source_diagnostics(app):
+    client,connector=setup_scan(app)
+    requested=[]
+    def page(owner,account,kind,offset=0,group_id='',cursor=None):
+        requested.append(cursor)
+        number=cursor['member_page'] if cursor else 1
+        if len(requested)==2:raise ValueError('PRIVATE_UPSTREAM')
+        start=(number-1)*100;end=min(number*100,245)
+        return scan_page(rows=[dict(uid=str(i+1),name='Member',kind='user') for i in range(start,end)],next_offset=end,total=245,
+            has_more=end<245,limited=False,member_source='group_info_v2',members_hidden=True,
+            diagnostics=dict(version=1,paged_status='ok',paged_page=number,paged_raw_count=end-start,paged_valid_count=end-start,paged_more=end<245,cookie='PRIVATE'),
+            cursor=dict(source='group_info_v2',member_page=number+1,member_offset=0) if end<245 else {})
+    connector.scan_action.side_effect=page
+    assert start(client,'members',remote_group='900').status_code==200
+    assert post(client,'/data-scans/1/more').status_code==400
+    assert client.get('/data-scans/1/rows').json['loaded']==100
+    assert post(client,'/data-scans/1/more').status_code==200
+    assert post(client,'/data-scans/1/more').status_code==200
+    data=client.get('/data-scans/1/rows').json
+    assert data['loaded']==245 and data['scan']['accessible_total']==245 and not data['scan']['limited']
+    assert not data['scan']['has_more'] and data['scan']['member_source']=='group_info_v2'
+    assert requested[1]==requested[2]==dict(source='group_info_v2',member_page=2,member_offset=0)
+    report=client.get('/data-scans/1/diagnostics')
+    assert report.json['diagnostics']['paged_page']==3 and 'PRIVATE' not in report.text
+
+
+def test_id_based_pages_remain_partial_and_reject_a_different_cursor_source(app):
+    client,connector=setup_scan(app)
+    connector.scan_action.side_effect=None
+    connector.scan_action.return_value=scan_page(rows=[dict(uid='1',name='Self',kind='user')],next_offset=1,total=645,
+        has_more=False,limited=False,member_source='group_info_v2',members_hidden=True,
+        diagnostics=dict(version=1,paged_status='ok',paged_more=False,paged_valid_count=1))
+    assert start(client,'members',remote_group='900').status_code==200
+    data=client.get('/data-scans/1/rows').json
+    assert data['scan']['limited'] and data['scan']['accessible_total']==1
+    connector.scan_action.return_value=scan_page(next_offset=2,has_more=True,member_source='group_info_v2',cursor=dict(source='group_link',member_page=2,member_offset=0))
+    assert start(client,'members',remote_group='900').status_code==400

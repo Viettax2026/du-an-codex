@@ -25,14 +25,16 @@ def scan_diagnostics(value):
     """Keep structural counts and fixed outcomes, never SDK payloads or identifiers."""
     if not isinstance(value,dict) or not value:return {}
     result={'version':1}
-    for key in ('group_info_ids','mem_ver_count','member_id_count','preview_count','link_page','link_raw_count','link_valid_count','merged_first_page_count'):
+    for key in ('group_info_ids','mem_ver_count','member_id_count','preview_count','link_page','link_raw_count','link_valid_count','merged_first_page_count','paged_page','paged_raw_count','paged_valid_count'):
         count=value.get(key)
         if type(count) is int and 0<=count<=1000000:result[key]=count
     if type(value.get('group_type')) is int and value['group_type'] in (0,1,2):result['group_type']=value['group_type']
     if isinstance(value.get('link_status'),str) and value['link_status'] in LINK_STATUSES:result['link_status']=value['link_status']
+    if isinstance(value.get('paged_status'),str) and value['paged_status'] in ('not_needed','sdk_unavailable','page_error','empty','ok'):result['paged_status']=value['paged_status']
     if type(value.get('link_more')) is bool:result['link_more']=value['link_more']
+    if type(value.get('paged_more')) is bool:result['paged_more']=value['paged_more']
     if isinstance(value.get('profile_status'),str) and value['profile_status'] in ('ok','error','unavailable'):result['profile_status']=value['profile_status']
-    for key in ('error_code','profile_error_code'):
+    for key in ('error_code','profile_error_code','paged_error_code'):
         code=value.get(key)
         if isinstance(code,str) and re.fullmatch(r'-?\d{1,8}',code):result[key]=code
     return result
@@ -60,11 +62,11 @@ def normalized_phone(raw,parse_phones):
 
 def member_cursor(value):
     if not value:return {}
-    if not isinstance(value,dict) or value.get('source')!='group_link':raise ValueError('Con trỏ phân trang thành viên không hợp lệ.')
+    if not isinstance(value,dict) or value.get('source') not in ('group_link','group_info_v2'):raise ValueError('Con trỏ phân trang thành viên không hợp lệ.')
     page,index=value.get('member_page'),value.get('member_offset')
     if type(page) is not int or not 1<=page<=10000 or type(index) is not int or not 0<=index<=10000:
         raise ValueError('Con trỏ phân trang thành viên không hợp lệ.')
-    return dict(source='group_link',member_page=page,member_offset=index)
+    return dict(source=value['source'],member_page=page,member_offset=index)
 
 
 def register_data_scans(app,db,login_required,connector,parse_phones):
@@ -150,11 +152,12 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
                 result={'state':'error','reason':'network'}
             rows=clean_result(result)
             offset=result.get('next_offset')
-            linked=scan['kind']=='members' and result.get('member_source')=='group_link'
-            if type(offset) is not int or (not scan['next_offset']<offset<=scan['next_offset']+100 if linked else offset!=scan['next_offset']+100):
+            member_paging=scan['kind']=='members' and result.get('member_source') in ('group_link','group_info_v2')
+            if type(offset) is not int or (not scan['next_offset']<offset<=scan['next_offset']+100 if member_paging else offset!=scan['next_offset']+100):
                 raise ValueError('Phân trang Zalo không hợp lệ.')
-            cursor=member_cursor(result.get('cursor')) if linked else {}
-            if linked and result.get('has_more') and not cursor:raise ValueError('Thiếu con trỏ trang thành viên tiếp theo.')
+            cursor=member_cursor(result.get('cursor')) if member_paging else {}
+            if member_paging and result.get('has_more') and not cursor:raise ValueError('Thiếu con trỏ trang thành viên tiếp theo.')
+            if member_paging and cursor and cursor['source']!=result['member_source']:raise ValueError('Nguồn trang thành viên không hợp lệ.')
             db().execute('BEGIN IMMEDIATE')
             account(scan['account_id'],remote=False)
             inserted=0
@@ -165,7 +168,7 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
             digest=hashlib.sha256(','.join(sorted({row['uid'] for row in rows})).encode()).hexdigest()
             # A merged first page can contain IDs that appear again in later link
             # pages. Stop only a repeated page, not every page with known IDs.
-            stalled=has_more and not inserted and (not linked or saved_cursor.get('_page_digest')==digest)
+            stalled=has_more and not inserted and (not member_paging or saved_cursor.get('_page_digest')==digest)
             total=result.get('total')
             total=total if isinstance(total,int) and 0<=total<=1000000 else None
             accessible=result.get('accessible_total')
@@ -173,7 +176,7 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
             reason=result.get('limit_reason') if result.get('limit_reason') in ('hidden_members','incomplete_members','scan_limit') else ''
             role=result.get('viewer_role') if result.get('viewer_role') in ('owner','admin','member') else 'unknown'
             limited=bool(result.get('limited')) or stalled
-            if linked:
+            if member_paging:
                 loaded=db().execute('SELECT count(*) FROM data_scan_rows WHERE scan_id=?',(scan_id,)).fetchone()[0]
                 if total and loaded>=total:has_more=False
                 if not has_more or stalled:
@@ -181,8 +184,8 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
                     partial=bool(total and loaded<total) or stalled
                     limited=limited or partial
                     if partial and reason!='scan_limit':reason='hidden_members' if result.get('members_hidden') is True else 'incomplete_members'
-            source=result.get('member_source') if result.get('member_source') in ('group_link','group_info') else ''
-            stored_cursor={**cursor,'_page_digest':digest} if linked and has_more and not stalled else {}
+            source=result.get('member_source') if result.get('member_source') in ('group_link','group_info','group_info_v2') else ''
+            stored_cursor={**cursor,'_page_digest':digest} if member_paging and has_more and not stalled else {}
             db().execute('''UPDATE data_scans SET status='ready',loading_at='',next_offset=?,has_more=?,total=?,limited=?,source_name=?,
                 accessible_total=?,limit_reason=?,viewer_role=?,scan_cursor=?,member_source=?,scan_diagnostics=? WHERE id=?''',
                 (offset,int(has_more and not stalled),total,int(limited),str(result.get('source_name') or KINDS[scan['kind']])[:100],

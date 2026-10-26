@@ -67,16 +67,17 @@
     $('range').textContent=`Hiển thị ${data.total?(page-1)*100+1:0}–${Math.min(page*100,data.total)}/${data.total} data`;
     $('page').textContent=`Trang ${page}/${pages}`;$('prev').disabled=page<=1;$('next').disabled=page>=pages;
     $('more').hidden=!data.scan.has_more;
-    $('more').textContent=data.scan.member_source==='group_link'?'Tải tiếp thành viên nhóm':'Tải tiếp 100 data';
+    $('more').textContent=['group_link','group_info_v2'].includes(data.scan.member_source)?'Tải tiếp thành viên nhóm':'Tải tiếp 100 data';
     if(data.scan.error)message(data.scan.error,true);
     else if(visibility){
       let diagnostics={};try{diagnostics=JSON.parse(data.scan.scan_diagnostics || '{}');}catch{}
       const outcomes={sdk_unavailable:'Kết nối chưa hỗ trợ đọc qua link nhóm.',detail_error:'Chưa lấy được link nhóm từ Zalo.',disabled:'Link nhóm đang tắt.',missing_link:'Zalo chưa trả về link nhóm.',invalid_link:'Link nhóm trả về không đúng định dạng.',page_error:'Chưa đọc được trang thành viên qua link nhóm.',empty:'Trang thành viên qua link nhóm trả về rỗng.'};
       if(diagnostics.link_status==='ok' && diagnostics.link_more===false)outcomes.ok='Link nhóm trả về một phần danh sách và báo không còn trang tiếp theo.';
-      message(`Đã lưu kết quả: ${data.scan.source_name}. Chưa quét đủ thành viên nhóm.${outcomes[diagnostics.link_status]?' '+outcomes[diagnostics.link_status]:''}${!diagnostics.version?' Quét mới để ghi chẩn đoán cho kết quả này.':''}`);
+      const pagedOutcome=diagnostics.paged_status==='page_error'?'Chưa đọc được danh sách phân trang theo ID nhóm.':diagnostics.paged_status==='empty'?'Danh sách phân trang theo ID nhóm trả về rỗng.':diagnostics.paged_status==='ok' && diagnostics.paged_more===false?'Nguồn phân trang theo ID nhóm chưa trả đủ thành viên.':'';
+      message(`Đã lưu kết quả: ${data.scan.source_name}. Chưa quét đủ thành viên nhóm.${pagedOutcome?' '+pagedOutcome:''}${outcomes[diagnostics.link_status]?' '+outcomes[diagnostics.link_status]:''}${!diagnostics.version?' Quét mới để ghi chẩn đoán cho kết quả này.':''}`);
     }
     else if(data.scan.limited)message('Đã lưu phần dữ liệu Zalo cho phép xem. Danh sách có thể chưa đầy đủ hoặc đã chạm giới hạn 10.000 dòng.');
-    else message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Bấm Tải tiếp để đọc thêm.':' Đã tải hết dữ liệu nguồn trả về.'}${data.scan.member_source==='group_link'?' Nguồn thành viên: phân trang link nhóm.':''}`);
+    else message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Bấm Tải tiếp để đọc thêm.':' Đã tải hết dữ liệu nguồn trả về.'}${data.scan.member_source==='group_link'?' Nguồn thành viên: phân trang link nhóm.':data.scan.member_source==='group_info_v2'?' Nguồn thành viên: phân trang theo ID nhóm.':''}`);
     renderRows();return data;
   }
   async function loadRemainingMembers(data){

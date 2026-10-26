@@ -166,3 +166,45 @@ test('merged first native page keeps its overflow and later link pages without l
   }
   assert.equal(found.length,151);assert.equal(new Set(found).size,151);
 });
+
+test('ID-based group pages read all returned members without relying on a truncated invite preview',async()=>{
+  const requests=[],ids=Array.from({length:645},(_,i)=>String(i+1));
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getOwnId:()=> '2',
+    getGroupInfo:async()=>({gridInfoMap:{'900':{type:2,creatorId:'1',memVerList:['1_0','2_0','3_0','4_0'],totalMember:645,setting:{lockViewMember:1}}}}),
+    getGroupInfoV2:async(id,{mpage,mcount})=>{assert.equal(id,'900');assert.equal(mcount,100);requests.push(mpage);return {groupId:'900',creatorId:'1',currentMems:ids.slice((mpage-1)*100,mpage*100).map(id=>({id,dName:'Member '+id,cookie:'PRIVATE'})),hasMoreMember:mpage<7?1:0,totalMember:645};},
+    getGroupLinkDetail:async()=>{throw new Error('Must not use link when group pages are available');}};
+  let offset=0,cursor={},found=[];
+  for(let index=0;index<7;index++){
+    const data=await executeScan(api,{kind:'members',group_id:'900',offset,cursor});
+    assert.equal(data.member_source,'group_info_v2');assert.equal(data.viewer_role,'member');assert.equal(data.has_more,index<6);
+    assert.equal(data.diagnostics.paged_status,'ok');assert.ok(!JSON.stringify(data).includes('PRIVATE'));
+    found.push(...data.rows.map(row=>row.uid));offset=data.next_offset;cursor=data.cursor;
+  }
+  assert.equal(new Set(found).size,645);assert.deepEqual(requests,[1,2,3,4,5,6,7]);
+});
+
+test('partial group pages preserve newly returned IDs when link reading is unavailable',async()=>{
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getGroupInfo:async()=>({gridInfoMap:{'900':{memVerList:['1_0'],totalMember:645}}}),
+    getGroupInfoV2:async()=>({groupId:'900',currentMems:[{id:'2',dName:'New'}],totalMember:645,hasMoreMember:0}),getGroupMembersInfo:async()=>({profiles:{}})};
+  const data=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.deepEqual(data.rows.map(row=>row.uid),['1','2']);assert.equal(data.accessible_total,2);assert.equal(data.limited,true);
+  assert.equal(data.diagnostics.paged_valid_count,1);assert.equal(data.diagnostics.paged_more,false);
+  api.getGroupInfoV2=async()=>{throw Object.assign(new Error('PRIVATE'),{code:403});};
+  const denied=await executeScan(api,{kind:'members',group_id:'900'});
+  assert.equal(denied.rows.length,1);assert.equal(denied.diagnostics.paged_error_code,'403');assert.ok(!JSON.stringify(denied).includes('PRIVATE'));
+  await assert.rejects(executeScan(api,{kind:'members',group_id:'900',offset:100,cursor:{source:'group_info_v2',member_page:2,member_offset:0}}));
+});
+
+test('paged response must belong to selected group and oversized native pages retain their cursor',async()=>{
+  const api={getAllGroups:async()=>({gridVerMap:{'900':1}}),getGroupInfo:async()=>({gridInfoMap:{'900':{memVerList:['1_0'],totalMember:250}}}),
+    getGroupInfoV2:async()=>({groupId:'901',currentMems:[{id:'999'}],hasMoreMember:0})};
+  await assert.rejects(executeScan(api,{kind:'members',group_id:'900'}),/Invalid paged group/);
+  const pages=[];
+  api.getGroupInfoV2=async(id,{mpage})=>{pages.push(mpage);return {groupId:'900',totalMember:250,currentMems:[],memberIds:Array.from({length:250},(_,i)=>String(i+1)),hasMoreMember:0};};
+  let offset=0,cursor={},found=[];
+  for(let i=0;i<3;i++){
+    const data=await executeScan(api,{kind:'members',group_id:'900',offset,cursor});found.push(...data.rows.map(row=>row.uid));offset=data.next_offset;cursor=data.cursor;
+  }
+  assert.equal(new Set(found).size,250);assert.deepEqual(pages,[1,1,1]);
+  await assert.rejects(executeScan(api,{kind:'members',group_id:'900',cursor:{source:'unexpected',member_page:1,member_offset:0}}));
+});

@@ -23,6 +23,36 @@ function errorCode(error) {
   const code=String(error?.code ?? error?.cause?.code ?? '');
   return /^-?\d{1,8}$/.test(code)?code:'';
 }
+function memberProfiles(data,includeIds=false) {
+  const profiles=new Map();
+  if(includeIds){
+    for(const field of ['memVerList','memberIds']){
+      if(data[field]!==undefined && !Array.isArray(data[field]))throw new Error('Invalid paged member IDs');
+      for(const entry of data[field] || []){const id=uid(entry);if(ID.test(id))profiles.set(id,{});}
+    }
+  }
+  for(const member of data.currentMems){const id=uid(member?.id);if(ID.test(id))profiles.set(id,member);}
+  return profiles;
+}
+async function pagedMembers(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers) {
+  const cursor=input.cursor || {},continuing=cursor.source==='group_info_v2';
+  if(typeof api.getGroupInfoV2!=='function'){diagnostics.paged_status='sdk_unavailable';if(continuing)throw new Error('Group paging unavailable');return null;}
+  const memberPage=continuing?cursor.member_page:1,start=continuing?cursor.member_offset:0;
+  diagnostics.paged_page=memberPage;
+  let data;
+  try {data=await api.getGroupInfoV2(String(input.group_id),{mpage:memberPage,mcount:100});}
+  catch(error){diagnostics.paged_status='page_error';diagnostics.paged_error_code=errorCode(error);if(continuing)throw error;return null;}
+  if(String(data?.groupId)!==String(input.group_id) || !Array.isArray(data.currentMems))throw new Error('Invalid paged group response');
+  const profiles=memberProfiles(data,true);
+  Object.assign(diagnostics,{paged_status:profiles.size?'ok':'empty',paged_raw_count:data.currentMems.length,paged_valid_count:profiles.size,paged_more:flag(data.hasMoreMember)});
+  const reported=Number(data.totalMember),expected=Math.max(total,Number.isFinite(reported)?reported:0);
+  if(!continuing && !flag(data.hasMoreMember) && profiles.size<expected){
+    // Keep additional authorized IDs even when this source is also partial.
+    for(const [id,member] of profiles)knownMembers.set(id,member);
+    return null;
+  }
+  return memberPageResult(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers,data,profiles,'group_info_v2',memberPage,start);
+}
 async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers) {
   const cursor=input.cursor || {},continuing=cursor.source==='group_link';
   if(typeof api.getGroupLinkDetail!=='function' || typeof api.getGroupLinkInfo!=='function'){
@@ -51,12 +81,14 @@ async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics
   try {data=await api.getGroupLinkInfo({link:link.href,memberPage});}
   catch(error){diagnostics.link_status='page_error';diagnostics.error_code=errorCode(error);if(continuing)throw error;return null;}
   if(String(data?.groupId)!==String(input.group_id) || !Array.isArray(data.currentMems))throw new Error('Invalid linked group response');
-  const profiles=new Map();
-  for(const member of data.currentMems){const id=uid(member?.id);if(ID.test(id))profiles.set(id,member);}
-  const linkIds=new Set(profiles.keys());
+  const profiles=memberProfiles(data);
   Object.assign(diagnostics,{link_status:profiles.size?'ok':'empty',link_raw_count:data.currentMems.length,link_valid_count:profiles.size,link_more:flag(data.hasMoreMember)});
   // An empty link preview must not discard profiles available in group info.
   if(!continuing && !profiles.size && diagnostics.group_info_ids>0)return null;
+  return memberPageResult(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers,data,profiles,'group_link',memberPage,start);
+}
+async function memberPageResult(api,input,group,total,viewerRole,hidden,diagnostics,knownMembers,data,profiles,source,memberPage,start) {
+  const profileIds=new Set(profiles.keys());
   // Merge known IDs into the first native page, including its continuation chunks.
   // A smaller link preview must never replace the group-info member list.
   if(memberPage===1){
@@ -66,7 +98,7 @@ async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics
   const list=[...profiles.entries()];
   if(start>list.length)throw new Error('Invalid linked group cursor');
   const page=list.slice(start,start+100),withinPage=start+100<list.length;
-  const missing=page.map(([id])=>id).filter(id=>!linkIds.has(id));
+  const missing=page.map(([id])=>id).filter(id=>!profileIds.has(id) || !profiles.get(id)?.dName && !profiles.get(id)?.displayName && !profiles.get(id)?.zaloName);
   let details={};
   if(missing.length){
     diagnostics.profile_status='unavailable';
@@ -83,16 +115,16 @@ async function linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics
   const admins=new Set((data.adminIds || group.adminIds || []).map(String));
   const sourceTotal=Number(data.totalMember);
   return {state:'ok',rows:page.map(([id,member])=>profile(details[id] || details[`${id}_0`] || member,id,String(data.creatorId || group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
-    next_offset:offset,has_more:hasMore && !atLimit,total:Math.max(total,Number.isFinite(sourceTotal)?Math.max(0,Math.floor(sourceTotal)):0),
+    next_offset:offset,has_more:hasMore && !atLimit,total:Math.max(total,list.length,Number.isFinite(sourceTotal)?Math.max(0,Math.floor(sourceTotal)):0),
     source_name:text(group.name || input.group_id),accessible_total:null,limited:atLimit,
-    limit_reason:atLimit?'scan_limit':'',viewer_role:viewerRole,member_source:'group_link',members_hidden:hidden,
-    cursor:hasMore && !atLimit?{source:'group_link',member_page:withinPage?memberPage:memberPage+1,member_offset:withinPage?start+100:0}:{},diagnostics};
+    limit_reason:atLimit?'scan_limit':'',viewer_role:viewerRole,member_source:source,members_hidden:hidden,
+    cursor:hasMore && !atLimit?{source,member_page:withinPage?memberPage:memberPage+1,member_offset:withinPage?start+100:0}:{},diagnostics};
 }
 export async function executeScan(api,input) {
   const offset=Number(input.offset || 0),size=100;
-  const cursor=input.cursor || {},fromLink=cursor.source==='group_link';
-  if(fromLink && (input.kind!=='members' || !Number.isInteger(cursor.member_page) || cursor.member_page<1 || cursor.member_page>10000 || !Number.isInteger(cursor.member_offset) || cursor.member_offset<0 || cursor.member_offset>10000))throw new Error('Invalid member cursor');
-  if(!Number.isInteger(offset) || offset<0 || offset>10000 || !fromLink && offset%size)throw new Error('Invalid offset');
+  const cursor=input.cursor || {},fromLink=cursor.source==='group_link',fromPaged=cursor.source==='group_info_v2',memberCursor=fromLink || fromPaged;
+  if(cursor.source && !memberCursor || memberCursor && (input.kind!=='members' || !Number.isInteger(cursor.member_page) || cursor.member_page<1 || cursor.member_page>10000 || !Number.isInteger(cursor.member_offset) || cursor.member_offset<0 || cursor.member_offset>10000))throw new Error('Invalid member cursor');
+  if(!Number.isInteger(offset) || offset<0 || offset>10000 || !memberCursor && offset%size)throw new Error('Invalid offset');
   if(input.kind==='friends') {
     const source=await api.getAllFriends(size,offset/size+1);
     if(!Array.isArray(source))throw new Error('Invalid friends');
@@ -121,7 +153,7 @@ export async function executeScan(api,input) {
   for(const entry of group.memVerList || []) {const id=uid(entry);if(ID.test(id))members.set(id,{});}
   for(const entry of group.memberIds || []) {const id=uid(entry);if(ID.test(id))members.set(id,members.get(id)||{});}
   for(const entry of group.currentMems || []) {const id=uid(entry.id);if(ID.test(id))members.set(id,entry);}
-  const all=[...members.keys()].sort(),page=all.slice(offset,offset+size);
+  let all=[...members.keys()].sort();
   const admins=new Set((group.adminIds || []).map(String));
   const selfId=typeof api.getOwnId==='function'?String(api.getOwnId()):'';
   const viewerRole=!ID.test(selfId)?'unknown':String(group.creatorId)===selfId?'owner':admins.has(selfId)?'admin':'member';
@@ -132,11 +164,17 @@ export async function executeScan(api,input) {
   const diagnostics={version:1,group_type:group.type===1 || group.type===2?group.type:0,
     group_info_ids:all.length,mem_ver_count:Array.isArray(group.memVerList)?group.memVerList.length:0,
     member_id_count:Array.isArray(group.memberIds)?group.memberIds.length:0,preview_count:Array.isArray(group.currentMems)?group.currentMems.length:0,
-    link_status:'not_needed'};
+    link_status:'not_needed',paged_status:'not_needed'};
+  if(incomplete && !fromLink || fromPaged){
+    const paged=await pagedMembers(api,input,group,total,viewerRole,hidden,diagnostics,members);
+    if(paged)return paged;
+  }
   if(incomplete || fromLink){
     const linked=await linkedMembers(api,input,group,total,viewerRole,hidden,diagnostics,members);
     if(linked)return linked;
   }
+  all=[...members.keys()].sort();
+  const page=all.slice(offset,offset+size);
   const details=page.length?await api.getGroupMembersInfo(page):{profiles:{}};
   if(!details?.profiles || typeof details.profiles!=='object')throw new Error('Invalid member profiles');
   const limitReason=incomplete?(hidden?'hidden_members':'incomplete_members'):all.length>10000?'scan_limit':'';
