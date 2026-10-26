@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<link rel="stylesheet" href="{{ url_for('static',filename='group-campaigns.css') }}">
+<section class="panel group-campaign-detail"><a href="{{ url_for('group_campaign_detail',campaign_id=campaign.id) }}">← {{ campaign.name }}</a><h1>Xem trước lô chia sẻ · {{ records|length }} group</h1>
+<div class="wizard-preview"><h2>Nội dung đã chốt</h2><p class="message-text">{{ preview.message }}</p></div>
+<p class="muted">Chỉ gửi những group trong danh sách này còn chờ xử lý. Số group trong một lượt có thể giảm theo hạn mức còn lại. Group chưa được chốt gửi vẫn giữ lại cho lượt sau.</p>
+<div class="group-target-scroll"><table><thead><tr><th>STT</th><th>Group</th><th>UID</th><th>Trạng thái</th></tr></thead><tbody>{% for row in records %}<tr><td>{{ loop.index }}</td><td>{{ row.group_name }}</td><td>{{ row.group_id }}</td><td>{{ {'prepared':'Chờ xác nhận','sending':'Đang gửi','sent':'Đã tiếp nhận','failed':'Lỗi · bỏ qua','unknown':'Chưa xác định · bỏ qua','skipped':'Bỏ qua'}.get(row.state,row.state) }}</td></tr>{% endfor %}</tbody></table></div>
+{% if preview.state=='prepared' and not campaign.paused and not campaign.group_is_draft %}<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><label class="send-confirm"><input type="checkbox" name="confirm_send" value="yes" required> Tôi xác nhận nội dung và các group nhận ở trên.</label><button class="purple-button">Gửi lô chia sẻ</button></form>{% else %}<p>Lô này đã được xác nhận hoặc chiến dịch đang tạm ngưng.</p>{% endif %}
+</section>{% endblock %}

@@ -475,6 +475,8 @@ def create_app(test_config=None):
                 row.update(group_counts(db,row['id']))
             if row['deleted_at']:
                 state, label, tone = 'deleted', 'Đã xóa', 'muted'
+            elif row['campaign_type']=='zalo_group' and row['group_is_draft']:
+                state, label, tone = 'draft', 'Bản nháp', 'draft'
             elif row['paused']:
                 state, label, tone = 'paused', 'Tạm ngưng', 'paused'
             elif row['sending']:

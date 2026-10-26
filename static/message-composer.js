@@ -201,6 +201,7 @@
   root.querySelector('[data-composer-basic]').addEventListener('click', () => { (rich.checked ? editor : textarea).focus(); });
   form.addEventListener('submit',event => {
     sync();
+    if(form.hasAttribute('data-group-campaign-form') && event.submitter?.name==='save_draft')return;
     const required = form.elements.send_message ? form.elements.send_message.checked : root.dataset.messageRequired==='true';
     if (root.querySelector('[name=media_mode][value=send]').checked && !attachment) {
       event.preventDefault(); status.textContent='Chọn một tệp để gửi hoặc chọn Không gửi file.'; root.querySelector('[data-composer-upload]').focus(); return;
@@ -210,7 +211,7 @@
       event.preventDefault();
       status.textContent = info.error || 'Vui lòng nhập nội dung tin nhắn.';
       const card = root.closest('.wizard-card');
-      if (card) { card.querySelector('.wizard-card-body').hidden=false; card.querySelector('[data-wizard-toggle]').setAttribute('aria-expanded','true'); }
+      if (card) { card.querySelector('.wizard-card-body').hidden=false; card.querySelector('[data-wizard-toggle],[data-group-step-toggle]')?.setAttribute('aria-expanded','true'); }
       (rich.checked ? editor : textarea).focus();
     }
   });

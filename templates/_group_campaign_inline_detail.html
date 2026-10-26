@@ -1,5 +1,5 @@
 {% if detail.tab=='info' %}
-<div class="inline-campaign-info"><dl><dt>Hành động</dt><dd>Zalo – Gửi tin nhắn đến group</dd><dt>Tài khoản</dt><dd>{{ selected.account_name or 'Cần chọn lại tài khoản' }}</dd><dt>Danh sách</dt><dd>{{ detail.counts.data }} group đã lưu riêng. Không gửi tin nhắn riêng cho thành viên.</dd><dt>Khoảng nghỉ</dt><dd>{{ selected.interval_seconds }} giây giữa hai group</dd><dt>Trạng thái</dt><dd>{{ selected.display_status }} · {{ selected.schedule_status }}</dd></dl>
+<div class="inline-campaign-info"><dl><dt>Hành động</dt><dd>Zalo – Gửi tin nhắn đến group</dd><dt>Tài khoản</dt><dd>{{ selected.account_name or 'Cần chọn lại tài khoản' }}</dd><dt>Danh sách</dt><dd>{{ detail.counts.data }} group · {{ 'Nguồn nhóm data tự cập nhật khi chạy' if selected.group_data_mode=='group' else 'Danh sách riêng' }}.</dd><dt>Khoảng nghỉ</dt><dd>{{ selected.interval_seconds }} giây giữa hai {{ 'lượt chia sẻ (tối đa 50 group)' if selected.group_send_mode=='share' else 'group' }}</dd><dt>Trạng thái</dt><dd>{{ selected.display_status }} · {{ selected.schedule_status }}</dd></dl>
 {% if selected.schedule_error %}<p class="notice error">{{ selected.schedule_error }}</p>{% endif %}
 <a href="{{ url_for('group_campaign_detail',campaign_id=selected.id) }}">Mở chi tiết, xem trước và xác nhận gửi group →</a></div>
 {% elif detail.tab=='data' %}

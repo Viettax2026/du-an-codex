@@ -137,6 +137,28 @@ class QRConnector:
                 return {'state':'lookup_failed','lookup_reason':reason}
             return {'state': 'unknown' if action in ('send', 'friend', 'alias') else 'failed'}
 
+    def forward_group_messages(self,user_id,account_id,group_ids,message):
+        unknown=[dict(uid=uid,state='unknown',reason='batch_uncertain') for uid in group_ids]
+        if not self.available() or self.status(user_id,account_id).get('state')!='connected':return unknown
+        try:
+            base=self.account_path(user_id,account_id)
+            run_id=str(uuid.UUID(json.loads((base/'current.json').read_text())['run_id']))
+            payload=dict(group_ids=group_ids,message=message,session=str(base/run_id/'session.enc.json'),key=str(self.root/'auth.key'))
+            result=subprocess.run([shutil.which('node'),str(self.worker.parent/'forward-groups.mjs')],input=json.dumps(payload),text=True,
+                stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=45,env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'NODE_ENV':'production'})
+            output=json.loads(result.stdout)
+            if not isinstance(output,dict) or output.get('state')!='ok' or not isinstance(output.get('rows'),list):return unknown
+            rows={}
+            for row in output['rows']:
+                if not isinstance(row,dict) or row.get('uid') not in group_ids or row.get('uid') in rows:return unknown
+                state=row.get('state') if row.get('state') in ('sent','failed','unknown') else 'unknown'
+                reason=row.get('reason') if row.get('reason') in ('group_not_joined','batch_accepted','batch_refused','batch_uncertain') else 'batch_uncertain'
+                message_id=str(row.get('message_id',''))
+                if state=='sent' and not re.fullmatch(r'\d{1,30}(?:,\d{1,30}){0,49}',message_id):state='unknown'
+                rows[row['uid']]=dict(uid=row['uid'],state=state,reason=reason,message_id=message_id if state=='sent' else '')
+            return [rows.get(row['uid'],row) for row in unknown]
+        except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):return unknown
+
     def scan_action(self, user_id, account_id, kind, offset=0, group_id='', cursor=None):
         if not self.available():
             return {'state':'error','reason':'connector_unavailable'}

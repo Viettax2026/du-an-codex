@@ -31,8 +31,9 @@ document.querySelectorAll('[data-schedule-fields]').forEach(root=>{
   root.addEventListener('input',update);root.addEventListener('change',update);
   form.addEventListener('submit',event=>{
     update();
+    if(form.hasAttribute('data-group-campaign-form') && event.submitter?.name==='save_draft')return;
     if(enabled.checked && root.dataset.scheduleValid==='false'){
-      event.preventDefault();const card=root.closest('.wizard-card');if(card){card.querySelector('.wizard-card-body').hidden=false;card.querySelector('[data-wizard-toggle]').setAttribute('aria-expanded','true');}
+      event.preventDefault();const card=root.closest('.wizard-card');if(card){card.querySelector('.wizard-card-body').hidden=false;card.querySelector('[data-wizard-toggle],[data-group-step-toggle]')?.setAttribute('aria-expanded','true');}
       status.scrollIntoView({block:'nearest'});root.querySelector('[name=schedule_kind]:checked').focus();
     }
   });

@@ -237,7 +237,7 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
     @login_required
     def scan_catalog():
         accounts=db().execute('SELECT id,name FROM zalo_accounts WHERE user_id=? AND deleted_at IS NULL ORDER BY name',(g.user['id'],)).fetchall()
-        scans=db().execute('''SELECT s.id,s.kind,s.source_name,s.created_at,a.name AS account_name,
+        scans=db().execute('''SELECT s.id,s.account_id,s.kind,s.source_name,s.created_at,a.name AS account_name,
             (SELECT count(*) FROM data_scan_rows r WHERE r.scan_id=s.id) AS total FROM data_scans s
             JOIN zalo_accounts a ON a.id=s.account_id WHERE s.user_id=? ORDER BY s.id DESC LIMIT 30''',(g.user['id'],)).fetchall()
         groups=db().execute('SELECT id,name FROM data_groups WHERE user_id=? AND deleted_at IS NULL ORDER BY name',(g.user['id'],)).fetchall()
