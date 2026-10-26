@@ -137,7 +137,7 @@ class QRConnector:
                 return {'state':'lookup_failed','lookup_reason':reason}
             return {'state': 'unknown' if action in ('send', 'friend', 'alias') else 'failed'}
 
-    def scan_action(self, user_id, account_id, kind, offset=0, group_id=''):
+    def scan_action(self, user_id, account_id, kind, offset=0, group_id='', cursor=None):
         if not self.available():
             return {'state':'error','reason':'connector_unavailable'}
         if self.status(user_id, account_id).get('state') != 'connected':
@@ -145,7 +145,7 @@ class QRConnector:
         try:
             base = self.account_path(user_id, account_id)
             run_id = str(uuid.UUID(json.loads((base / 'current.json').read_text())['run_id']))
-            payload = dict(kind=kind, offset=offset, group_id=group_id,
+            payload = dict(kind=kind, offset=offset, group_id=group_id, cursor=cursor or {},
                 session=str(base / run_id / 'session.enc.json'), key=str(self.root / 'auth.key'))
             result = subprocess.run([shutil.which('node'), str(self.worker.parent / 'scan.mjs')],
                 input=json.dumps(payload),text=True,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
@@ -155,6 +155,6 @@ class QRConnector:
                 reason=output.get('reason') if isinstance(output,dict) else ''
                 return {'state':'error','reason':reason if reason in ('session','network','rate_limited','connector_unavailable') else 'unavailable'}
             # Further row validation and allowlisting happens before persistence.
-            return {key:output[key] for key in ('state','rows','has_more','next_offset','total','limited','source_name') if key in output}
+            return {key:output[key] for key in ('state','rows','has_more','next_offset','total','limited','source_name','accessible_total','limit_reason','viewer_role','member_source','members_hidden','cursor') if key in output}
         except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):
             return {'state':'error','reason':'network'}

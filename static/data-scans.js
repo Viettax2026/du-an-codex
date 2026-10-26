@@ -37,20 +37,51 @@
     });
     if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=9;td.textContent='Chưa có dữ liệu hoặc không khớp bộ lọc.';tr.append(td);body.append(tr);}updateSelection();
   }
+  function visibilityMessage(scan,loaded){
+    if(scan.kind!=='members' || !scan.limited)return '';
+    const available=scan.accessible_total,reported=scan.total;
+    const count=available!==null && available!==undefined?available:loaded;
+    const detail=`Zalo trả về ${count}${reported!==null?' / '+reported:''} hồ sơ thành viên cho tài khoản quét.`;
+    if(scan.limit_reason==='hidden_members'){
+      const role=scan.viewer_role==='owner'?'trưởng nhóm':scan.viewer_role==='admin'?'phó nhóm':scan.viewer_role==='member'?'thành viên':'';
+      if(['owner','admin'].includes(scan.viewer_role))return `Nhóm đang bật ẩn thành viên. ${detail} Tài khoản được ghi nhận là ${role}, nhưng phản hồi vẫn thiếu danh sách. Kiểm tra quyền xem trong Zalo và tải lại; chưa thể xác nhận đã quét đủ nhóm.`;
+      return `Nhóm đang bật ẩn thành viên. ${detail}${role?' Tài khoản đang quét là thành viên.':''} Chọn tài khoản trưởng/phó nhóm được quyền xem đầy đủ, hoặc nhờ quản trị viên mở quyền xem rồi quét lại.`;
+    }
+    if(scan.limit_reason==='scan_limit')return 'Đã đạt giới hạn 10.000 hồ sơ cho một kết quả quét. Danh sách nhóm chưa được tải đầy đủ.';
+    if(scan.has_more)return `${detail} Còn trang dữ liệu đã được trả về; bấm Tải tiếp. Chưa thể xác nhận danh sách đầy đủ.`;
+    return `${detail} Phản hồi danh sách chưa đầy đủ. Chưa xác định được do quyền xem hay giới hạn của kết nối Zalo; kết quả hiện tại không đại diện toàn bộ nhóm.`;
+  }
   async function refresh(){
     if(!scanId)return;
     const current=++revision,id=scanId;
     const data=await request(`/data-scans/${id}/rows?${new URLSearchParams({...filters(),p:page})}`);
     if(current!==revision || id!==scanId)return;
     rows=data.rows;page=data.page;pages=data.pages;
-    $('total').textContent=`Tổng ${data.loaded} data${data.scan.total!==null?' / '+data.scan.total+' từ nguồn':''}`;
+    const savedOption=$('saved').selectedOptions[0];
+    if(savedOption?.value===String(id))savedOption.textContent=savedOption.textContent.replace(/\(\d+\)$/,`(${data.loaded})`);
+    $('total').textContent=data.scan.kind==='members' && data.scan.accessible_total!==null
+      ?`Đã tải ${data.loaded}/${data.scan.accessible_total} hồ sơ được Zalo trả về · Tổng thành viên nhóm: ${data.scan.total ?? 'chưa rõ'}`
+      :`Tổng ${data.loaded} data${data.scan.total!==null?' / '+data.scan.total+' từ nguồn':''}`;
+    const visibility=visibilityMessage(data.scan,data.loaded);
+    $('visibility').hidden=!visibility;$('visibility').textContent=visibility;
     $('range').textContent=`Hiển thị ${data.total?(page-1)*100+1:0}–${Math.min(page*100,data.total)}/${data.total} data`;
     $('page').textContent=`Trang ${page}/${pages}`;$('prev').disabled=page<=1;$('next').disabled=page>=pages;
     $('more').hidden=!data.scan.has_more;
+    $('more').textContent=data.scan.member_source==='group_link'?'Tải tiếp thành viên nhóm':'Tải tiếp 100 data';
     if(data.scan.error)message(data.scan.error,true);
+    else if(visibility)message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Có thể tải tiếp phần danh sách được trả về.':' Đã lưu hết phần danh sách Zalo trả về; chưa quét đủ thành viên nhóm.'}`);
     else if(data.scan.limited)message('Đã lưu phần dữ liệu Zalo cho phép xem. Danh sách có thể chưa đầy đủ hoặc đã chạm giới hạn 10.000 dòng.');
-    else message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Bấm Tải tiếp để đọc thêm.':' Đã tải hết dữ liệu nguồn trả về.'}`);
-    renderRows();
+    else message(`Đã lưu kết quả: ${data.scan.source_name}.${data.scan.has_more?' Bấm Tải tiếp để đọc thêm.':' Đã tải hết dữ liệu nguồn trả về.'}${data.scan.member_source==='group_link'?' Nguồn thành viên: phân trang link nhóm.':''}`);
+    renderRows();return data;
+  }
+  async function loadRemainingMembers(data){
+    const id=scanId;
+    while(dialog.open && scanId===id && data?.scan.kind==='members' && data.scan.has_more){
+      message(`Đang tải thành viên nhóm: đã lưu ${data.loaded}${data.scan.total!==null?' / '+data.scan.total:''} hồ sơ… Đóng cửa sổ để ngừng tải tiếp.`);
+      await request(`/data-scans/${id}/more`,{});
+      if(scanId!==id)break;
+      data=await refresh();
+    }
   }
   async function catalog(){
     const data=await request('/data-scans/catalog'),previous=$('account').value;
@@ -84,14 +115,14 @@
     if(busy)return;if(!$('account').value){message('Chọn tài khoản Zalo trước khi tải dữ liệu.',true);return;}setBusy(true);message('Đang tải dữ liệu từ nguồn đã chọn…');
     try{
       const data=await request('/data-scans/start',{kind:$('kind').value,account_id:$('account').value,remote_group:$('remote-group').value});
-      scanId=data.scan_id;selection.clear();page=1;$('query').value='';$('phone').value='';$('role').value='';await catalog();await refresh();
+      scanId=data.scan_id;selection.clear();page=1;$('query').value='';$('phone').value='';$('role').value='';await catalog();const loaded=await refresh();await loadRemainingMembers(loaded);
     }catch(error){message(error.message,true);try{await catalog();}catch{}}finally{setBusy(false);}
   });
   $('saved').addEventListener('change',async()=>{
     if(!$('saved').value)return;scanId=Number($('saved').value);selection.clear();page=1;
     try{const data=await request(`/data-scans/${scanId}/rows`);$('kind').value=data.scan.kind;$('account').value=String(data.scan.account_id);$('group-controls').hidden=data.scan.kind!=='members';await refresh();}catch(error){message(error.message,true);}
   });
-  $('more').addEventListener('click',async()=>{if(busy || !scanId)return;setBusy(true);try{await request(`/data-scans/${scanId}/more`,{});await refresh();}catch(error){message(error.message,true);}finally{setBusy(false);}});
+  $('more').addEventListener('click',async()=>{if(busy || !scanId)return;setBusy(true);try{await request(`/data-scans/${scanId}/more`,{});const loaded=await refresh();await loadRemainingMembers(loaded);}catch(error){message(error.message,true);}finally{setBusy(false);}});
   for(const name of ['phone','role'])$(name).addEventListener('change',()=>{selection.clear();page=1;refresh().catch(error=>message(error.message,true));});
   $('query').addEventListener('input',()=>{clearTimeout(queryTimer);queryTimer=setTimeout(()=>{selection.clear();page=1;refresh().catch(error=>message(error.message,true));},250);});
   $('prev').addEventListener('click',()=>{page=Math.max(1,page-1);refresh().catch(error=>message(error.message,true));});

@@ -29,3 +29,5 @@
 .scan-selection>label{width:auto;white-space:nowrap;font-weight:400}
 .data-heading [data-open-scan]{margin-left:auto;flex-shrink:0}
 @media(max-width:450px){.scan-selection>label{white-space:normal}.data-heading [data-open-scan]{font-size:12px;padding:8px}}
+
+.scan-dialog .group-dialog-heading .scan-visibility{max-width:1050px;line-height:1.6;padding:8px 12px;border:1px solid #e8c47b;border-left:3px solid #cf9326;background:#fff3d9;color:#805615;border-radius:5px;font-size:12px;font-weight:400}

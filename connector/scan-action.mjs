@@ -2,6 +2,7 @@
 const ID=/^\d{1,30}$/;
 const text=(value,max=100)=>String(value ?? '').slice(0,max);
 const uid=value=>String(value ?? '').replace(/_\d+$/,'');
+const flag=value=>value===true || value===1 || value==='1';
 function avatar(value) {
   try {const url=new URL(String(value));return url.protocol==='https:' && !url.username && !url.password ? url.href.slice(0,1500) : '';}
   catch {return '';}
@@ -18,9 +19,44 @@ export async function joinedGroupIds(api) {
 export async function assertJoinedGroup(api,id) {
   if(!ID.test(String(id)) || !(await joinedGroupIds(api)).includes(String(id)))throw new Error('Group not joined');
 }
+async function linkedMembers(api,input,group,total,viewerRole,hidden) {
+  const cursor=input.cursor || {},continuing=cursor.source==='group_link';
+  if(typeof api.getGroupLinkDetail!=='function' || typeof api.getGroupLinkInfo!=='function'){
+    if(continuing)throw new Error('Group link reading unavailable');
+    return null;
+  }
+  let detail;
+  try {detail=await api.getGroupLinkDetail(String(input.group_id));}
+  catch(error){if(continuing)throw error;return null;}
+  let link;
+  try {link=new URL(detail?.link);}catch {if(continuing)throw new Error('Group link unavailable');return null;}
+  if(!flag(detail.enabled) || link.protocol!=='https:' || link.hostname!=='zalo.me' || link.port || link.username || link.password || !/^\/g\/[a-z0-9]+\/?$/i.test(link.pathname)){
+    if(continuing)throw new Error('Group link unavailable');
+    return null;
+  }
+  const memberPage=continuing?cursor.member_page:1,start=continuing?cursor.member_offset:0;
+  const data=await api.getGroupLinkInfo({link:link.href,memberPage});
+  if(String(data?.groupId)!==String(input.group_id) || !Array.isArray(data.currentMems))throw new Error('Invalid linked group response');
+  const profiles=new Map();
+  for(const member of data.currentMems){const id=uid(member?.id);if(ID.test(id))profiles.set(id,member);}
+  const list=[...profiles.entries()];
+  if(start>list.length)throw new Error('Invalid linked group cursor');
+  const page=list.slice(start,start+100),withinPage=start+100<list.length;
+  const hasMore=withinPage || flag(data.hasMoreMember);
+  const offset=Number(input.offset || 0)+Math.max(1,page.length),atLimit=hasMore && offset>=10000;
+  const admins=new Set((data.adminIds || group.adminIds || []).map(String));
+  const sourceTotal=Number(data.totalMember);
+  return {state:'ok',rows:page.map(([id,member])=>profile(member,id,String(data.creatorId || group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
+    next_offset:offset,has_more:hasMore && !atLimit,total:Math.max(total,Number.isFinite(sourceTotal)?Math.max(0,Math.floor(sourceTotal)):0),
+    source_name:text(group.name || input.group_id),accessible_total:null,limited:atLimit,
+    limit_reason:atLimit?'scan_limit':'',viewer_role:viewerRole,member_source:'group_link',members_hidden:hidden,
+    cursor:hasMore && !atLimit?{source:'group_link',member_page:withinPage?memberPage:memberPage+1,member_offset:withinPage?start+100:0}:{}};
+}
 export async function executeScan(api,input) {
   const offset=Number(input.offset || 0),size=100;
-  if(!Number.isInteger(offset) || offset<0 || offset>10000 || offset%size)throw new Error('Invalid offset');
+  const cursor=input.cursor || {},fromLink=cursor.source==='group_link';
+  if(fromLink && (input.kind!=='members' || !Number.isInteger(cursor.member_page) || cursor.member_page<1 || cursor.member_page>10000 || !Number.isInteger(cursor.member_offset) || cursor.member_offset<0 || cursor.member_offset>10000))throw new Error('Invalid member cursor');
+  if(!Number.isInteger(offset) || offset<0 || offset>10000 || !fromLink && offset%size)throw new Error('Invalid offset');
   if(input.kind==='friends') {
     const source=await api.getAllFriends(size,offset/size+1);
     if(!Array.isArray(source))throw new Error('Invalid friends');
@@ -50,12 +86,23 @@ export async function executeScan(api,input) {
   for(const entry of group.memberIds || []) {const id=uid(entry);if(ID.test(id))members.set(id,members.get(id)||{});}
   for(const entry of group.currentMems || []) {const id=uid(entry.id);if(ID.test(id))members.set(id,entry);}
   const all=[...members.keys()].sort(),page=all.slice(offset,offset+size);
+  const admins=new Set((group.adminIds || []).map(String));
+  const selfId=typeof api.getOwnId==='function'?String(api.getOwnId()):'';
+  const viewerRole=!ID.test(selfId)?'unknown':String(group.creatorId)===selfId?'owner':admins.has(selfId)?'admin':'member';
+  const reported=Number(group.totalMember);
+  const total=Math.max(all.length,Number.isFinite(reported)?Math.max(0,Math.floor(reported)):0);
+  const incomplete=total>all.length || (!Number.isFinite(reported) || reported<=0) && flag(group.hasMoreMember);
+  const hidden=flag(group.setting?.lockViewMember);
+  if(incomplete || fromLink){
+    const linked=await linkedMembers(api,input,group,total,viewerRole,hidden);
+    if(linked)return linked;
+  }
   const details=page.length?await api.getGroupMembersInfo(page):{profiles:{}};
   if(!details?.profiles || typeof details.profiles!=='object')throw new Error('Invalid member profiles');
-  const admins=new Set((group.adminIds || []).map(String));
+  const limitReason=incomplete?(hidden?'hidden_members':'incomplete_members'):all.length>10000?'scan_limit':'';
   return {state:'ok',rows:page.map(id=>profile(details.profiles[id] || details.profiles[`${id}_0`] || members.get(id),id,
     String(group.creatorId)===id?'owner':admins.has(id)?'admin':'member')),
     has_more:offset+size<Math.min(all.length,10000),next_offset:offset+size,
-    total:Math.max(all.length,Number(group.totalMember)||0),source_name:text(group.name || groupId),
-    limited:all.length>10000 || Number(group.totalMember)>all.length || Boolean(group.hasMoreMember)};
+    total,source_name:text(group.name || groupId),accessible_total:all.length,
+    limited:Boolean(limitReason),limit_reason:limitReason,viewer_role:viewerRole,member_source:'group_info',members_hidden:hidden,cursor:{}};
 }

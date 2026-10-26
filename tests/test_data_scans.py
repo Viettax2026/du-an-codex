@@ -142,3 +142,67 @@ def test_read_only_scan_can_resume_after_interrupted_worker_lease_expires(app):
     assert post(client,'/data-scans/1/more').status_code==200
     assert client.get('/data-scans/1/rows').json['loaded']==3
     assert query(app,'SELECT count(*) FROM contacts')==[(0,)]
+
+
+def test_hidden_group_scan_persists_visibility_metadata_without_discarding_visible_members(app):
+    client,connector=setup_scan(app)
+    data=scan_page(total=441,limited=True,accessible_total=2,limit_reason='hidden_members',viewer_role='member')
+    connector.scan_action.side_effect=None;connector.scan_action.return_value=data
+    assert start(client,'members',remote_group='900').status_code==200
+    result=client.get('/data-scans/1/rows').json
+    assert result['loaded']==2 and result['scan']['total']==441
+    assert result['scan']['accessible_total']==2 and result['scan']['limit_reason']=='hidden_members'
+    assert result['scan']['viewer_role']=='member' and not result['scan']['has_more']
+    assert not connector.message_action.called
+    assert post(client,'/data-scans/1/export').status_code==200
+    assert query(app,'SELECT count(*) FROM contacts')==[(0,)]
+
+
+def test_scan_visibility_metadata_is_allowlisted(app):
+    client,connector=setup_scan(app)
+    connector.scan_action.side_effect=None
+    connector.scan_action.return_value=scan_page(accessible_total='PRIVATE_COOKIE',limit_reason='PRIVATE_TOKEN',viewer_role='PRIVATE_SESSION')
+    start(client)
+    response=client.get('/data-scans/1/rows')
+    assert 'PRIVATE_' not in response.text
+    assert response.json['scan']['accessible_total'] is None
+    assert response.json['scan']['limit_reason']=='' and response.json['scan']['viewer_role']=='unknown'
+
+
+def test_group_link_scan_cursor_survives_paging_and_totals_use_unique_stored_members(app):
+    client,connector=setup_scan(app)
+    calls=[]
+    def page(owner,account,kind,offset=0,group_id='',cursor=None):
+        calls.append((offset,cursor))
+        number=cursor['member_page'] if cursor else 1
+        start=(number-1)*50;end=min(number*50,120)
+        rows=[dict(uid=str(index+1),name='Member '+str(index+1),kind='user') for index in range(start,end)]
+        return dict(state='ok',rows=rows,next_offset=end,total=120,has_more=end<120,limited=False,
+            source_name='Hidden',member_source='group_link',members_hidden=True,viewer_role='member',accessible_total=None,
+            cursor=dict(source='group_link',member_page=number+1,member_offset=0) if end<120 else {})
+    connector.scan_action.side_effect=page
+    assert start(client,'members',remote_group='900').status_code==200
+    first=client.get('/data-scans/1/rows').json
+    assert first['loaded']==50 and first['scan']['has_more']
+    assert post(client,'/data-scans/1/more').status_code==200
+    assert post(client,'/data-scans/1/more').status_code==200
+    data=client.get('/data-scans/1/rows').json
+    assert data['loaded']==120 and data['scan']['accessible_total']==120
+    assert not data['scan']['limited'] and not data['scan']['has_more']
+    assert calls==[(0,None),(50,dict(source='group_link',member_page=2,member_offset=0)),(100,dict(source='group_link',member_page=3,member_offset=0))]
+    assert query(app,'SELECT count(*) FROM contacts')==[(0,)]
+
+
+def test_group_link_repeated_page_stops_without_claiming_full_group(app):
+    client,connector=setup_scan(app)
+    def page(owner,account,kind,offset=0,group_id='',cursor=None):
+        return scan_page(rows=[dict(uid='1',name='Only visible',kind='user')],next_offset=offset+1,total=441,
+            has_more=True,limited=False,member_source='group_link',members_hidden=True,
+            cursor=dict(source='group_link',member_page=2 if not cursor else 3,member_offset=0))
+    connector.scan_action.side_effect=page
+    start(client,'members',remote_group='900')
+    post(client,'/data-scans/1/more')
+    data=client.get('/data-scans/1/rows').json
+    assert data['loaded']==1 and data['scan']['limited']
+    assert data['scan']['limit_reason']=='hidden_members' and not data['scan']['has_more']
+    assert data['scan']['scan_cursor']=='{}'

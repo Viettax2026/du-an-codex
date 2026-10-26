@@ -39,6 +39,15 @@ def normalized_phone(raw,parse_phones):
     except ValueError:return ''
 
 
+def member_cursor(value):
+    if not value:return {}
+    if not isinstance(value,dict) or value.get('source')!='group_link':raise ValueError('Con trỏ phân trang thành viên không hợp lệ.')
+    page,index=value.get('member_page'),value.get('member_offset')
+    if type(page) is not int or not 1<=page<=10000 or type(index) is not int or not 0<=index<=10000:
+        raise ValueError('Con trỏ phân trang thành viên không hợp lệ.')
+    return dict(source='group_link',member_page=page,member_offset=index)
+
+
 def register_data_scans(app,db,login_required,connector,parse_phones):
     with app.app_context():
         db().executescript('''CREATE TABLE IF NOT EXISTS data_scans (
@@ -54,8 +63,11 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
             uid TEXT NOT NULL,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',avatar TEXT NOT NULL DEFAULT '',
             role TEXT NOT NULL DEFAULT 'member',kind TEXT NOT NULL DEFAULT 'user',member_count INTEGER NOT NULL DEFAULT 0,
             phone_state TEXT NOT NULL DEFAULT 'unchecked',UNIQUE(scan_id,uid));''')
-        if 'loading_at' not in {row['name'] for row in db().execute('PRAGMA table_info(data_scans)')}:
-            db().execute("ALTER TABLE data_scans ADD COLUMN loading_at TEXT NOT NULL DEFAULT ''")
+        columns={row['name'] for row in db().execute('PRAGMA table_info(data_scans)')}
+        for name,declaration in {'loading_at':"TEXT NOT NULL DEFAULT ''",'accessible_total':'INTEGER',
+                'limit_reason':"TEXT NOT NULL DEFAULT ''",'viewer_role':"TEXT NOT NULL DEFAULT 'unknown'",
+                'scan_cursor':"TEXT NOT NULL DEFAULT '{}'",'member_source':"TEXT NOT NULL DEFAULT ''"}.items():
+            if name not in columns:db().execute(f'ALTER TABLE data_scans ADD COLUMN {name} {declaration}')
         db().commit()
 
     def own_scan(scan_id):
@@ -111,12 +123,17 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
         if not updated:abort(409,'Lượt quét này đang tải dữ liệu. Chờ hoàn tất trước khi tải tiếp.')
         try:
             try:
-                result=history_page(scan) if scan['kind']=='history' else connector.scan_action(g.user['id'],scan['account_id'],scan['kind'],offset=scan['next_offset'],group_id=scan['remote_group'])
+                cursor=member_cursor(json.loads(scan['scan_cursor']))
+                result=history_page(scan) if scan['kind']=='history' else connector.scan_action(g.user['id'],scan['account_id'],scan['kind'],offset=scan['next_offset'],group_id=scan['remote_group'],**({'cursor':cursor} if cursor else {}))
             except Exception:
                 result={'state':'error','reason':'network'}
             rows=clean_result(result)
             offset=result.get('next_offset')
-            if offset!=scan['next_offset']+100:raise ValueError('Phân trang Zalo không hợp lệ.')
+            linked=scan['kind']=='members' and result.get('member_source')=='group_link'
+            if type(offset) is not int or (not scan['next_offset']<offset<=scan['next_offset']+100 if linked else offset!=scan['next_offset']+100):
+                raise ValueError('Phân trang Zalo không hợp lệ.')
+            cursor=member_cursor(result.get('cursor')) if linked else {}
+            if linked and result.get('has_more') and not cursor:raise ValueError('Thiếu con trỏ trang thành viên tiếp theo.')
             db().execute('BEGIN IMMEDIATE')
             account(scan['account_id'],remote=False)
             inserted=0
@@ -127,8 +144,24 @@ def register_data_scans(app,db,login_required,connector,parse_phones):
             stalled=has_more and not inserted
             total=result.get('total')
             total=total if isinstance(total,int) and 0<=total<=1000000 else None
-            db().execute('''UPDATE data_scans SET status='ready',loading_at='',next_offset=?,has_more=?,total=?,limited=?,source_name=? WHERE id=?''',
-                (offset,int(has_more and not stalled),total,int(bool(result.get('limited')) or stalled),str(result.get('source_name') or KINDS[scan['kind']])[:100],scan_id))
+            accessible=result.get('accessible_total')
+            accessible=accessible if type(accessible) is int and 0<=accessible<=1000000 else None
+            reason=result.get('limit_reason') if result.get('limit_reason') in ('hidden_members','incomplete_members','scan_limit') else ''
+            role=result.get('viewer_role') if result.get('viewer_role') in ('owner','admin','member') else 'unknown'
+            limited=bool(result.get('limited')) or stalled
+            if linked:
+                loaded=db().execute('SELECT count(*) FROM data_scan_rows WHERE scan_id=?',(scan_id,)).fetchone()[0]
+                if total and loaded>=total:has_more=False
+                if not has_more or stalled:
+                    accessible=loaded
+                    partial=bool(total and loaded<total) or stalled
+                    limited=limited or partial
+                    if partial and reason!='scan_limit':reason='hidden_members' if result.get('members_hidden') is True else 'incomplete_members'
+            source=result.get('member_source') if result.get('member_source') in ('group_link','group_info') else ''
+            db().execute('''UPDATE data_scans SET status='ready',loading_at='',next_offset=?,has_more=?,total=?,limited=?,source_name=?,
+                accessible_total=?,limit_reason=?,viewer_role=?,scan_cursor=?,member_source=? WHERE id=?''',
+                (offset,int(has_more and not stalled),total,int(limited),str(result.get('source_name') or KINDS[scan['kind']])[:100],
+                 accessible,reason,role,json.dumps(cursor if has_more and not stalled else {}),source,scan_id))
             db().commit()
         except Exception as error:
             db().rollback()
