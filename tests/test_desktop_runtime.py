@@ -157,5 +157,7 @@ def test_native_close_handler_waits_for_runtime_shutdown_before_destroying_windo
         for callback in events.shown:callback()
         assert all(callback() is False for callback in events.closing)
         assert destroyed.wait(3)
-    monkeypatch.setitem(sys.modules,'webview',SimpleNamespace(create_window=lambda *args,**kwargs:window,start=start))
+    settings={}
+    monkeypatch.setitem(sys.modules,'webview',SimpleNamespace(settings=settings,create_window=lambda *args,**kwargs:window,start=start))
     run_window(r);r.activate.assert_called_once();assert r.stop.called and r.begin_stop.called
+    assert settings['ALLOW_DOWNLOADS'] is True

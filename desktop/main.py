@@ -26,6 +26,7 @@ def show_error(message):
 
 def run_window(runtime,smoke=False):
     import webview
+    webview.settings['ALLOW_DOWNLOADS']=True
     logger=logging.getLogger('desktop')
     logger.info('Creating native window')
     window=webview.create_window('ZaloFlow',runtime.url,width=1440,height=940,min_size=(900,640),confirm_close=False)

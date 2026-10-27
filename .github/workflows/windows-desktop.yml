@@ -58,6 +58,12 @@ jobs:
           try {
             if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw 'Native window did not close.' }
             if ($process.ExitCode -ne 0) { throw 'Native Windows GUI smoke test failed.' }
+          } catch {
+            if (Test-Path "$reportPath.log") {
+              $diagnostic = (Get-Content "$reportPath.log" -Raw).Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Output "::error title=Native window diagnostics::$diagnostic"
+            }
+            throw
           } finally {
             if (Test-Path "$reportPath.log") {
               Get-Content "$reportPath.log"
