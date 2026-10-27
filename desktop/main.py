@@ -1,5 +1,6 @@
 """Native Windows window; no server or schedule service is installed."""
 import argparse
+import faulthandler
 import json
 import logging
 import os
@@ -25,16 +26,22 @@ def show_error(message):
 
 def run_window(runtime,smoke=False):
     import webview
+    logger=logging.getLogger('desktop')
+    logger.info('Creating native window')
     window=webview.create_window('ZaloFlow',runtime.url,width=1440,height=940,min_size=(900,640),confirm_close=False)
     closing=threading.Event();ready_to_close=threading.Event();loaded=threading.Event()
     def on_shown():
+        logger.info('Native window shown')
         try:runtime.activate()
         except Exception:
             logging.getLogger('desktop').exception('Cannot start local scheduler')
             show_error('Không bật được bộ chạy chiến dịch. Có thể tool hoặc bộ lịch đang mở ở nơi khác. Đóng rồi mở lại tool.')
             on_closing()
     def drain():
-        runtime.stop();ready_to_close.set();window.destroy()
+        logger.info('Draining local runtime')
+        runtime.stop();ready_to_close.set()
+        logger.info('Destroying native window')
+        window.destroy()
     def on_closing():
         if ready_to_close.is_set():return True
         runtime.begin_stop()
@@ -43,6 +50,7 @@ def run_window(runtime,smoke=False):
             threading.Thread(target=drain,name='ZaloFlow-close',daemon=True).start()
         return False
     def on_loaded():
+        logger.info('Native window loaded')
         loaded.set()
         if smoke:on_closing()
     window.events.shown+=on_shown;window.events.closing+=on_closing;window.events.loaded+=on_loaded
@@ -75,7 +83,18 @@ def main():
     args=parser.parse_args();protect_process_tree()
     if args.smoke_test:
         if not args.smoke_report:parser.error('--smoke-report is required')
-        smoke_check(args.smoke_report,args.smoke_gui);return
+        # Windowed executables have no stderr. Preserve exceptions and blocked
+        # thread stacks so a failed Windows smoke test is diagnosable.
+        with open(args.smoke_report+'.log','w',encoding='utf-8') as diagnostic:
+            logging.basicConfig(stream=diagnostic,level=logging.INFO,force=True)
+            faulthandler.enable(diagnostic)
+            faulthandler.dump_traceback_later(45,repeat=True,file=diagnostic)
+            try:smoke_check(args.smoke_report,args.smoke_gui)
+            except BaseException:
+                logging.getLogger('desktop').exception('Packaged smoke test failed')
+                raise SystemExit(1)
+            finally:faulthandler.cancel_dump_traceback_later()
+        return
     root=Path(args.data_dir or default_data_root());root.mkdir(parents=True,exist_ok=True)
     log=RotatingFileHandler(root/'desktop.log',maxBytes=2_000_000,backupCount=2,encoding='utf-8')
     logging.basicConfig(handlers=[log],level=logging.WARNING,format='%(asctime)s %(levelname)s %(message)s')

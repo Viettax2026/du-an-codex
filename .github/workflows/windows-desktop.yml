@@ -55,8 +55,17 @@ jobs:
           }
           $reportPath = Join-Path $env:RUNNER_TEMP 'zaloflow-gui-smoke.json'
           $process = Start-Process desktop/dist/ZaloFlow/ZaloFlow.exe -ArgumentList @('--smoke-test', '--smoke-gui', '--smoke-report', $reportPath) -PassThru
-          if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw 'Native window did not close.' }
-          if ($process.ExitCode -ne 0) { throw 'Native Windows GUI smoke test failed.' }
+          try {
+            if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw 'Native window did not close.' }
+            if ($process.ExitCode -ne 0) { throw 'Native Windows GUI smoke test failed.' }
+          } finally {
+            if (Test-Path "$reportPath.log") {
+              Get-Content "$reportPath.log"
+              '```text' >> $env:GITHUB_STEP_SUMMARY
+              Get-Content "$reportPath.log" >> $env:GITHUB_STEP_SUMMARY
+              '```' >> $env:GITHUB_STEP_SUMMARY
+            }
+          }
           $report = Get-Content $reportPath -Raw | ConvertFrom-Json
           if (-not $report.ok -or -not $report.gui -or -not $report.stopped) { throw 'Incomplete GUI smoke test.' }
           Get-Content $reportPath
