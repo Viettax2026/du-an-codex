@@ -228,6 +228,16 @@ def test_public_authority_endpoints_require_device_credentials_and_reject_malfor
     assert client.post('/v1/refresh', json=dict(device=DEVICE_A, activation_token=secret), headers={'X-Forwarded-For': '1.2.3.4'}).status_code == 429
 
 
+def test_frozen_customer_app_uses_compiled_publisher_identity_instead_of_editable_json(authority, tmp_path, monkeypatch):
+    import sys
+    trusted = json.loads(authority.folder.joinpath('client-config.json').read_text())
+    editable = tmp_path / 'license-config.json'
+    editable.write_text(json.dumps(dict(trusted, server_url='https://other-authority.invalid', public_key='A' * 43)))
+    monkeypatch.setattr(sys, 'frozen', True, raising=False)
+    monkeypatch.setitem(sys.modules, 'desktop.license_identity', SimpleNamespace(CLIENT_CONFIG=trusted))
+    assert load_config(editable) == trusted
+
+
 def admin_csrf(client, path='/admin/login'):
     response = client.get(path)
     return re.search(r'name="csrf" value="([^"]+)"', response.text).group(1)

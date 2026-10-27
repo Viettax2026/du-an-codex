@@ -62,8 +62,10 @@ def run_window(runtime,smoke=False):
 
 
 def smoke_check(report,gui=False):
-    from desktop.licensing import DesktopLicense
+    from desktop.licensing import CONFIG_PATH, DesktopLicense, load_config
     from license_system.signatures import PRODUCT, new_signer, public_text, sign
+    if CONFIG_PATH.is_file():
+        assert load_config()==json.loads(CONFIG_PATH.read_text(encoding='utf-8')),'Bundled publisher identity does not match the build configuration'
     # Persistent WebView2 profiles can retain a cache file until process exit.
     # These are disposable test profiles; the process job closes any remaining
     # browser children on exit. Normal user profiles are never removed here.

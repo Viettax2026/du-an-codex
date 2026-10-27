@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -34,14 +35,20 @@ def device_code():
 
 def load_config(path=CONFIG_PATH):
     try:
-        config = json.loads(Path(path).read_text(encoding='utf-8'))
+        if getattr(sys, 'frozen', False):
+            # The publisher identity is compiled into the customer executable.
+            # Editing an adjacent public JSON must not replace the trusted key.
+            from desktop.license_identity import CLIENT_CONFIG
+            config = dict(CLIENT_CONFIG)
+        else:
+            config = json.loads(Path(path).read_text(encoding='utf-8'))
         parts = urlsplit(config['server_url'])
         if config['version'] != 1 or parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
             raise ValueError()
         if len(decode(config['public_key'])) != 32:
             raise ValueError()
         return config
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, ImportError) as error:
         raise LicenseError('Bản cài chưa có cấu hình máy chủ bản quyền. Liên hệ người cung cấp phần mềm.') from error
 
 
