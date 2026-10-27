@@ -10,6 +10,10 @@ on:
     branches: [main]
     paths:
       - 'desktop/**'
+      - 'static/**'
+      - 'connector/**'
+      - 'tests/test_desktop_runtime.py'
+      - 'tests/test_license_system.py'
       - 'runtime_lock.py'
       - 'license_system/**'
       - 'app.py'
@@ -100,10 +104,22 @@ jobs:
           $report = Get-Content $reportPath -Raw | ConvertFrom-Json
           if (-not $report.ok -or -not $report.gui -or -not $report.stopped) { throw 'Incomplete GUI smoke test.' }
           Get-Content $reportPath
+      - name: Build single-file Windows installer
+        shell: pwsh
+        run: |
+          $compilerPath = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compilerPath)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot install Inno Setup 6.' }
+          }
+          ./desktop/build-installer.ps1 -AppVersion "1.0.${{ github.run_number }}"
+      - name: Test installer, shortcuts, upgrade and uninstall on Windows
+        shell: pwsh
+        run: ./desktop/test-installer.ps1
       - uses: actions/upload-artifact@v4
         if: steps.license_config.outputs.configured == 'true'
         with:
-          name: ZaloFlow-Windows-x64
-          path: desktop/dist/ZaloFlow/
+          name: ZaloFlow-Setup-Windows-x64
+          path: desktop/dist/installer/
           if-no-files-found: error
           retention-days: 30

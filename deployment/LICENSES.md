@@ -43,7 +43,7 @@ Tệp chỉ có `version`, `server_url`, `public_key`. Có thể gửi nội dun
 
 GitHub Actions → **Build Windows desktop → Run workflow**: dán JSON công khai vào trường `license_config`, chọn main rồi Run workflow. Hoặc commit `desktop/license-config.json` để workflow tự dùng cho các lần dựng sau. Nếu chưa có cấu hình, workflow chỉ kiểm thử gói với danh tính tạm; không xuất bản gói khách hàng. Không dùng khóa thử để cấp key thật.
 
-Khi lượt dựng có dấu xanh và artifact, tải `ZaloFlow-Windows-x64`, giải nén toàn bộ. Gói khách hàng chỉ có khóa công khai; không đóng gói kho key hoặc công cụ quản trị server. Dựng thủ công trên Windows cũng yêu cầu cấu hình công khai hợp lệ trước.
+Khi lượt dựng có dấu xanh và artifact, tải `ZaloFlow-Setup-Windows-x64`, lấy `ZaloFlow-Setup-x64.exe` trong ZIP rồi chạy để cài. Bộ cài tạo biểu tượng Desktop/Start; tệp hỗ trợ được cài vào thư mục chương trình và ẩn mặc định. Chỉ gửi bộ cài cho khách. Ẩn tệp không ngăn được sao chép; key vẫn kiểm soát quyền dùng một máy. Gói khách hàng chỉ có khóa công khai; không đóng gói kho key hoặc công cụ quản trị server. Dựng thủ công trên Windows cũng yêu cầu cấu hình công khai hợp lệ trước. Cài đè/gỡ giữ dữ liệu và kích hoạt; gỡ không giải phóng chỗ máy đã kích hoạt. Muốn chuyển máy cần hủy kích hoạt trong tool hoặc quản trị viên reset máy.
 
 ## Cấp, gia hạn và chuyển máy
 

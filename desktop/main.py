@@ -119,7 +119,7 @@ def main():
     runtime=None
     try:
         runtime=DesktopRuntime(root)
-        if not runtime.app.extensions['zalo_connector'].available():raise RuntimeError('Thiếu bộ kết nối. Giải nén đầy đủ gói Windows, giữ thư mục _internal cạnh ZaloFlow.exe.')
+        if not runtime.app.extensions['zalo_connector'].available():raise RuntimeError('Thiếu bộ kết nối. Đóng ZaloFlow rồi chạy lại bộ cài để khôi phục tệp chương trình.')
         runtime.start();run_window(runtime)
     except Exception as error:
         logging.getLogger('desktop').exception('Desktop startup failed')

@@ -1,7 +1,7 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
-1. Giải nén toàn bộ gói ZIP vào một thư mục. Giữ _internal cạnh ZaloFlow.exe.
-2. Mở ZaloFlow.exe. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tạo tài khoản ZaloFlow trong cửa sổ ứng dụng và đăng nhập Zalo bằng QR.
+1. Lấy ZaloFlow-Setup-x64.exe trong ZIP tải về, chạy để cài. Giữ tùy chọn tạo shortcut Desktop được chọn. Không cần quyền quản trị.
+2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tạo tài khoản ZaloFlow trong cửa sổ ứng dụng và đăng nhập Zalo bằng QR.
 3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
 4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
 5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
@@ -20,7 +20,13 @@ Dữ liệu riêng của máy tính lưu ở:
 Nhật ký chẩn đoán:
 %LOCALAPPDATA%\ZaloFlow\desktop.log
 
-Nâng cấp: đóng tool, giải nén gói mới vào thư mục chương trình; dữ liệu nằm ngoài thư mục chương trình nên được giữ lại. Không xóa thư mục dữ liệu.
+Chương trình cài ở %LOCALAPPDATA%\Programs\ZaloFlow. Thư mục hỗ trợ _internal được ẩn mặc định; không xóa hoặc di chuyển riêng các tệp này.
+
+Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng tài khoản Windows. Dữ liệu nằm ngoài thư mục chương trình nên được giữ lại, cả khi gỡ cài đặt. Không xóa thư mục dữ liệu. Nếu đang dùng bản ZIP cũ, đóng bản đó trước khi cài; cùng tài khoản Windows sẽ dùng tiếp dữ liệu ở vị trí mặc định.
+
+Gỡ cài đặt không hủy kích hoạt key. Muốn chuyển máy, hủy kích hoạt trong tool trước khi gỡ.
+
+Bộ cài chỉ cần một file EXE để chia sẻ. Ẩn tệp không ngăn được sao chép hoặc trích xuất; quyền sử dụng vẫn được kiểm soát bằng key một máy.
 
 CHUYỂN DỮ LIỆU TỪ VPS
 - Tool Windows không đồng bộ tự động với VPS.
