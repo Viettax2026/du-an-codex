@@ -126,6 +126,8 @@ class CampaignManager:
     def require_active(self, campaign):
         stop=self.app.config.get('DESKTOP_STOP_EVENT')
         if stop is not None and stop.is_set():abort(409,'Tool đang đóng; không nhận thêm lượt mới.')
+        license=self.app.extensions.get('desktop_license')
+        if license is not None and not license.allowed():abort(403,'Bản quyền chưa kích hoạt, đã hết hạn hoặc cần kiểm tra lại. Mở mục Bản quyền để tiếp tục.')
         if campaign['paused'] or campaign['deleted_at']:
             abort(409, 'Chiến dịch đã dừng hoặc đã xóa. Không thực hiện thêm hành động.')
 

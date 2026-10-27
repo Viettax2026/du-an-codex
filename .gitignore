@@ -6,3 +6,6 @@ instance/
 node_modules/
 desktop/build/
 desktop/dist/
+license-private/
+signing-private.pem
+admin-password.txt

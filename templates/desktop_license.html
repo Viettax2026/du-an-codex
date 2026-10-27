@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="auth-card">
+  <div class="brand">Z<span>●</span> ZaloFlow</div>
+  <h1>{{ 'Bản quyền đang hoạt động' if license_status.allowed else 'Kích hoạt bản quyền' }}</h1>
+  <p class="muted">Mỗi key sử dụng trên một máy Windows. Dữ liệu và tiến độ chiến dịch được giữ nguyên khi gia hạn hoặc đổi key.</p>
+  <label>Mã máy<input readonly value="{{ license_status.device }}" aria-label="Mã máy"></label>
+  {% if license_status.claims %}
+  <p>Khách hàng: <strong>{{ license_status.claims.customer }}</strong></p>
+  <p>Hạn sử dụng: <strong>{{ expiry }}</strong> (giờ Việt Nam)</p>
+  {% endif %}
+  {% if license_status.error %}<p role="status" class="notice error">{{ license_status.error }}</p>{% endif %}
+  {% if license_status.allowed %}<p><a class="primary" href="{{ url_for('dashboard' if g.user else 'login') }}">Vào ứng dụng →</a></p>{% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ session.csrf }}">
+    <input type="hidden" name="action" value="activate">
+    <label>{{ 'Đổi key' if license_status.allowed else 'Key sử dụng' }}<input name="key" required autocomplete="off" spellcheck="false" maxlength="200" placeholder="ZF-…"></label>
+    <button class="primary full">Kích hoạt</button>
+  </form>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="refresh">
+    <button class="ghost">Kiểm tra lại / cập nhật gia hạn</button>
+  </form>
+  {% if g.user and license_status.can_deactivate %}<form method="post">
+    <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="deactivate">
+    <label><input type="checkbox" required> Tôi muốn ngừng dùng trên máy này để chuyển key sang máy khác.</label>
+    <button class="ghost">Hủy kích hoạt máy này</button>
+  </form>{% endif %}
+  <p class="muted">Cần mạng mỗi lần mở tool và khi kiểm tra định kỳ. Nếu mất mạng trong lúc dùng, phiên đã xác thực chỉ dùng tiếp trong thời gian còn hiệu lực, tối đa 1 giờ; không vượt quá hạn key. Để đổi sang key khác, hãy hủy kích hoạt key hiện tại trước.</p>
+  <p><a href="{{ url_for('login') }}">Đăng nhập tài khoản ZaloFlow</a></p>
+</section>
+{% endblock %}

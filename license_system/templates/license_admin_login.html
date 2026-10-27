@@ -1,0 +1,5 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị key ZaloFlow</title></head><body>
+<h1>Quản trị key ZaloFlow</h1><p>Chỉ dành cho chủ phần mềm. Tài khoản ZaloFlow của khách hàng không có quyền vào đây.</p>
+{% for message in get_flashed_messages() %}<p role="alert">{{ message }}</p>{% endfor %}
+<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><label>Mật khẩu quản trị <input type="password" name="password" required maxlength="256" autocomplete="current-password"></label> <button>Đăng nhập</button></form>
+</body></html>

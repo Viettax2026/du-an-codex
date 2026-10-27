@@ -6,6 +6,8 @@ Tải bản dựng tại [Build Windows desktop](https://github.com/Viettax2026/
 
 Gói không chứa database, mật khẩu hoặc phiên QR từ VPS. Không đồng bộ dữ liệu giữa máy tính và VPS. Muốn chuyển dữ liệu cần dừng bộ lịch VPS, sao lưu đầy đủ `instance` khi web/bộ lịch đã dừng rồi chép vào thư mục dữ liệu của tool đang đóng; xem [hướng dẫn](HUONG-DAN.txt). Không bật hai bộ chạy trên hai bản sao cùng chiến dịch.
 
+Bản mới yêu cầu **key sử dụng cho một máy** trước khi tạo tài khoản và chạy chiến dịch. Chủ phần mềm cài máy chủ key, lấy cấu hình **công khai** rồi dựng bản Windows theo [hướng dẫn quản lý bản quyền](../deployment/LICENSES.md). Gói khách không chứa khóa ký riêng. Workflow chưa có cấu hình chỉ kiểm thử, không phát artifact cho khách. Dữ liệu kích hoạt nằm ngoài `instance`, trong `%LOCALAPPDATA%\ZaloFlow\license`; sao chép dữ liệu chiến dịch không chuyển được bản quyền sang máy khác.
+
 Dựng lại trên Windows x64 với Python 3.12 và Node.js 22:
 
 ```powershell

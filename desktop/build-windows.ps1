@@ -1,3 +1,4 @@
+param([switch]$AllowUnconfigured)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Push-Location $projectRoot
@@ -5,6 +6,11 @@ try {
     if (-not $IsWindows -and $env:OS -ne 'Windows_NT') { throw 'Build on Windows x64.' }
     python -m pip install -r desktop/requirements.txt
     if ($LASTEXITCODE -ne 0) { throw 'Python dependencies failed.' }
+    python -m desktop.configure_build
+    if ($LASTEXITCODE -ne 0) { throw 'Invalid public license configuration.' }
+    if (-not $AllowUnconfigured -and -not (Test-Path desktop/license-config.json)) {
+        throw 'Copy the PUBLIC client-config.json from the license server to desktop/license-config.json first.'
+    }
     Push-Location connector
     try {
         npm.cmd ci --omit=dev

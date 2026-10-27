@@ -565,6 +565,9 @@ class CampaignScheduler:
 
     def tick(self,now=local_now):
         self.heartbeat()
+        license=self.app.extensions.get('desktop_license')
+        if license is not None and not license.allowed():
+            return
         rows=self.db().execute("SELECT id,user_id,schedule_revision FROM campaigns WHERE schedule_enabled=1 AND paused=0 AND deleted_at IS NULL AND schedule_error='' ORDER BY id").fetchall()
         for row in rows:
             if self.stopping:
@@ -579,7 +582,9 @@ class CampaignScheduler:
                 if current['schedule_revision']!=row['schedule_revision'] or not current['schedule_enabled'] or current['paused'] or current['deleted_at']:
                     continue  # An edit/stop superseded this tick; do not block the new configuration.
                 # Quotas/spacing are temporary waits; no new attempts have been claimed.
-                if error.code==409:
+                if license is not None and not license.allowed():
+                    self.status(row['id'],'Đang chờ kích hoạt / gia hạn bản quyền')
+                elif error.code==409:
                     self.status(row['id'],'Đang chờ giới hạn gửi / khoảng nghỉ')
                 else:
                     self.block(row['id'],error.description)

@@ -62,13 +62,25 @@ def run_window(runtime,smoke=False):
 
 
 def smoke_check(report,gui=False):
+    from desktop.licensing import DesktopLicense
+    from license_system.signatures import PRODUCT, new_signer, public_text, sign
     # Persistent WebView2 profiles can retain a cache file until process exit.
     # These are disposable test profiles; the process job closes any remaining
     # browser children on exit. Normal user profiles are never removed here.
     with tempfile.TemporaryDirectory(prefix='zaloflow-smoke-',ignore_cleanup_errors=True) as folder:
-        runtime=DesktopRuntime(folder)
+        signer=new_signer();device='ZFM1-'+'A'*64
+        def transport(config,action,data):
+            now=int(time.time())
+            lease=sign(signer,dict(product=PRODUCT,license_id=1,customer='Smoke test only',activation_id=1,
+                device=device,issued_at=now,valid_until=now+3600,license_expires_at=now+86400))
+            return dict(lease=lease,activation_token='temporary-smoke-activation-token')
+        license=DesktopLicense(Path(folder)/'license',config=dict(server_url='https://smoke.invalid',public_key=public_text(signer)),transport=transport,device=device)
+        runtime=DesktopRuntime(folder,license=license)
         try:
             runtime.start()
+            with urlopen(runtime.url+'/register',timeout=10) as response:assert response.url.endswith('/desktop/license')
+            license.activate('ZF-'+'a'*32)
+            assert license.allowed(),'Signed activation was not accepted'
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
             if gui:run_window(runtime,smoke=True)
@@ -78,7 +90,7 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True)),encoding='utf-8')
         finally:runtime.stop()
 
 

@@ -1,12 +1,19 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
 1. Giải nén toàn bộ gói ZIP vào một thư mục. Giữ _internal cạnh ZaloFlow.exe.
-2. Mở ZaloFlow.exe. Lần đầu tạo tài khoản quản trị trong cửa sổ ứng dụng, rồi đăng nhập Zalo bằng QR.
+2. Mở ZaloFlow.exe. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tạo tài khoản ZaloFlow trong cửa sổ ứng dụng và đăng nhập Zalo bằng QR.
 3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
 4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
 5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
 
 Cần có Internet để kết nối Zalo. Máy ngủ/tắt hoặc tool đóng thì không chạy lịch. Không cài dịch vụ chạy nền hoặc tự khởi động Windows.
+
+BẢN QUYỀN
+- Key sử dụng khác với mật khẩu đăng nhập ZaloFlow. Mỗi key dùng trên một máy Windows.
+- Cần mạng mỗi lần mở tool và kiểm tra định kỳ 5 phút. Nếu mất mạng trong khi đang dùng, phiên đã xác thực còn hiệu lực tối đa 1 giờ, không vượt quá hạn key.
+- Khi key hết hiệu lực, tool ngừng nhận lượt mới; giữ nguyên dữ liệu và tiến độ. Gia hạn rồi bấm Bản quyền > Kiểm tra lại để chạy tiếp.
+- Chuyển máy: đăng nhập trên máy cũ > Bản quyền > Hủy kích hoạt máy này; khi thành công, nhập cùng key trên máy mới. Đóng tool thông thường không hủy key.
+- Nếu máy cũ bị mất/hỏng hoặc quên key, liên hệ người cấp key; không xóa dữ liệu để thử kích hoạt lại.
 
 Dữ liệu riêng của máy tính lưu ở:
 %LOCALAPPDATA%\ZaloFlow\instance

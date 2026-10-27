@@ -39,7 +39,7 @@ def default_data_root():
 
 
 class DesktopRuntime:
-    def __init__(self,data_root=None,config=None,tick=None):
+    def __init__(self,data_root=None,config=None,tick=None,license=None):
         self.data_root=Path(data_root or default_data_root()).resolve()
         self.instance=self.data_root/'instance';self.instance.mkdir(parents=True,exist_ok=True)
         self.instance_lock=RuntimeLock(self.data_root/'desktop.lock').acquire()
@@ -49,6 +49,17 @@ class DesktopRuntime:
         settings.update(config or {})
         try:self.app=create_app(settings,instance_path=self.instance)
         except BaseException:self.instance_lock.release();raise
+        self.license=license
+        try:
+            if self.license is None and not self.app.config.get('TESTING'):
+                from desktop.licensing import DesktopLicense
+                self.license=DesktopLicense(self.data_root/'license')
+        except BaseException:
+            self.instance_lock.release();raise
+        if self.license is not None:
+            from desktop.license_routes import register_license_routes
+            self.app.extensions['desktop_license']=self.license
+            register_license_routes(self.app,self.license)
         self.gate=RequestGate(self.app,self.stop_event)
         self.tick=tick or self.app.extensions['campaign_scheduler'].tick
         self.server=None;self.server_thread=None;self.worker=None;self.url=None
@@ -81,7 +92,8 @@ class DesktopRuntime:
         while not self.stop_event.is_set():
             with self.app.app_context():
                 try:
-                    if not self.stop_event.is_set():self.tick()
+                    licensed=self.license is None or self.license.refresh()
+                    if not self.stop_event.is_set() and licensed:self.tick()
                 except Exception:
                     self.app.extensions['campaign_manager'].db().rollback()
                     logging.getLogger('desktop').exception('Local schedule cycle failed')
@@ -108,7 +120,13 @@ class DesktopRuntime:
                     self.gate.condition.wait(left)
             self.app.extensions['zalo_connector'].stop_workers()
             if self.server:
-                for channel in list(self.server._map.values()):channel.close()
+                def close_channels():
+                    for channel in list(self.server._map.values()):channel.close()
+                # Close sockets on the asyncore thread, rather than racing its
+                # select() call from the native window's shutdown thread.
+                if self.server_thread and self.server_thread.is_alive():
+                    self.server.trigger.pull_trigger(close_channels)
+                else:close_channels()
                 self.server.task_dispatcher.shutdown(timeout=5)
             if self.server_thread:self.server_thread.join(5)
             if self.server_thread and self.server_thread.is_alive():return False
