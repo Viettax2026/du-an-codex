@@ -10,7 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from license_system.signatures import LicenseError, decode, verify
+from license_system.signatures import ActivationInvalid, LicenseError, decode, verify
 
 REFRESH_SECONDS = 300
 CONFIG_PATH = Path(__file__).resolve().parent / 'license-config.json'
@@ -63,9 +63,15 @@ def exchange_http(config, action, data):
     except HTTPError as error:
         if error.code in (400, 403):
             try:
-                detail = json.loads(error.read(4096)).get('error', '')
+                result = json.loads(error.read(4096))
             except (ValueError, AttributeError):
-                detail = ''
+                result = {}
+            if not isinstance(result, dict):
+                result = {}
+            detail = result.get('error', '')
+            detail = detail if isinstance(detail, str) else ''
+            if result.get('error_code') == 'activation_invalid' or detail.startswith('Phiên kích hoạt không còn hiệu lực.'):
+                raise ActivationInvalid(detail[:300] or 'Phiên kích hoạt đã bị hủy.') from error
             raise LicenseError(detail[:300] or 'Key không còn hiệu lực. Liên hệ người cấp key.') from error
         raise ConnectionError('Chưa kết nối được máy chủ bản quyền. Thử lại khi có mạng.') from error
     except (URLError, OSError, ValueError) as error:
@@ -161,6 +167,9 @@ class DesktopLicense:
                 response = self.transport(self.config, 'refresh', dict(device=self.device, activation_token=self.state['activation_token']))
                 with self.lock:
                     self.accept(response)
+            except ActivationInvalid as error:
+                with self.lock:
+                    self.error = str(error); self.state = {}; self.save()
             except LicenseError as error:
                 # An explicit denial invalidates cached access immediately.
                 with self.lock:
@@ -176,7 +185,10 @@ class DesktopLicense:
                 self.deactivating = True
             try:
                 if self.state.get('activation_token'):
-                    self.transport(self.config, 'deactivate', dict(device=self.device, activation_token=self.state['activation_token']))
+                    try:
+                        self.transport(self.config, 'deactivate', dict(device=self.device, activation_token=self.state['activation_token']))
+                    except ActivationInvalid:
+                        pass  # The server has already released this session.
                 with self.lock:
                     self.state = {}; self.error = ''; self.save()
             finally:

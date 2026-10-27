@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from license_system.authority import Authority
-from license_system.signatures import LicenseError
+from license_system.signatures import ActivationInvalid, LicenseError
 
 
 def create_app(folder=None):
@@ -40,6 +40,8 @@ def create_app(folder=None):
             return jsonify(error='Mã máy hoặc key không hợp lệ.'), 400
         try:
             return jsonify(authority.exchange(action, device, credential))
+        except ActivationInvalid as error:
+            return jsonify(error=str(error), error_code='activation_invalid'), 403
         except LicenseError as error:
             return jsonify(error=str(error)), 403
 

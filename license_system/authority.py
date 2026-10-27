@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from cryptography.hazmat.primitives import serialization
 from werkzeug.security import generate_password_hash
 
-from license_system.signatures import PRODUCT, LicenseError, new_signer, public_text, sign
+from license_system.signatures import PRODUCT, ActivationInvalid, LicenseError, new_signer, public_text, sign
 
 LEASE_SECONDS = 3600
 
@@ -172,7 +172,7 @@ class Authority:
                 return dict(self.lease(db, activation, license_row, now), activation_token=secret)
             activation = db.execute('SELECT * FROM activations WHERE device=? AND token_hash=? AND active=1', (device, secret_hash(credential))).fetchone()
             if activation is None:
-                raise LicenseError('Phiên kích hoạt không còn hiệu lực. Nhập lại key hoặc liên hệ người cấp key.')
+                raise ActivationInvalid('Phiên kích hoạt không còn hiệu lực. Nhập lại key hoặc liên hệ người cấp key.')
             if action == 'deactivate':
                 db.execute('UPDATE activations SET active=0 WHERE id=?', (activation['id'],))
                 return dict(deactivated=True)

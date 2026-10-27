@@ -13,6 +13,10 @@ class LicenseError(ValueError):
     pass
 
 
+class ActivationInvalid(LicenseError):
+    """The authority explicitly confirms that this bearer session is inactive."""
+
+
 def encode(value):
     return base64.urlsafe_b64encode(value).decode('ascii').rstrip('=')
 

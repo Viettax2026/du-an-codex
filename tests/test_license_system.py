@@ -15,7 +15,7 @@ from desktop.licensing import DesktopLicense, load_config
 from desktop.runtime import DesktopRuntime
 from license_system.authority import Authority, LEASE_SECONDS, secret_hash
 from license_system.server import create_app as create_license_app
-from license_system.signatures import LicenseError, decode, encode, verify
+from license_system.signatures import ActivationInvalid, LicenseError, decode, encode, verify
 from test_workflow import app, post, token
 from test_send import setup_send, prepare
 
@@ -139,6 +139,30 @@ def test_restarting_requires_server_validation_and_different_keys_require_deacti
     assert online.refresh(force=True)
     online.deactivate(); online.activate(second)
     assert online.claims()['customer'] == 'B'
+
+
+def test_server_reset_does_not_trap_client_in_an_invalid_activation(authority, clock, tmp_path):
+    client = make_client(tmp_path, authority, clock)
+    key = authority.issue('A', now=clock.wall)['key']; client.activate(key)
+    authority.manage(1, 'reset-devices', now=clock.wall)
+    client.deactivate()  # The authority confirms this session was already removed.
+    assert not client.state
+    client.activate(key)
+    authority.manage(1, 'reset-devices', now=clock.wall)
+    assert not client.refresh(force=True) and not client.state
+    client.activate(authority.issue('B', now=clock.wall)['key'])
+    assert client.allowed()
+
+
+def test_http_activation_denial_is_distinguished_from_other_server_errors(monkeypatch):
+    import io
+    from urllib.error import HTTPError
+    from desktop.licensing import exchange_http
+    def denied(*args, **kwargs):
+        raise HTTPError('https://example.com', 403, 'Forbidden', {}, io.BytesIO(json.dumps(dict(error='Session gone', error_code='activation_invalid')).encode()))
+    monkeypatch.setattr('desktop.licensing.build_opener', lambda *args: SimpleNamespace(open=denied))
+    with pytest.raises(ActivationInvalid):
+        exchange_http({'server_url': 'https://example.com'}, 'refresh', dict(device=DEVICE_A, activation_token='synthetic'))
 
 
 def test_renewal_network_does_not_hold_dispatch_guard_lock(authority, clock, tmp_path):
