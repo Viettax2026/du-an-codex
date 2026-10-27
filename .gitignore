@@ -10,3 +10,4 @@ license-private/
 signing-private.pem
 admin-password.txt
 desktop/license_identity.py
+dist/

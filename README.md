@@ -370,3 +370,7 @@ Tải gói **ZaloFlow-Windows-x64** từ artifact của [Build Windows desktop](
 Bản mới có kích hoạt bằng key qua máy chủ: một key/một máy, đặt hạn dùng, gia hạn, thu hồi và hủy kích hoạt để chuyển máy. Trang quản trị key chạy riêng tại `/licenses/admin`, không dùng quyền đăng nhập của khách hàng ZaloFlow. Chỉ phát gói Windows khi đã có cấu hình công khai của máy chủ; khóa ký riêng ở VPS của chủ phần mềm. Xem [cài đặt và quản lý bản quyền](deployment/LICENSES.md).
 
 Hai bản Windows và web vận hành tách biệt: bản web dùng database/tài khoản/phiên đăng nhập trên VPS và không yêu cầu key Windows; bản Windows dùng database/tài khoản/phiên đăng nhập riêng trên PC. Đóng Windows không dừng chiến dịch web. Dịch vụ `/licenses/` là máy chủ xác thực key riêng, chỉ nhận thông tin kích hoạt; không đồng bộ khách hàng, chiến dịch hoặc tiến độ giữa hai bản.
+
+### Gói web cho domain và VPS mới
+
+[Build portable web package](https://github.com/Viettax2026/du-an-codex/actions/workflows/web-package.yml) tạo artifact **zaloflow-web**, tải về thành ZIP chỉ chứa mã web và bộ cài Ubuntu 24.04. Sau khi trỏ DNS và giải nén trên VPS mới, chạy `bash web_deploy/install-web.sh --domain crm.example.com --email owner@example.com`. Có thể đặt `--name` và `--port` riêng cho từng bản cài. Script dựng Nginx/HTTPS, Python và Node 22 riêng; bộ lịch chỉ bật khi chọn `--start-scheduler` hoặc bật dịch vụ sau. ZIP không chứa Windows, kho key hoặc dữ liệu thực. Xem [hướng dẫn cài, sao lưu và chuyển dữ liệu](web_deploy/README.md).
