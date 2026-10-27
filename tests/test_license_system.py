@@ -310,6 +310,20 @@ def test_unlicensed_scheduler_waits_and_never_processes_campaigns(authority, clo
         assert runtime.stop(5)
 
 
+def test_reopened_desktop_validates_saved_key_before_loading_page_without_starting_campaigns(authority, clock, tmp_path):
+    first = make_client(tmp_path, authority, clock)
+    first.activate(authority.issue('A', now=clock.wall)['key'])
+    saved = make_client(tmp_path, authority, clock)
+    assert not saved.allowed()
+    runtime = DesktopRuntime(tmp_path / 'desktop', config={'TESTING': True}, license=saved)
+    try:
+        runtime.start()
+        assert saved.allowed() and runtime.worker is None
+        assert runtime.app.test_client().get('/register').status_code == 200
+    finally:
+        assert runtime.stop(5)
+
+
 def test_nginx_install_preserves_https_and_rejects_unrelated_sites():
     from deployment.license_nginx import configure
     existing = 'server { listen 443 ssl; server_name cskh.viettaxco.com; ssl_certificate /cert; location / { proxy_pass http://127.0.0.1:8000; } }'
