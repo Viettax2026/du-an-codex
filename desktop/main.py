@@ -62,7 +62,10 @@ def run_window(runtime,smoke=False):
 
 
 def smoke_check(report,gui=False):
-    with tempfile.TemporaryDirectory(prefix='zaloflow-smoke-') as folder:
+    # Persistent WebView2 profiles can retain a cache file until process exit.
+    # These are disposable test profiles; the process job closes any remaining
+    # browser children on exit. Normal user profiles are never removed here.
+    with tempfile.TemporaryDirectory(prefix='zaloflow-smoke-',ignore_cleanup_errors=True) as folder:
         runtime=DesktopRuntime(folder)
         try:
             runtime.start()
