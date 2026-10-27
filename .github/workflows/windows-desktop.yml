@@ -51,6 +51,15 @@ jobs:
       - name: Build native Windows package
         shell: pwsh
         run: ./desktop/build-windows.ps1 -AllowUnconfigured
+      - name: Verify bundled public license configuration
+        if: steps.license_config.outputs.configured == 'true'
+        shell: pwsh
+        run: |
+          $expected = Get-Content desktop/license-config.json -Raw | ConvertFrom-Json
+          $bundled = Get-Content desktop/dist/ZaloFlow/_internal/desktop/license-config.json -Raw | ConvertFrom-Json
+          if ($bundled.version -ne $expected.version -or $bundled.server_url -ne $expected.server_url -or $bundled.public_key -ne $expected.public_key) { throw 'The packaged license authority does not match the owner configuration.' }
+          $privateFiles = Get-ChildItem desktop/dist/ZaloFlow -Recurse -File | Where-Object { $_.Name -in @('signing-private.pem', 'admin-password.txt', 'session-secret.txt', 'licenses.sqlite3') }
+          if ($privateFiles) { throw 'Private authority data must never be included in the customer package.' }
       - name: Smoke test packaged web server, scheduler and bundled Node
         shell: pwsh
         run: |
