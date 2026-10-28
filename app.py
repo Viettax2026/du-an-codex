@@ -26,6 +26,7 @@ from campaign_duplicates import save_duplicate_check
 from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
 from account_recovery import initialize_recovery, register_recovery, revoke_recovery
+from account_approval import initialize_approval, register_approval, grant_admin
 
 
 def create_app(test_config=None,instance_path=None):
@@ -136,6 +137,7 @@ def create_app(test_config=None,instance_path=None):
         db().commit()
         initialize_campaign_actions(db)
         initialize_recovery(db)
+        initialize_approval(db)
 
     def action_settings():
         if request.form.get('options_present') == 'yes':
@@ -240,9 +242,9 @@ def create_app(test_config=None,instance_path=None):
                 session['csrf'], request.form.get('csrf', '')):
             return 'Phiên làm việc không hợp lệ. Vui lòng tải lại trang.', 400
         if session.get('user_id'):
-            user = db().execute('SELECT id, name, username, auth_version FROM users WHERE id=?',
+            user = db().execute('SELECT id, name, username, auth_version, role, approval_status FROM users WHERE id=?',
                                 (session['user_id'],)).fetchone()
-            if user and session.get('auth_version', 0) == user['auth_version']:
+            if user and user['approval_status'] == 'approved' and session.get('auth_version', 0) == user['auth_version']:
                 g.user = user
             else:
                 session.clear()
@@ -288,17 +290,16 @@ def create_app(test_config=None,instance_path=None):
             name, username, password = request.form.get('name', '').strip(), request.form.get('username', '').strip().lower(), request.form.get('password', '')
             if not name or len(name) > 100 or not re.fullmatch(r'[a-z0-9_.-]{3,64}', username) or not 10 <= len(password) <= 256:
                 flash('Nhập họ tên, tài khoản từ 3 đến 64 ký tự (chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang) và mật khẩu từ 10 đến 256 ký tự.', 'error')
+            elif username == 'admin':
+                flash('Tên admin dành cho tài khoản quản trị. Vui lòng chọn tên khác.', 'error')
             else:
                 try:
-                    cur = db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
+                    db().execute("INSERT INTO users(name,username,password,approval_status,role,registered_at) VALUES (?,?,?,'pending','user',CURRENT_TIMESTAMP)",
                                        (name, username, generate_password_hash(password)))
                     db().commit()
                     session.clear()
-                    session['user_id'] = cur.lastrowid
-                    session['auth_version'] = 0
-                    session.permanent = True
-                    flash('Đã tạo tài khoản. Vào Bảo mật tài khoản để tạo và lưu mã khôi phục khi quên mật khẩu.', 'success')
-                    return redirect(url_for('dashboard'))
+                    flash('Đăng ký thành công. Tài khoản đang chờ quản trị viên duyệt; bạn chưa thể đăng nhập.', 'success')
+                    return redirect(url_for('registration_pending'))
                 except sqlite3.IntegrityError:
                     flash('Tài khoản này đã được đăng ký.', 'error')
         return render_template('auth.html', register=True)
@@ -310,6 +311,9 @@ def create_app(test_config=None,instance_path=None):
             password = request.form.get('password', '')
             if user and len(password) <= 256 and check_password_hash(user['password'], password):
                 session.clear()
+                if user['approval_status'] != 'approved':
+                    flash('Tài khoản đang chờ quản trị viên duyệt.' if user['approval_status'] == 'pending' else 'Tài khoản chưa được phép đăng nhập. Liên hệ quản trị viên để được hỗ trợ.', 'error')
+                    return redirect(url_for('login'))
                 session['user_id'] = user['id']
                 session['auth_version'] = user['auth_version']
                 session.permanent = True
@@ -969,10 +973,12 @@ def create_app(test_config=None,instance_path=None):
         else:
             db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
                          ('Admin', 'admin', password_hash))
+        grant_admin(db(), 'admin')
         db().commit()
         click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')
 
     register_recovery(app, db, login_required)
+    register_approval(app, db, login_required)
 
     from data_groups import register_data_groups
     register_data_groups(app, db, login_required, parse_phones)

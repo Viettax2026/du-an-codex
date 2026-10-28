@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">QUẢN TRỊ</span><h1>Quản lý tài khoản</h1><p class="muted">Duyệt đăng ký mới và quản lý quyền truy cập ZaloFlow.</p></div></div>
+<div class="approval-counts">{% for value,label in states.items() %}<a class="{{ 'active' if selected_status==value }}" href="{{ url_for('admin_users',status=value) }}">{{ label }} <strong>{{ counts.get(value,0) }}</strong></a>{% endfor %}</div>
+<section class="panel">
+  <form method="get" class="approval-filters"><label>Tìm tài khoản<input name="q" value="{{ search }}" maxlength="100" placeholder="Tên đăng nhập hoặc họ tên"></label><label>Trạng thái<select name="status"><option value="all" {{ 'selected' if selected_status=='all' }}>Tất cả</option>{% for value,label in states.items() %}<option value="{{ value }}" {{ 'selected' if selected_status==value }}>{{ label }}</option>{% endfor %}</select></label><button class="primary">Lọc tài khoản</button></form>
+  <div class="table-scroll"><table><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Trạng thái</th><th>Ngày đăng ký</th><th>Thao tác</th></tr></thead><tbody>
+  {% for user in users %}<tr>
+    <td><strong>{{ user.username }}</strong>{% if user.role=='admin' %}<br><span class="badge blue">Quản trị viên</span>{% endif %}</td><td>{{ user.name }}</td>
+    <td><span class="badge {{ 'green' if user.approval_status=='approved' else 'neutral' }}">{{ states[user.approval_status] }}</span></td><td>{{ user.registered_at|localtime if user.registered_at else 'Có trước bản cập nhật' }}</td>
+    <td>{% if user.role=='admin' %}<span class="muted">Tài khoản quản trị</span>{% else %}
+      <form method="post" action="{{ url_for('admin_user_status',user_id=user.id) }}" class="approval-actions">
+        <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="filter_status" value="{{ selected_status }}"><input type="hidden" name="q" value="{{ search }}">
+        {% if user.approval_status!='approved' %}<button class="primary" name="status" value="approved">Duyệt</button>{% else %}<button class="ghost" name="status" value="blocked">Khóa truy cập</button>{% endif %}
+        {% if user.approval_status=='pending' %}<button class="ghost" name="status" value="rejected">Từ chối</button>{% endif %}
+      </form>{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="5" class="empty">Không có tài khoản phù hợp.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="approval-pagination"><span>{{ total }} tài khoản · Trang {{ current_page }}/{{ pages }}</span><div>{% if current_page>1 %}<a class="ghost button" href="{{ url_for('admin_users',status=selected_status,q=search,page=current_page-1) }}">Trang trước</a>{% endif %}{% if current_page<pages %}<a class="ghost button" href="{{ url_for('admin_users',status=selected_status,q=search,page=current_page+1) }}">Trang sau</a>{% endif %}</div></div>
+</section>
+<p class="muted">Khóa truy cập giữ nguyên dữ liệu và tiến độ, chặn đăng nhập, API và lượt chạy mới. Lượt đã bắt đầu được ghi nhận kết quả. Khi được duyệt lại, người dùng cần đăng nhập lại. Tài khoản mới không thể tự cấp quyền quản trị.</p>
+{% endblock %}

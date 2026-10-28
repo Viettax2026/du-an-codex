@@ -86,7 +86,10 @@ def smoke_check(report,gui=False):
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
             from desktop.smoke_recovery import verify_recovery_flow
-            assert verify_recovery_flow(runtime.url),'Packaged password recovery did not complete'
+            def approve_smoke_user(username):
+                result=runtime.app.test_cli_runner().invoke(args=['approve-user','--username',username])
+                assert result.exit_code==0,result.output
+            assert verify_recovery_flow(runtime.url,approve_smoke_user),'Packaged password recovery did not complete'
             if gui:run_window(runtime,smoke=True)
             else:
                 runtime.activate();deadline=time.monotonic()+10
@@ -100,8 +103,17 @@ def smoke_check(report,gui=False):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--smoke-test',action='store_true');parser.add_argument('--smoke-gui',action='store_true');parser.add_argument('--smoke-report')
-    parser.add_argument('--support-recovery',metavar='USERNAME',help='Local Windows administrator: issue a one-use recovery code for an existing account.')
+    support=parser.add_mutually_exclusive_group()
+    support.add_argument('--support-recovery',metavar='USERNAME',help='Local Windows administrator: issue a one-use recovery code for an existing account.')
+    support.add_argument('--grant-account-admin',metavar='USERNAME',help='Local Windows administrator: approve an existing account and grant local ZaloFlow administration.')
     args=parser.parse_args();protect_process_tree()
+    if args.grant_account_admin:
+        from desktop.recovery import account_admin_dialog
+        try:account_admin_dialog(args.data_dir or default_data_root(),args.grant_account_admin)
+        except Exception as error:
+            show_error(str(error) if isinstance(error,RuntimeError) else 'Không cấp được quyền quản trị. Kiểm tra thư mục dữ liệu và đóng ZaloFlow trước.')
+            raise SystemExit(1)
+        return
     if args.support_recovery:
         from desktop.recovery import recovery_dialog
         try:recovery_dialog(args.data_dir or default_data_root(),args.support_recovery)

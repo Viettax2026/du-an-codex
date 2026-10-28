@@ -124,6 +124,8 @@ class CampaignManager:
                           (campaign_id, kind, detail))
 
     def require_active(self, campaign):
+        if not self.db().execute("SELECT 1 FROM users WHERE id=? AND approval_status='approved'", (campaign['user_id'],)).fetchone():
+            abort(403, 'Tài khoản chưa được duyệt hoặc đã bị khóa. Không nhận thêm lượt chạy.')
         stop=self.app.config.get('DESKTOP_STOP_EVENT')
         if stop is not None and stop.is_set():abort(409,'Tool đang đóng; không nhận thêm lượt mới.')
         license=self.app.extensions.get('desktop_license')

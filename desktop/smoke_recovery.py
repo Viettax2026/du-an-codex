@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
-def verify_recovery_flow(url):
+def verify_recovery_flow(url, approve):
     browser = build_opener(HTTPCookieProcessor(CookieJar()))
     old_browser = build_opener(HTTPCookieProcessor(CookieJar()))
 
@@ -23,6 +23,10 @@ def verify_recovery_flow(url):
     assert '/forgot-password' in get(browser, '/login')[1]
     assert 'password-toggle' in get(browser, '/static/account-security.js')[1]
     post(browser, '/register', dict(name='Recovery smoke', username='recovery-smoke', password='temporary-old-password'))
+    target, pending = post(browser, '/login', dict(username='recovery-smoke', password='temporary-old-password'))
+    assert target.endswith('/login') and 'chờ quản trị viên duyệt' in pending
+    approve('recovery-smoke')
+    post(browser, '/login', dict(username='recovery-smoke', password='temporary-old-password'))
     _, page = post(browser, '/account/security', dict(current_password='temporary-old-password'))
     code = re.search(r'<code id="issued-recovery-code">(ZFR-[A-F0-9-]+)</code>', page).group(1)
     post(old_browser, '/login', dict(username='recovery-smoke', password='temporary-old-password'))

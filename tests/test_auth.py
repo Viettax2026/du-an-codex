@@ -13,8 +13,8 @@ def test_username_registration_and_login(app):
     assert 'type="email"' not in page
     post(client, '/register', {'name': 'An', 'username': 'VietTax_01', 'password': 'secure-password'})
     with client.session_transaction() as session:
-        assert session['user_id'] == 1
-    post(client, '/logout')
+        assert 'user_id' not in session
+    assert app.test_cli_runner().invoke(args=['approve-user','--username','viettax_01']).exit_code == 0
     assert 'Tài khoản này đã được đăng ký.' in post(client, '/register', {
         'name': 'Other', 'username': 'viettax_01', 'password': 'secure-password'}).text
     assert 'Tài khoản hoặc mật khẩu chưa đúng.' in post(client, '/login', {

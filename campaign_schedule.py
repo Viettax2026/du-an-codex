@@ -372,6 +372,7 @@ class CampaignScheduler:
 
     def guard(self,campaign_id,revision,now):
         def check(campaign,record=None):
+            self.manager.require_active(campaign)
             if self.stopping or campaign['schedule_revision']!=revision or not active_window(campaign,now()):
                 raise ValueError('Lịch đã dừng hoặc ngoài giờ chạy.')
             stamp=now().astimezone(timezone.utc).replace(tzinfo=None,microsecond=0).isoformat(' ')
@@ -568,12 +569,14 @@ class CampaignScheduler:
         license=self.app.extensions.get('desktop_license')
         if license is not None and not license.allowed():
             return
-        rows=self.db().execute("SELECT id,user_id,schedule_revision FROM campaigns WHERE schedule_enabled=1 AND paused=0 AND deleted_at IS NULL AND schedule_error='' ORDER BY id").fetchall()
+        rows=self.db().execute("SELECT c.id,c.user_id,c.schedule_revision FROM campaigns c JOIN users u ON u.id=c.user_id WHERE u.approval_status='approved' AND c.schedule_enabled=1 AND c.paused=0 AND c.deleted_at IS NULL AND c.schedule_error='' ORDER BY c.id").fetchall()
         for row in rows:
             if self.stopping:
                 break
             self.heartbeat()
             g.user=self.db().execute('SELECT id,name,username FROM users WHERE id=?',(row['user_id'],)).fetchone()
+            if not self.db().execute("SELECT 1 FROM users WHERE id=? AND approval_status='approved'", (row['user_id'],)).fetchone():
+                continue
             try:
                 self.tick_campaign(row['id'],now)
             except HTTPException as error:
@@ -582,7 +585,9 @@ class CampaignScheduler:
                 if current['schedule_revision']!=row['schedule_revision'] or not current['schedule_enabled'] or current['paused'] or current['deleted_at']:
                     continue  # An edit/stop superseded this tick; do not block the new configuration.
                 # Quotas/spacing are temporary waits; no new attempts have been claimed.
-                if license is not None and not license.allowed():
+                if not self.db().execute("SELECT 1 FROM users WHERE id=? AND approval_status='approved'", (row['user_id'],)).fetchone():
+                    self.status(row['id'],'Đang chờ duyệt / mở khóa tài khoản')
+                elif license is not None and not license.allowed():
                     self.status(row['id'],'Đang chờ kích hoạt / gia hạn bản quyền')
                 elif error.code==409:
                     self.status(row['id'],'Đang chờ giới hạn gửi / khoảng nghỉ')

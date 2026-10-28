@@ -56,7 +56,7 @@ Kiểm thử VPS trước khi dựng Windows:
 
 1. Cập nhật VPS bằng các lệnh bên dưới, lưu thông báo thư mục sao lưu và kết quả cập nhật.
 2. Mở `https://cskh.viettaxco.com/login`, kiểm tra có **Quên mật khẩu?**.
-3. Dùng một tài khoản thử riêng, không thêm tài khoản Zalo hoặc tạo chiến dịch gửi thật. Đăng nhập, mở **Bảo mật tài khoản**, xác nhận mật khẩu rồi tạo/tải mã.
+3. Dùng một tài khoản thử riêng, không thêm tài khoản Zalo hoặc tạo chiến dịch gửi thật. Tài khoản đăng ký mới cần được quản trị viên duyệt trong **Quản lý tài khoản** trước khi đăng nhập. Sau khi duyệt, đăng nhập, mở **Bảo mật tài khoản**, xác nhận mật khẩu rồi tạo/tải mã.
 4. Đăng nhập cùng tài khoản thử ở một trình duyệt khác để kiểm tra vô hiệu hóa phiên cũ. Đăng xuất ở trình duyệt đầu, chọn **Quên mật khẩu?**, nhập mã và đặt mật khẩu mới.
 5. Kiểm tra đăng nhập được bằng mật khẩu mới; mật khẩu cũ không dùng được, phiên trình duyệt thứ hai yêu cầu đăng nhập lại, mã đã dùng không thể dùng lần nữa. Không thử đổi mật khẩu tài khoản đang vận hành để tránh gián đoạn công việc.
 6. Kiểm tra tài khoản làm việc vẫn hiển thị dữ liệu/tiến độ bình thường. Báo kết quả hoặc lỗi; chỉ sau khi xác nhận VPS chạy ổn mới kích hoạt **Build Windows desktop → Run workflow → vps_tested** với đúng phiên bản đã thử. Không thay mã giữa lần thử VPS và lần đóng gói.

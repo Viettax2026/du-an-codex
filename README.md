@@ -17,11 +17,11 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Ứng dụng phục vụ trên cổng 8000. Mở trang đăng ký để tạo tài khoản; không có mật khẩu mặc định. Dữ liệu nằm trong `instance/zalo.sqlite3`; khóa phiên được tạo trong `instance/session.key`. Các tệp này bị Git bỏ qua và cần được bảo vệ, sao lưu khi triển khai.
+Ứng dụng phục vụ trên cổng 8000. Mở trang đăng ký để tạo tài khoản chờ duyệt; chủ máy chạy `.venv/bin/flask --app app:create_app grant-admin --username TEN_TAI_KHOAN` trong terminal khác để thiết lập quản trị viên đầu tiên, sau đó đăng nhập lại. Không có mật khẩu mặc định. Dữ liệu nằm trong `instance/zalo.sqlite3`; khóa phiên được tạo trong `instance/session.key`. Các tệp này bị Git bỏ qua và cần được bảo vệ, sao lưu khi triển khai.
 
 ## Quy trình
 
-1. Đăng ký hoặc đăng nhập.
+1. Đăng ký, được quản trị viên duyệt, rồi đăng nhập.
 2. Thêm khách hàng hoặc nhập CSV UTF-8 (cột `name,phone`, tùy chọn `tag,zalo_id,consent`).
 3. Ghi nhận sự đồng ý nhận tin khi đã có sự đồng ý thực tế.
 4. Tạo chiến dịch với nhóm khách hàng; dùng `{{name}}` trong nội dung để cá nhân hóa.
@@ -362,6 +362,8 @@ Bản cập nhật sửa lỗi `edit_started_recipient` của phiên bản `5651
 
 
 ### Ứng dụng Windows: mở tool mới chạy
+
+Đăng ký mới phải được quản trị viên duyệt trước khi đăng nhập. Chủ VPS cấp quyền lần đầu bằng `flask --app app:create_app grant-admin --username TEN_TAI_KHOAN`, rồi vào **Quản lý tài khoản** để duyệt/từ chối/khóa. Tài khoản cũ giữ quyền sử dụng, không tự có quyền quản trị. Nút **Đăng xuất** hiện ở góc phải mọi trang. Xem [hướng dẫn cập nhật và duyệt tài khoản](deployment/ACCOUNT-APPROVAL.md).
 
 Thứ tự phát hành: cập nhật và kiểm thử trên VPS thật trước; khi xác nhận ổn mới đóng gói Windows từ đúng phiên bản đã thử. Workflow Windows chỉ chạy thủ công với xác nhận `vps_tested`, không tự chạy khi push. Xem [các bước kiểm thử quên mật khẩu trên VPS](deployment/ACCOUNT-RECOVERY.md#cập-nhật).
 

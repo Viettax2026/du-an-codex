@@ -1,5 +1,7 @@
 # ZaloFlow Windows
 
+Đăng ký mới có bước chờ duyệt. Bản Windows quản lý tài khoản trên chính máy đó; quản trị viên Windows thiết lập chủ ứng dụng đầu tiên, rồi người này duyệt các đăng ký khác trong **Quản lý tài khoản**. Nút Đăng xuất nằm ở góc phải mọi trang. Xem [hướng dẫn duyệt tài khoản](../deployment/ACCOUNT-APPROVAL.md); chỉ đóng gói tính năng này sau khi kiểm thử VPS thành công.
+
 Quy trình phát hành: **cập nhật và kiểm thử trên VPS trước, xác nhận thành công rồi mới đóng gói Windows**. Workflow Windows không tự chạy khi push mã nữa. Sau khi kiểm thử đúng phiên bản mã trên VPS, chủ phần mềm mở **Build Windows desktop → Run workflow**, chọn đúng nhánh/phiên bản đã thử và đánh dấu `vps_tested`. Mặc định chưa xác nhận thì job đóng gói không chạy. Dựng thủ công cũng chỉ thực hiện sau bước kiểm thử VPS. Bản đã dựng trước khi đổi quy trình vẫn còn trên GitHub, không phải bằng chứng phiên bản đó đã được thử trên VPS thật.
 
 Mở `ZaloFlow.exe` để dùng giao diện trong cửa sổ Windows. Bộ lịch chỉ khởi động sau khi cửa sổ hiện ra. Đóng tool chặn lượt mới ngay, chờ lượt hiện tại kết thúc rồi dừng web/bộ lịch/worker QR. Dữ liệu, kết quả và hạn mức lưu trong `%LOCALAPPDATA%\ZaloFlow\instance`; mở lại tiếp tục bước chờ. Thu nhỏ vẫn chạy; máy ngủ/tắt không chạy.

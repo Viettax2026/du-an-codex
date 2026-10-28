@@ -23,7 +23,13 @@ def post(client, path, data=None):
 
 
 def register(client, username='an01'):
-    return post(client, '/register', {'name': 'An', 'username': username, 'password': 'secure-password'})
+    if username == 'admin':
+        result = client.application.test_cli_runner().invoke(args=['reset-admin'], input='secure-password\nsecure-password\n')
+    else:
+        post(client, '/register', {'name': 'An', 'username': username, 'password': 'secure-password'})
+        result = client.application.test_cli_runner().invoke(args=['approve-user', '--username', username])
+    assert result.exit_code == 0, result.output
+    return post(client, '/login', {'username': username, 'password': 'secure-password'})
 
 
 def test_full_workflow_and_persistence(app):

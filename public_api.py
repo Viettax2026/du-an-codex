@@ -81,7 +81,7 @@ def register_public_api(app, db, login_required, manager, parse_phones):
             abort(401, 'Cần khóa API trong header Authorization: Bearer <khóa>.')
         key = db().execute('''SELECT k.id AS key_id,k.scopes,u.id,u.name,u.username FROM api_keys k
             JOIN users u ON u.id=k.user_id WHERE k.token_hash=? AND k.revoked_at IS NULL
-            AND k.expires_at>CURRENT_TIMESTAMP''', (digest(authorization[7:]),)).fetchone()
+            AND k.expires_at>CURRENT_TIMESTAMP AND u.approval_status='approved' ''', (digest(authorization[7:]),)).fetchone()
         if not key:
             abort(401, 'Khóa API không hợp lệ, đã hết hạn hoặc bị thu hồi.')
         g.user, g.api_key_id, g.api_scopes = key, key['key_id'], set(key['scopes'].split(','))

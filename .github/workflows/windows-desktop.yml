@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m pip install -r desktop/requirements.txt pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest tests/test_auth.py tests/test_account_recovery.py tests/test_desktop_runtime.py tests/test_license_system.py -q
+          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_runtime.py tests/test_license_system.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Read public license configuration
         id: license_config

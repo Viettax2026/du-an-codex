@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="auth-card">
+  <div class="brand">Z<span>●</span> ZaloFlow</div>
+  <span class="eyebrow">ĐĂNG KÝ TÀI KHOẢN</span>
+  <h1>Chờ duyệt tài khoản</h1>
+  <p>Quản trị viên cần duyệt đăng ký trước khi bạn có thể đăng nhập và sử dụng ZaloFlow.</p>
+  <div class="notice">{% if desktop_license_enabled %}Liên hệ quản trị viên trên máy Windows đang lưu dữ liệu để duyệt tài khoản. Chủ máy có thể thiết lập quản trị viên đầu tiên theo hướng dẫn sử dụng.{% else %}Vui lòng liên hệ quản trị viên của website và cung cấp tên tài khoản đã đăng ký.{% endif %} Không cần đăng ký lại.</div>
+  <a class="primary button full" href="{{ url_for('login') }}">Trở lại đăng nhập</a>
+</section>
+{% endblock %}

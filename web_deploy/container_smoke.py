@@ -62,6 +62,17 @@ def main():
         csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
         assert any(cookie.name == 'session' and cookie.secure for cookie in cookies)
         with request('/register', dict(csrf=csrf, name='Synthetic smoke user', username='smoke-user', password='synthetic-test-password')) as response:
+            assert response.status == 200 and 'Chờ duyệt tài khoản' in response.read().decode()
+        with request('/login') as response:
+            page = response.read().decode()
+        csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        with request('/login', dict(csrf=csrf, username='smoke-user', password='synthetic-test-password')) as response:
+            assert 'chờ quản trị viên duyệt' in response.read().decode()
+        subprocess.run(['runuser', '-u', name, '--', str(root / '.venv/bin/python'), '-m', 'flask', '--app', 'app',
+                        'approve-user', '--username', 'smoke-user'], cwd=root, env=environment, check=True)
+        with request('/login') as response:
+            csrf = re.search(r'name="csrf" value="([^"]+)"', response.read().decode()).group(1)
+        with request('/login', dict(csrf=csrf, username='smoke-user', password='synthetic-test-password')) as response:
             assert response.status == 200 and 'Synthetic smoke user' in response.read().decode()
         with request('/campaigns') as response:
             assert response.status == 200

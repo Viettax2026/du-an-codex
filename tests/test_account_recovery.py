@@ -158,7 +158,7 @@ def test_recovery_remains_available_when_desktop_license_expires(tmp_path):
     try:
         with runtime.app.app_context():
             connection = runtime.app.extensions['campaign_manager'].db()
-            connection.execute("INSERT INTO users(name,username,password) VALUES ('An','an01',?)",
+            connection.execute("INSERT INTO users(name,username,password,approval_status) VALUES ('An','an01',?,'approved')",
                                (account_recovery.generate_password_hash('secure-password'),))
             connection.commit()
         client = runtime.app.test_client()
@@ -174,6 +174,7 @@ def test_recovery_remains_available_when_desktop_license_expires(tmp_path):
 
 def test_two_simultaneous_resets_cannot_reuse_one_code(app):
     owner = app.test_client(); register(owner); code = create_code(owner)
+    original_version = query(app, 'SELECT auth_version FROM users')[0][0]
     clients = [app.test_client(), app.test_client()]
     tokens = [token(client) for client in clients]
     def submit(index):
@@ -183,7 +184,7 @@ def test_two_simultaneous_resets_cannot_reuse_one_code(app):
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(submit, [0, 1])) == [200, 302]
     assert query(app, 'SELECT * FROM account_recovery_codes') == []
-    assert query(app, 'SELECT auth_version FROM users') == [(1,)]
+    assert query(app, 'SELECT auth_version FROM users') == [(original_version+1,)]
 
 
 def test_web_and_windows_data_do_not_share_codes(app, tmp_path):

@@ -1,7 +1,7 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
 1. Lấy ZaloFlow-Setup-x64.exe trong ZIP tải về, chạy để cài. Giữ tùy chọn tạo shortcut Desktop được chọn. Không cần quyền quản trị.
-2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tạo tài khoản ZaloFlow trong cửa sổ ứng dụng và đăng nhập Zalo bằng QR.
+2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó đăng ký tài khoản ZaloFlow và chờ quản trị viên duyệt trước khi đăng nhập, rồi kết nối Zalo bằng QR.
 3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
 4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
 5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
@@ -25,6 +25,12 @@ Chương trình cài ở %LOCALAPPDATA%\Programs\ZaloFlow. Thư mục hỗ trợ
 Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng tài khoản Windows. Dữ liệu nằm ngoài thư mục chương trình nên được giữ lại, cả khi gỡ cài đặt. Không xóa thư mục dữ liệu. Nếu đang dùng bản ZIP cũ, đóng bản đó trước khi cài; cùng tài khoản Windows sẽ dùng tiếp dữ liệu ở vị trí mặc định.
 
 Gỡ cài đặt không hủy kích hoạt key. Muốn chuyển máy, hủy kích hoạt trong tool trước khi gỡ.
+
+DUYỆT ĐĂNG KÝ VÀ ĐĂNG XUẤT
+- Tài khoản mới chờ quản trị viên duyệt, không tự đăng nhập sau đăng ký.
+- Chủ máy thiết lập quản trị viên đầu tiên bằng quyền Windows, rồi dùng Quản lý tài khoản để duyệt các đăng ký khác. Hướng dẫn:
+  https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-APPROVAL.md
+- Nút Đăng xuất luôn nằm ở góc phải thanh trên cùng. Đăng xuất không xóa dữ liệu hoặc hủy key.
 
 QUÊN MẬT KHẨU ZALOFLOW
 - Khi còn đăng nhập: Bảo mật tài khoản > xác nhận mật khẩu hiện tại > Tạo mã khôi phục > Tải mã khôi phục. Cất tệp riêng tư, không cùng mật khẩu.

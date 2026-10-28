@@ -47,7 +47,7 @@ def test_preview_all_variants_simulation_and_persistent_rotation(app):
     restarted=create_app({'TESTING':True,'DATABASE':app.config['DATABASE'],'SECRET_KEY':'test-only','ZALO_QR_ENABLED':True})
     restarted.extensions['zalo_connector'].message_action=connector.message_action
     new_client=restarted.test_client()
-    with new_client.session_transaction() as session:session['user_id']=1
+    post(new_client,'/login',{'username':'an01','password':'secure-password'})
     post(new_client,'/campaigns/1/prepare-send',{'contact_id':'3','account_id':'1'})
     rows=query(app,'SELECT message,message_styles FROM message_sends ORDER BY id')
     assert [r[0] for r in rows]==['Chào Lan','Dịch vụ Khách 2','Chào Khách 3']
@@ -93,7 +93,7 @@ def test_concurrent_duplicate_preview_advances_only_once(app):
     connector.message_action.side_effect=resolve
     def worker(_):
         client=app.test_client()
-        with client.session_transaction() as session:session['user_id']=1
+        post(client,'/login',{'username':'an01','password':'secure-password'})
         return client.post('/campaigns/1/prepare-send',data={'csrf':token(client),'contact_id':'1','account_id':'1'}).status_code
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert list(pool.map(worker,range(2)))==[302,302]
