@@ -363,6 +363,8 @@ Bản cập nhật sửa lỗi `edit_started_recipient` của phiên bản `5651
 
 ### Ứng dụng Windows: mở tool mới chạy
 
+Thứ tự phát hành: cập nhật và kiểm thử trên VPS thật trước; khi xác nhận ổn mới đóng gói Windows từ đúng phiên bản đã thử. Workflow Windows chỉ chạy thủ công với xác nhận `vps_tested`, không tự chạy khi push. Xem [các bước kiểm thử quên mật khẩu trên VPS](deployment/ACCOUNT-RECOVERY.md#cập-nhật).
+
 Đăng nhập có **Quên mật khẩu?** để đặt mật khẩu mới bằng mã khôi phục dùng một lần. Khi còn đăng nhập, mở **Bảo mật tài khoản** để tạo/tải mã sau khi xác nhận mật khẩu hiện tại. Tài khoản cũ chưa có mã có thể được chủ VPS/quản trị viên Windows cấp mã hỗ trợ 15 phút sau khi xác minh. Đặt lại giữ dữ liệu/tiến độ/key, vô hiệu hóa phiên/mã cũ. Xem [hướng dẫn quên mật khẩu](deployment/ACCOUNT-RECOVERY.md).
 
 Bản Windows có cửa sổ riêng, bộ web nội bộ và bộ lịch hoạt động theo vòng đời cửa sổ. Chỉ bắt đầu lịch khi cửa sổ hiện ra; bấm X chặn lượt mới, chờ lượt đang xử lý kết thúc rồi dừng. Dữ liệu/tiến độ lưu riêng trong `%LOCALAPPDATA%\ZaloFlow\instance`, mở lại tiếp tục bước chờ, không đặt lại lịch sử/hạn mức. Không cài dịch vụ hay tác vụ tự khởi động Windows. Thu nhỏ vẫn chạy; đóng tool/máy ngủ/tắt thì không chạy lịch.

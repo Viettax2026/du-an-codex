@@ -2,32 +2,20 @@ name: Build Windows desktop
 on:
   workflow_dispatch:
     inputs:
+      vps_tested:
+        description: 'Confirm this exact revision has been tested successfully on the VPS before building Windows'
+        required: true
+        type: boolean
+        default: false
       license_config:
         description: 'Public client-config.json from the owner license server (never a private key)'
         required: false
         type: string
-  push:
-    branches: [main]
-    paths:
-      - 'desktop/**'
-      - 'static/**'
-      - 'connector/**'
-      - 'tests/test_desktop_runtime.py'
-      - 'tests/test_license_system.py'
-      - 'runtime_lock.py'
-      - 'license_system/**'
-      - 'app.py'
-      - 'account_recovery.py'
-      - 'tests/test_account_recovery.py'
-      - 'campaign_actions.py'
-      - 'campaign_schedule.py'
-      - 'templates/**'
-      - 'requirements.txt'
-      - '.github/workflows/windows-desktop.yml'
 permissions:
   contents: read
 jobs:
   windows:
+    if: ${{ inputs.vps_tested == true }}
     runs-on: windows-latest
     timeout-minutes: 25
     env:
