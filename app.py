@@ -26,7 +26,7 @@ from campaign_duplicates import save_duplicate_check
 from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
 from account_recovery import initialize_recovery, register_recovery, revoke_recovery
-from account_approval import initialize_approval, register_approval, grant_admin
+from account_approval import initialize_approval, register_approval, grant_admin, create_pending_account
 
 
 def create_app(test_config=None,instance_path=None):
@@ -294,8 +294,7 @@ def create_app(test_config=None,instance_path=None):
                 flash('Tên admin dành cho tài khoản quản trị. Vui lòng chọn tên khác.', 'error')
             else:
                 try:
-                    db().execute("INSERT INTO users(name,username,password,approval_status,role,registered_at) VALUES (?,?,?,'pending','user',CURRENT_TIMESTAMP)",
-                                       (name, username, generate_password_hash(password)))
+                    create_pending_account(db(), name, username, generate_password_hash(password))
                     db().commit()
                     session.clear()
                     flash('Đăng ký thành công. Tài khoản đang chờ quản trị viên duyệt; bạn chưa thể đăng nhập.', 'success')
@@ -971,8 +970,7 @@ def create_app(test_config=None,instance_path=None):
             db().execute('UPDATE users SET password=?,auth_version=auth_version+1 WHERE id=?', (password_hash, user['id']))
             revoke_recovery(db(), user['id'])
         else:
-            db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
-                         ('Admin', 'admin', password_hash))
+            create_pending_account(db(), 'Admin', 'admin', password_hash)
         grant_admin(db(), 'admin')
         db().commit()
         click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')

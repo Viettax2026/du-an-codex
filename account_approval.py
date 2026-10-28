@@ -1,5 +1,6 @@
 """Explicit account approval, separate from Windows license administration."""
 from functools import wraps
+import re
 
 import click
 from flask import abort, flash, g, redirect, render_template, request, url_for
@@ -26,7 +27,19 @@ def initialize_approval(db):
         id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
         actor_id INTEGER REFERENCES users(id), action TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)''')
+    db().executescript('''CREATE TABLE IF NOT EXISTS retired_user_ids (id INTEGER PRIMARY KEY);
+        CREATE TRIGGER IF NOT EXISTS users_prevent_retired_id AFTER INSERT ON users
+        WHEN EXISTS (SELECT 1 FROM retired_user_ids WHERE id=NEW.id)
+        BEGIN SELECT RAISE(ABORT,'Retired account IDs cannot be reused'); END;''')
     db().commit()
+
+
+def create_pending_account(connection, name, username, password_hash):
+    # Allocate in the same write statement. An old browser session or a local
+    # credential directory must never become the identity of a different user.
+    return connection.execute('''INSERT INTO users(id,name,username,password,approval_status,role,registered_at)
+        SELECT coalesce(max(id),0)+1,?,?,?,'pending','user',CURRENT_TIMESTAMP
+        FROM (SELECT id FROM users UNION ALL SELECT id FROM retired_user_ids)''', (name, username, password_hash))
 
 
 def set_approval(connection, user_id, status, actor_id=None):
@@ -58,7 +71,64 @@ def grant_admin(connection, username):
         connection.execute("INSERT INTO account_approval_events(user_id,action) VALUES (?,'grant_admin')", (user['id'],))
 
 
+def delete_empty_test_user(connection, username):
+    """Caller owns the local database; delete only a named, empty test account.
+
+    Keep SQLite foreign keys enabled. Operational data and other users' audit
+    history are never cascaded away to make a deletion succeed.
+    """
+    username = username.strip().lower()
+    if not re.fullmatch(r'test[a-z0-9_.-]{0,60}', username):
+        raise ValueError('Lệnh này chỉ xóa tài khoản thử có tên bắt đầu bằng test.')
+    if not connection.execute('PRAGMA foreign_keys').fetchone()[0]:
+        raise ValueError('Cần bật bảo vệ khóa ngoại trước khi xóa tài khoản.')
+    connection.execute('BEGIN IMMEDIATE')
+    try:
+        user = connection.execute('SELECT id,role FROM users WHERE username=?', (username,)).fetchone()
+        if not user:
+            connection.rollback()
+            return False
+        if user['role'] == 'admin':
+            raise ValueError('Không xóa tài khoản quản trị bằng lệnh xóa tài khoản thử.')
+        def quote(value):
+            return '"' + value.replace('"', '""') + '"'
+        tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        for table in tables:
+            columns = {row['name'] for row in connection.execute('PRAGMA table_info(' + quote(table) + ')')}
+            references = {row['from'] for row in connection.execute('PRAGMA foreign_key_list(' + quote(table) + ')') if row['table'].lower() == 'users'}
+            if 'user_id' in columns:
+                references.add('user_id')
+            for column in references:
+                if (table, column) in {('account_recovery_codes','user_id'), ('account_approval_events','user_id')}:
+                    continue
+                # Own approval events will be removed below; a reference from
+                # another account's history must still prevent deletion.
+                extra = ' AND user_id<>?' if table == 'account_approval_events' and column == 'actor_id' else ''
+                args = (user['id'], user['id']) if extra else (user['id'],)
+                if connection.execute('SELECT 1 FROM ' + quote(table) + ' WHERE ' + quote(column) + '=?' + extra + ' LIMIT 1', args).fetchone():
+                    raise ValueError('Tài khoản còn dữ liệu hoặc liên kết trong ' + table + '. Chưa xóa tài khoản hay dữ liệu nào.')
+        connection.execute('DELETE FROM account_recovery_codes WHERE user_id=?', (user['id'],))
+        connection.execute('DELETE FROM account_approval_events WHERE user_id=?', (user['id'],))
+        connection.execute('INSERT INTO retired_user_ids(id) VALUES (?)', (user['id'],))
+        connection.execute('DELETE FROM users WHERE id=?', (user['id'],))
+        connection.commit()
+        return True
+    except BaseException:
+        connection.rollback()
+        raise
+
+
 def register_approval(app, db, login_required):
+    @app.cli.command('delete-test-user')
+    @click.option('--username', required=True)
+    def delete_test_account(username):
+        """Local VPS owner: delete one empty test account by exact username."""
+        try:
+            deleted = delete_empty_test_user(db(), username)
+        except ValueError as error:
+            raise click.ClickException(str(error)) from error
+        click.echo('Đã xóa tài khoản thử ' + username.strip().lower() + '.' if deleted else 'Không tìm thấy tài khoản thử này; không thay đổi dữ liệu.')
+
     def admin_required(view):
         @wraps(view)
         @login_required

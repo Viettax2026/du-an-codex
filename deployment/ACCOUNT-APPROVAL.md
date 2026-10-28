@@ -30,6 +30,8 @@ Khóa truy cập vô hiệu hóa phiên cũ, chặn khóa API của người dù
 
 ## Tài khoản đã có trước bản cập nhật
 
+Để xóa một tài khoản thử trống, chủ VPS có thể chạy `runuser -u zaloflow -- .venv/bin/flask --app app:create_app delete-test-user --username test12345` trong `/opt/zaloflow` sau khi cập nhật và khởi động lại web bằng `deployment/update.sh`. Lệnh tìm đúng tên, chỉ nhận tên bắt đầu bằng `test`, từ chối tài khoản quản trị hoặc tài khoản còn dữ liệu/liên kết; chỉ xóa người dùng thử cùng mã khôi phục và lịch sử duyệt của chính người đó. Không tự xóa dây chuyền khách hàng/chiến dịch hoặc lịch sử của tài khoản khác. Không tìm thấy thì không thay đổi gì. Mã định danh đã xóa không được cấp lại để phiên đăng nhập cũ không thể truy cập tài khoản đăng ký sau đó. Đây là lệnh CLI của chủ VPS, không phải API công khai.
+
 Các tài khoản cũ giữ trạng thái được phép sử dụng để không làm gián đoạn hoạt động. Chúng không tự có quyền quản trị. Chủ VPS cấp quyền cho đúng tài khoản chủ ứng dụng bằng `grant-admin`, sau đó xem tab **Đã duyệt** và khóa những tài khoản không còn được phép sử dụng. Đăng ký mới sau cập nhật luôn chờ duyệt, kể cả sau khởi động lại hoặc nâng cấp tiếp.
 
 ## Nút Đăng xuất
