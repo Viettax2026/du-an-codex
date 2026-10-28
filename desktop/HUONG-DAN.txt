@@ -26,6 +26,14 @@ Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng t�
 
 Gỡ cài đặt không hủy kích hoạt key. Muốn chuyển máy, hủy kích hoạt trong tool trước khi gỡ.
 
+QUÊN MẬT KHẨU ZALOFLOW
+- Khi còn đăng nhập: Bảo mật tài khoản > xác nhận mật khẩu hiện tại > Tạo mã khôi phục > Tải mã khôi phục. Cất tệp riêng tư, không cùng mật khẩu.
+- Khi quên: chọn Quên mật khẩu?, nhập tài khoản, mã và mật khẩu mới hai lần (10–256 ký tự).
+- Mã dùng một lần; đăng nhập rồi tạo mã mới. Phiên cũ hết hiệu lực; dữ liệu, tiến độ và key giữ nguyên.
+- Tài khoản cũ chưa có mã: nhờ quản trị viên Windows trên chính máy này cấp mã hỗ trợ 15 phút sau khi xác minh. Không xóa dữ liệu hoặc đăng ký lại. Hướng dẫn:
+  https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-RECOVERY.md
+- Tài khoản/mật khẩu/mã của bản web khác bản Windows. Key hoặc mật khẩu Zalo không phải mã khôi phục.
+
 Bộ cài chỉ cần một file EXE để chia sẻ. Ẩn tệp không ngăn được sao chép hoặc trích xuất; quyền sử dụng vẫn được kiểm soát bằng key một máy.
 
 CHUYỂN DỮ LIỆU TỪ VPS

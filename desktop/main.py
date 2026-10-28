@@ -85,6 +85,8 @@ def smoke_check(report,gui=False):
             assert license.allowed(),'Signed activation was not accepted'
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
+            from desktop.smoke_recovery import verify_recovery_flow
+            assert verify_recovery_flow(runtime.url),'Packaged password recovery did not complete'
             if gui:run_window(runtime,smoke=True)
             else:
                 runtime.activate();deadline=time.monotonic()+10
@@ -92,13 +94,21 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True)),encoding='utf-8')
         finally:runtime.stop()
 
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--smoke-test',action='store_true');parser.add_argument('--smoke-gui',action='store_true');parser.add_argument('--smoke-report')
+    parser.add_argument('--support-recovery',metavar='USERNAME',help='Local Windows administrator: issue a one-use recovery code for an existing account.')
     args=parser.parse_args();protect_process_tree()
+    if args.support_recovery:
+        from desktop.recovery import recovery_dialog
+        try:recovery_dialog(args.data_dir or default_data_root(),args.support_recovery)
+        except Exception as error:
+            show_error(str(error) if isinstance(error,RuntimeError) else 'Không tạo được mã hỗ trợ. Kiểm tra thư mục dữ liệu và đóng ZaloFlow trước.')
+            raise SystemExit(1)
+        return
     if args.smoke_test:
         if not args.smoke_report:parser.error('--smoke-report is required')
         # Windowed executables have no stderr. Preserve exceptions and blocked

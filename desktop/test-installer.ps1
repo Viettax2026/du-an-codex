@@ -39,7 +39,7 @@ function Assert-InstalledApp {
         throw 'Installed application smoke test failed.'
     }
     $report = Get-Content $reportPath -Raw | ConvertFrom-Json
-    if (-not $report.ok -or -not $report.stopped -or -not $report.node_available -or -not $report.licensed) { throw 'Incomplete installed app smoke test.' }
+    if (-not $report.ok -or -not $report.stopped -or -not $report.node_available -or -not $report.licensed -or -not $report.password_recovery) { throw 'Incomplete installed app smoke test.' }
 }
 
 $argsInstall = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$appPath`"")

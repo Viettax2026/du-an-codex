@@ -25,6 +25,7 @@ from campaign_limits import save_limits
 from campaign_duplicates import save_duplicate_check
 from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
+from account_recovery import initialize_recovery, register_recovery, revoke_recovery
 
 
 def create_app(test_config=None,instance_path=None):
@@ -134,6 +135,7 @@ def create_app(test_config=None,instance_path=None):
         db().execute('CREATE INDEX IF NOT EXISTS contacts_active_user ON contacts(user_id,deleted_at)')
         db().commit()
         initialize_campaign_actions(db)
+        initialize_recovery(db)
 
     def action_settings():
         if request.form.get('options_present') == 'yes':
@@ -238,8 +240,13 @@ def create_app(test_config=None,instance_path=None):
                 session['csrf'], request.form.get('csrf', '')):
             return 'Phiên làm việc không hợp lệ. Vui lòng tải lại trang.', 400
         if session.get('user_id'):
-            g.user = db().execute('SELECT id, name, username FROM users WHERE id=?',
-                                  (session['user_id'],)).fetchone()
+            user = db().execute('SELECT id, name, username, auth_version FROM users WHERE id=?',
+                                (session['user_id'],)).fetchone()
+            if user and session.get('auth_version', 0) == user['auth_version']:
+                g.user = user
+            else:
+                session.clear()
+                session['csrf'] = secrets.token_hex(24)
 
     @app.after_request
     def headers(response):
@@ -288,7 +295,9 @@ def create_app(test_config=None,instance_path=None):
                     db().commit()
                     session.clear()
                     session['user_id'] = cur.lastrowid
+                    session['auth_version'] = 0
                     session.permanent = True
+                    flash('Đã tạo tài khoản. Vào Bảo mật tài khoản để tạo và lưu mã khôi phục khi quên mật khẩu.', 'success')
                     return redirect(url_for('dashboard'))
                 except sqlite3.IntegrityError:
                     flash('Tài khoản này đã được đăng ký.', 'error')
@@ -302,6 +311,7 @@ def create_app(test_config=None,instance_path=None):
             if user and len(password) <= 256 and check_password_hash(user['password'], password):
                 session.clear()
                 session['user_id'] = user['id']
+                session['auth_version'] = user['auth_version']
                 session.permanent = True
                 return redirect(url_for('dashboard'))
             flash('Tài khoản hoặc mật khẩu chưa đúng.', 'error')
@@ -954,12 +964,15 @@ def create_app(test_config=None,instance_path=None):
         user = db().execute('SELECT id FROM users WHERE username=?', ('admin',)).fetchone()
         password_hash = generate_password_hash(password)
         if user:
-            db().execute('UPDATE users SET password=? WHERE id=?', (password_hash, user['id']))
+            db().execute('UPDATE users SET password=?,auth_version=auth_version+1 WHERE id=?', (password_hash, user['id']))
+            revoke_recovery(db(), user['id'])
         else:
             db().execute('INSERT INTO users(name,username,password) VALUES (?,?,?)',
                          ('Admin', 'admin', password_hash))
         db().commit()
         click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')
+
+    register_recovery(app, db, login_required)
 
     from data_groups import register_data_groups
     register_data_groups(app, db, login_required, parse_phones)

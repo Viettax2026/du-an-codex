@@ -10,6 +10,8 @@ Nâng cấp: đóng ZaloFlow hoàn toàn rồi chạy bộ cài mới trong cùn
 
 Gói không chứa database, mật khẩu hoặc phiên QR từ VPS. Không đồng bộ dữ liệu giữa máy tính và VPS. Muốn chuyển dữ liệu cần dừng bộ lịch VPS, sao lưu đầy đủ `instance` khi web/bộ lịch đã dừng rồi chép vào thư mục dữ liệu của tool đang đóng; xem [hướng dẫn](HUONG-DAN.txt). Không bật hai bộ chạy trên hai bản sao cùng chiến dịch.
 
+**Quên mật khẩu:** khi còn đăng nhập, mở **Bảo mật tài khoản**, xác nhận mật khẩu hiện tại rồi tạo/tải mã khôi phục. Khi quên, chọn **Quên mật khẩu?**, nhập tài khoản, mã và mật khẩu mới. Mã dùng một lần; sau khi dùng cần tạo mã mới. Phiên đăng nhập cũ hết hiệu lực; dữ liệu/tiến độ/key được giữ nguyên. Tài khoản cũ chưa có mã cần quản trị viên Windows trên chính máy đó hỗ trợ; xem [cách khôi phục](../deployment/ACCOUNT-RECOVERY.md). Key không thay cho mã khôi phục.
+
 Bản mới yêu cầu **key sử dụng cho một máy** trước khi tạo tài khoản và chạy chiến dịch. Chủ phần mềm cài máy chủ key, lấy cấu hình **công khai** rồi dựng bản Windows theo [hướng dẫn quản lý bản quyền](../deployment/LICENSES.md). Gói khách không chứa khóa ký riêng. Workflow chưa có cấu hình chỉ kiểm thử, không phát artifact cho khách. Dữ liệu kích hoạt nằm ngoài `instance`, trong `%LOCALAPPDATA%\ZaloFlow\license`; sao chép dữ liệu chiến dịch không chuyển được bản quyền sang máy khác.
 
 Dựng lại trên Windows x64 với Python 3.12, Node.js 22 và Inno Setup 6:

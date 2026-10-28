@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">TÀI KHOẢN CỦA BẠN</span><h1>Bảo mật tài khoản</h1><p class="muted">Chuẩn bị cách lấy lại tài khoản khi quên mật khẩu.</p></div><a class="ghost button" href="{{ url_for('dashboard') }}">Về tổng quan</a></div>
+<div class="security-grid">
+  <section class="panel form-panel">
+    <h2>Mã khôi phục</h2>
+    <p>Tài khoản: <strong>{{ g.user.username }}</strong></p>
+    <p class="badge {{ 'green' if has_code else 'neutral' }}">{{ 'Đã thiết lập mã khôi phục' if has_code else 'Chưa có mã khôi phục' }}</p>
+    {% if recovery_code %}
+    <div class="recovery-issued" role="status">
+      <h3>Lưu mã này ở nơi riêng tư</h3>
+      <p>Mã chỉ hiển thị trong lần tạo này. Hệ thống lưu bản băm, không thể xem lại mã gốc.</p>
+      <code id="issued-recovery-code">{{ recovery_code }}</code>
+      <button class="primary" type="button" data-download-recovery data-username="{{ g.user.username }}" data-source="{{ 'Windows trên máy này' if desktop_license_enabled else 'Web: ' ~ request.host }}">Tải mã khôi phục</button>
+      <p>Mã dùng một lần. Mã cá nhân cũ đã hết hiệu lực.</p>
+    </div>
+    {% endif %}
+    <p>{{ 'Tạo mã mới sẽ thay thế mã cá nhân hiện tại.' if has_code else 'Tạo và lưu mã trước khi bạn cần khôi phục.' }} Không gửi mã cho người khác hoặc lưu cùng mật khẩu.</p>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <label>Xác nhận mật khẩu hiện tại<span class="password-field"><input type="password" name="current_password" required maxlength="256" autocomplete="current-password"><button type="button" class="password-toggle" aria-label="Hiện mật khẩu hiện tại" aria-pressed="false">Hiện</button></span></label>
+      <button class="primary">{{ 'Tạo mã thay thế' if has_code else 'Tạo mã khôi phục' }}</button>
+    </form>
+  </section>
+  <section class="panel form-panel recovery-instructions">
+    <h2>Khi quên mật khẩu</h2>
+    <ol><li>Ở màn hình đăng nhập, chọn <strong>Quên mật khẩu?</strong></li><li>Nhập tài khoản và mã khôi phục đã lưu.</li><li>Đặt mật khẩu mới rồi đăng nhập lại. Các phiên đăng nhập cũ sẽ hết hiệu lực.</li><li>Tạo và lưu mã khôi phục mới để dùng cho lần sau.</li></ol>
+    <div class="notice">Đặt lại mật khẩu giữ nguyên khách hàng, chiến dịch, lịch sử, tiến độ và bản quyền.</div>
+    <p class="muted">Bản Windows và bản web có tài khoản, mật khẩu và mã khôi phục riêng. Mã của bản này không dùng cho bản kia.</p>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='account-security.js') }}" defer></script>
+{% endblock %}

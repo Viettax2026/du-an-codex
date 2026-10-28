@@ -363,6 +363,8 @@ Bản cập nhật sửa lỗi `edit_started_recipient` của phiên bản `5651
 
 ### Ứng dụng Windows: mở tool mới chạy
 
+Đăng nhập có **Quên mật khẩu?** để đặt mật khẩu mới bằng mã khôi phục dùng một lần. Khi còn đăng nhập, mở **Bảo mật tài khoản** để tạo/tải mã sau khi xác nhận mật khẩu hiện tại. Tài khoản cũ chưa có mã có thể được chủ VPS/quản trị viên Windows cấp mã hỗ trợ 15 phút sau khi xác minh. Đặt lại giữ dữ liệu/tiến độ/key, vô hiệu hóa phiên/mã cũ. Xem [hướng dẫn quên mật khẩu](deployment/ACCOUNT-RECOVERY.md).
+
 Bản Windows có cửa sổ riêng, bộ web nội bộ và bộ lịch hoạt động theo vòng đời cửa sổ. Chỉ bắt đầu lịch khi cửa sổ hiện ra; bấm X chặn lượt mới, chờ lượt đang xử lý kết thúc rồi dừng. Dữ liệu/tiến độ lưu riêng trong `%LOCALAPPDATA%\ZaloFlow\instance`, mở lại tiếp tục bước chờ, không đặt lại lịch sử/hạn mức. Không cài dịch vụ hay tác vụ tự khởi động Windows. Thu nhỏ vẫn chạy; đóng tool/máy ngủ/tắt thì không chạy lịch.
 
 Tải gói **ZaloFlow-Setup-Windows-x64** từ artifact của [Build Windows desktop](https://github.com/Viettax2026/du-an-codex/actions/workflows/windows-desktop.yml). Lấy `ZaloFlow-Setup-x64.exe` trong ZIP rồi chạy để cài; bộ cài tạo icon Desktop/Start, cài tệp hỗ trợ trong thư mục ẩn và giữ dữ liệu khi nâng cấp/gỡ. Chỉ cần phát bộ cài EXE cho khách. Ẩn file không ngăn sao chép; quyền sử dụng được kiểm soát bằng key. Bộ kết nối Node/SDK được đóng gói cùng ứng dụng. Cần Windows 10/11 x64, Microsoft Edge WebView2 Runtime và Internet. [Hướng dẫn sử dụng, dựng lại và chuyển dữ liệu VPS](desktop/README.md). Bản Windows không tự sao chép hoặc đồng bộ dữ liệu VPS; nếu chuyển cùng chiến dịch sang PC, dừng bộ lịch VPS trước để tránh hai nơi cùng gửi.

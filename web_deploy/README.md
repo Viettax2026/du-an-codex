@@ -1,5 +1,7 @@
 # ZaloFlow Web — bộ cài cho VPS và domain mới
 
+Đăng nhập có **Quên mật khẩu?** bằng mã khôi phục dùng một lần. Khi còn đăng nhập, mở **Bảo mật tài khoản** để tạo/tải mã. Với tài khoản đã mất mật khẩu và chưa có mã, chủ VPS xác minh rồi cấp mã hỗ trợ 15 phút bằng `runuser -u zaloflow-web -- /opt/zaloflow-web/.venv/bin/flask --app app:create_app issue-recovery-code --username TEN_TAI_KHOAN` (chạy trong `/opt/zaloflow-web`; thay tên dịch vụ/thư mục nếu cài tên khác). Đặt lại giữ dữ liệu và vô hiệu hóa phiên cũ. Xem [hướng dẫn đầy đủ](https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-RECOVERY.md).
+
 Gói `zaloflow-web.zip` chứa mã nguồn web, giao diện, bộ kết nối Zalo và script cài đặt. Mã không gắn với domain/IP cũ. Dùng Ubuntu 24.04 LTS x64 hoặc ARM64; cần Internet để tải Python/Node/thư viện và kết nối Zalo. Bản web có tài khoản, database và bộ chạy lịch riêng; không yêu cầu key Windows.
 
 ## Cài nhanh trên VPS mới
