@@ -5,6 +5,7 @@ import { executeMessageAction } from './message-action.mjs';
 import { lookupFailure } from './lookup-errors.mjs';
 import { actionFailure } from './action-errors.mjs';
 import {assertJoinedGroup} from './scan-action.mjs';
+import {withAttachmentListener} from './attachment-listener.mjs';
 
 let sending = false, partial=false, action='', stage='input';
 const finish = value => { process.stdout.write(JSON.stringify(value)); process.exit(0); };
@@ -22,7 +23,8 @@ try {
   const api = await new Zalo({logging: false, checkUpdate: false}).login(credentials);
   if(input.thread_type===1){stage='lookup';await assertJoinedGroup(api,String(input.uid));}
   stage=action==='resolve'?'lookup':'dispatch';
-  finish(await executeMessageAction(api, input, () => { sending = true; },()=>{partial=true;}));
+  finish(await withAttachmentListener(api,input,
+    ()=>executeMessageAction(api, input, () => { sending = true; },()=>{partial=true;})));
 } catch (error) {
   // An error after dispatch may follow acceptance by Zalo. Never retry automatically.
   finish(action==='resolve'?lookupFailure(error,stage):actionFailure(error,action,stage,sending,partial));

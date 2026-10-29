@@ -59,6 +59,10 @@ def test_public_action_diagnostics_cross_bridge_but_raw_secrets_do_not(tmp_path,
     assert worker.message_action(1,1,'send',uid='123',message='Hi')==dict(state='failed')
     worker=worker_connector(tmp_path/'blocked',monkeypatch,json.dumps(dict(state='lookup_failed',lookup_reason='recipient_blocked',lookup_code='210',message='PRIVATE')))
     assert worker.message_action(1,1,'resolve',phone='0901234567')==dict(state='lookup_failed',lookup_reason='recipient_blocked',lookup_code='210')
+    worker=worker_connector(tmp_path/'pdf',monkeypatch,json.dumps(dict(state='unknown',error_reason='attachment_connection',error_code='ATTACHMENT_LISTENER_CLOSED',message='PRIVATE',cookie='PRIVATE')))
+    assert worker.message_action(1,1,'send',uid='123',message='Contract')==dict(state='unknown',error_reason='attachment_connection',error_code='ATTACHMENT_LISTENER_CLOSED')
+    from campaign_errors import error_description
+    assert error_description(dict(error_reason='attachment_connection'))=='Kênh xác nhận tải tệp Zalo chưa kết nối hoặc đã bị gián đoạn'
 
 
 def test_partial_send_with_refusal_stays_uncertain_and_is_not_retried(app):

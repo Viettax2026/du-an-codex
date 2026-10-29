@@ -8,6 +8,7 @@ ERROR_LABELS={
     'rate_limited':'Zalo đang giới hạn thao tác',
     'session':'Phiên Zalo chưa đăng nhập hoặc đã hết hạn',
     'invalid_response':'Chưa nhận được phản hồi xác nhận hợp lệ từ Zalo',
+    'attachment_connection':'Kênh xác nhận tải tệp Zalo chưa kết nối hoặc đã bị gián đoạn',
     'unavailable':'Không thực hiện được thao tác Zalo',
 }
 

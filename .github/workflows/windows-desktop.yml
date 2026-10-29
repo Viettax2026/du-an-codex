@@ -65,6 +65,12 @@ jobs:
       - name: Build native Windows package
         shell: pwsh
         run: ./desktop/build-windows.ps1 -AllowUnconfigured
+      - name: Test pinned Zalo SDK text and document delivery without live sends
+        shell: pwsh
+        working-directory: connector
+        run: |
+          npm.cmd test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify bundled public license configuration
         if: steps.license_config.outputs.configured == 'true'
         shell: pwsh
