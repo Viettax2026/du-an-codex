@@ -25,7 +25,7 @@ test('scan waits for confirmation and expiry removes QR', () => {
   assert.equal(expired.image, undefined);
 });
 
-test('credentials are encrypted with AES-GCM and written with private permissions', () => {
+test('credentials are encrypted with AES-GCM and use private POSIX permissions where supported', () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'zaloflow-crypto-'));
   try {
     const key = randomBytes(32);
@@ -34,7 +34,10 @@ test('credentials are encrypted with AES-GCM and written with private permission
     const file = path.join(directory, 'session.enc.json');
     const contents = readFileSync(file, 'utf8');
     assert.ok(!contents.includes('sensitive-cookie-value'));
-    assert.equal(statSync(file).mode & 0o777, 0o600);
+    // Windows reports synthetic mode bits, not its filesystem ACL. Keep the
+    // encryption checks on every OS; POSIX mode 0600 is meaningful on Unix.
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.ok(statSync(file).isFile());
     const saved = JSON.parse(contents);
     assert.deepEqual(decryptCredentials(saved, key), credentials);
     const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(saved.iv, 'base64'));

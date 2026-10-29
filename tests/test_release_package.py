@@ -22,6 +22,8 @@ def installer(tmp_path):
 
 def test_release_combines_matching_installer_source_and_instructions_with_checksums(tmp_path):
     source=ROOT/'downloads'/release.CODE_NAME
+    if not source.is_file():
+        pytest.skip('Generated release snapshots are excluded from source-only exports')
     output=tmp_path/'public-release'
     manifest=release.assemble(source,installer(tmp_path),output)
     assert manifest['source_commit']==release.APP_COMMIT and manifest['pdf_live_delivery_confirmed'] is False
@@ -37,6 +39,8 @@ def test_release_combines_matching_installer_source_and_instructions_with_checks
 def test_release_refuses_installer_corruption_or_a_different_source_revision(tmp_path):
     folder=installer(tmp_path)
     code=ROOT/'downloads'/release.CODE_NAME
+    if not code.is_file():
+        pytest.skip('Generated release snapshots are excluded from source-only exports')
     (folder/'SOURCE.txt').write_text('Application source: wrong-commit')
     with pytest.raises(ValueError,match='source'):
         release.assemble(code,folder,tmp_path/'output')
