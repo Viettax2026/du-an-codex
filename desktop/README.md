@@ -1,5 +1,7 @@
 # ZaloFlow Windows
 
+Đợt cập nhật đã được chủ ứng dụng xác nhận kiểm thử VPS: mã `0a819608efffecd3dd4efaaf1a4d41448e2cef36`, hỗ trợ mật khẩu từ 8 ký tự. Mốc phát hành riêng `windows-vps-tested-0a81960` chỉ đóng gói đúng mã này; `SOURCE.txt` trong artifact ghi phiên bản bộ cài và mã nguồn. Ngoài mốc này, quy trình vẫn chạy thủ công với `vps_tested`; đẩy mã lên main không tự đóng gói Windows.
+
 Đăng ký mới có bước chờ duyệt. Bản Windows quản lý tài khoản trên chính máy đó; quản trị viên Windows thiết lập chủ ứng dụng đầu tiên, rồi người này duyệt các đăng ký khác trong **Quản lý tài khoản**. Nút Đăng xuất nằm ở góc phải mọi trang. Xem [hướng dẫn duyệt tài khoản](../deployment/ACCOUNT-APPROVAL.md); chỉ đóng gói tính năng này sau khi kiểm thử VPS thành công.
 
 Quy trình phát hành: **cập nhật và kiểm thử trên VPS trước, xác nhận thành công rồi mới đóng gói Windows**. Workflow Windows không tự chạy khi push mã nữa. Sau khi kiểm thử đúng phiên bản mã trên VPS, chủ phần mềm mở **Build Windows desktop → Run workflow**, chọn đúng nhánh/phiên bản đã thử và đánh dấu `vps_tested`. Mặc định chưa xác nhận thì job đóng gói không chạy. Dựng thủ công cũng chỉ thực hiện sau bước kiểm thử VPS. Bản đã dựng trước khi đổi quy trình vẫn còn trên GitHub, không phải bằng chứng phiên bản đó đã được thử trên VPS thật.

@@ -1,5 +1,10 @@
 name: Build Windows desktop
 on:
+  # One explicit release requested after the owner confirmed VPS testing.
+  # This event builds the pinned application revision below, never the tag's
+  # newer workflow-only commit or future main commits.
+  push:
+    tags: ['windows-vps-tested-0a81960']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -15,13 +20,21 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && github.ref == 'refs/tags/windows-vps-tested-0a81960') }}
     runs-on: windows-latest
     timeout-minutes: 25
     env:
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.sha }}
+      - name: Record tested application revision
+        shell: pwsh
+        run: |
+          $source = git rev-parse HEAD
+          if ('${{ github.event_name }}' -eq 'push' -and $source -ne '0a819608efffecd3dd4efaaf1a4d41448e2cef36') { throw 'The release must build the exact VPS-tested application revision.' }
+          "Application source: $source" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -103,6 +116,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Cannot install Inno Setup 6.' }
           }
           ./desktop/build-installer.ps1 -AppVersion "1.0.${{ github.run_number }}"
+          $source = git rev-parse HEAD
+          "ZaloFlow Windows x64`nApplication source: $source`nInstaller version: 1.0.${{ github.run_number }}`n" | Set-Content desktop/dist/installer/SOURCE.txt -Encoding utf8
       - name: Test installer, shortcuts, upgrade and uninstall on Windows
         shell: pwsh
         run: ./desktop/test-installer.ps1
