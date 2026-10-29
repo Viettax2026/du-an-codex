@@ -61,6 +61,28 @@ def set_approval(connection, user_id, status, actor_id=None):
     return True
 
 
+def approve_pending_desktop_login(connection, user, license):
+    """Called only after password verification in an actual licensed desktop app.
+
+    Recheck identity, status and license under the write lock. Never turn a
+    concurrent password reset, explicit block or rejection into a valid login.
+    """
+    connection.execute('BEGIN IMMEDIATE')
+    try:
+        current = connection.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone()
+        if not current or current['password'] != user['password'] or current['auth_version'] != user['auth_version']:
+            connection.rollback()
+            return None
+        if current['approval_status'] == 'pending' and license.allowed():
+            set_approval(connection, current['id'], 'approved')
+        current = connection.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone()
+        connection.commit()
+        return current
+    except BaseException:
+        connection.rollback()
+        raise
+
+
 def grant_admin(connection, username):
     user = connection.execute('SELECT id,role FROM users WHERE username=?', (username.strip().lower(),)).fetchone()
     if not user:
@@ -141,6 +163,8 @@ def register_approval(app, db, login_required):
 
     @app.get('/registration-pending')
     def registration_pending():
+        if 'desktop_license' in app.extensions:
+            return redirect(url_for('login'))
         return render_template('registration_pending.html')
 
     @app.get('/admin/users')

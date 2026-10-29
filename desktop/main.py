@@ -86,10 +86,7 @@ def smoke_check(report,gui=False):
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
             from desktop.smoke_recovery import verify_recovery_flow
-            def approve_smoke_user(username):
-                result=runtime.app.test_cli_runner().invoke(args=['approve-user','--username',username])
-                assert result.exit_code==0,result.output
-            assert verify_recovery_flow(runtime.url,approve_smoke_user),'Packaged password recovery did not complete'
+            assert verify_recovery_flow(runtime.url),'Packaged self-registration and password recovery did not complete'
             if gui:run_window(runtime,smoke=True)
             else:
                 runtime.activate();deadline=time.monotonic()+10
@@ -97,7 +94,7 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True)),encoding='utf-8')
         finally:runtime.stop()
 
 

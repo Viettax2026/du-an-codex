@@ -29,7 +29,7 @@
   <section class="panel form-panel recovery-instructions">
     <h2>Lấy lại mật khẩu qua email</h2>
     <ol><li>Chọn <strong>Quên mật khẩu?</strong> ở màn hình đăng nhập.</li><li>Nhập tài khoản và email đã xác minh, bấm <strong>Gửi mã qua email</strong>.</li><li>Mở email, nhập mã 5 số rồi đặt mật khẩu mới.</li><li>Đăng nhập lại bằng mật khẩu mới. Các phiên đăng nhập cũ sẽ hết hiệu lực.</li></ol>
-    <div class="notice">Đặt lại mật khẩu giữ nguyên khách hàng, chiến dịch, lịch sử, tiến độ và bản quyền. Tài khoản chờ duyệt vẫn phải được quản trị viên duyệt trước khi đăng nhập.</div>
+    <div class="notice">Đặt lại mật khẩu giữ nguyên khách hàng, chiến dịch, lịch sử, tiến độ và bản quyền. {% if not desktop_license_enabled %}Tài khoản chờ duyệt vẫn phải được quản trị viên duyệt trước khi đăng nhập.{% endif %}</div>
     <p class="muted">Bản Windows và bản web có tài khoản và dữ liệu riêng.</p>
   </section>
   <section class="panel form-panel">

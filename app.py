@@ -27,7 +27,7 @@ from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
 from account_recovery import initialize_recovery, register_recovery, revoke_recovery
 from email_recovery import initialize_email, register_email, normalize_email
-from account_approval import initialize_approval, register_approval, grant_admin, create_pending_account
+from account_approval import initialize_approval, register_approval, grant_admin, create_pending_account, set_approval, approve_pending_desktop_login
 
 
 def create_app(test_config=None,instance_path=None):
@@ -297,16 +297,28 @@ def create_app(test_config=None,instance_path=None):
             else:
                 try:
                     email = normalize_email(request.form.get('email', ''))
-                    created = create_pending_account(db(), name, username, generate_password_hash(password))
+                    password_hash = generate_password_hash(password)
+                    desktop_license = app.extensions.get('desktop_license')
+                    if desktop_license is not None and not desktop_license.allowed():
+                        raise ValueError('Kích hoạt key còn hiệu lực trên máy này trước khi tạo tài khoản.')
+                    created = create_pending_account(db(), name, username, password_hash)
                     db().execute('UPDATE users SET email=? WHERE id=?', (email, created.lastrowid))
+                    if desktop_license is not None:
+                        set_approval(db(), created.lastrowid, 'approved')
+                        if not desktop_license.allowed():
+                            raise ValueError('Key không còn hiệu lực. Kích hoạt lại trước khi tạo tài khoản.')
                     db().commit()
                     session.clear()
+                    if desktop_license is not None:
+                        flash('Đăng ký thành công. Bạn có thể đăng nhập và sử dụng ZaloFlow trên máy này ngay.', 'success')
+                        return redirect(url_for('login'))
                     flash('Đăng ký thành công. Tài khoản đang chờ quản trị viên duyệt; bạn chưa thể đăng nhập.', 'success')
                     return redirect(url_for('registration_pending'))
                 except sqlite3.IntegrityError:
                     db().rollback()
                     flash('Tài khoản này đã được đăng ký.', 'error')
                 except ValueError as error:
+                    db().rollback()
                     flash(str(error), 'error')
         return render_template('auth.html', register=True)
 
@@ -317,7 +329,19 @@ def create_app(test_config=None,instance_path=None):
             password = request.form.get('password', '')
             if user and len(password) <= 256 and check_password_hash(user['password'], password):
                 session.clear()
+                desktop_license = app.extensions.get('desktop_license')
+                if desktop_license is not None and user['approval_status'] == 'pending':
+                    if not desktop_license.allowed():
+                        flash('Kích hoạt key còn hiệu lực để đăng nhập tài khoản trên máy này.', 'error')
+                        return redirect(url_for('desktop_license'))
+                    user = approve_pending_desktop_login(db(), user, desktop_license)
+                    if user is None:
+                        flash('Thông tin đăng nhập đã thay đổi. Vui lòng đăng nhập lại.', 'error')
+                        return redirect(url_for('login'))
                 if user['approval_status'] != 'approved':
+                    if desktop_license is not None and user['approval_status'] == 'pending':
+                        flash('Kích hoạt key còn hiệu lực để đăng nhập tài khoản trên máy này.', 'error')
+                        return redirect(url_for('desktop_license'))
                     flash('Tài khoản đang chờ quản trị viên duyệt.' if user['approval_status'] == 'pending' else 'Tài khoản chưa được phép đăng nhập. Liên hệ quản trị viên để được hỗ trợ.', 'error')
                     return redirect(url_for('login'))
                 session['user_id'] = user['id']

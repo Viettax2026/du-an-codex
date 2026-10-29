@@ -1,7 +1,7 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
 1. Lấy ZaloFlow-Setup-x64.exe trong ZIP tải về, chạy để cài. Giữ tùy chọn tạo shortcut Desktop được chọn. Không cần quyền quản trị.
-2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó đăng ký tài khoản ZaloFlow và chờ quản trị viên duyệt trước khi đăng nhập, rồi kết nối Zalo bằng QR.
+2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tự đăng ký tài khoản ZaloFlow, mật khẩu tối thiểu 8 ký tự, rồi đăng nhập sử dụng ngay và kết nối Zalo bằng QR. Bản Windows không cần duyệt đăng ký.
 3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
 4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
 5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
@@ -26,9 +26,11 @@ Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng t�
 
 Gỡ cài đặt không hủy kích hoạt key. Muốn chuyển máy, hủy kích hoạt trong tool trước khi gỡ.
 
-DUYỆT ĐĂNG KÝ VÀ ĐĂNG XUẤT
-- Tài khoản mới chờ quản trị viên duyệt, không tự đăng nhập sau đăng ký.
-- Chủ máy thiết lập quản trị viên đầu tiên bằng quyền Windows, rồi dùng Quản lý tài khoản để duyệt các đăng ký khác. Hướng dẫn:
+ĐĂNG KÝ VÀ ĐĂNG XUẤT
+- Sau khi kích hoạt key còn hiệu lực, tài khoản mới được dùng ngay sau khi đăng ký và đăng nhập. Không cần thao tác cấp quyền trên VPS hoặc PowerShell.
+- Tài khoản đã đăng ký ở bản cũ nhưng còn chờ duyệt: đăng nhập lại bằng mật khẩu của chính tài khoản đó với key hợp lệ. Giữ nguyên dữ liệu; không cần đăng ký lại.
+- Key chưa kích hoạt/hết hiệu lực không cho tạo tài khoản mới. Tài khoản bị khóa/từ chối rõ ràng không được tự mở khóa bằng đăng nhập.
+- Tài khoản tự tạo có vai trò thường. Nếu chủ máy có nhu cầu quản lý/khóa các tài khoản cục bộ, vẫn có thể cấp quyền quản trị bằng chức năng hỗ trợ riêng. Hướng dẫn:
   https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-APPROVAL.md
 - Nút Đăng xuất luôn nằm ở góc phải thanh trên cùng. Đăng xuất không xóa dữ liệu hoặc hủy key.
 

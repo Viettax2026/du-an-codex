@@ -1,6 +1,8 @@
 # Duyệt đăng ký và đăng xuất
 
-Đăng ký mới tạo tài khoản **Chờ duyệt**, không tự đăng nhập. Chỉ sau khi quản trị viên duyệt, người dùng mới đăng nhập được bằng mật khẩu đã đăng ký. Đặt lại mật khẩu, tạo cookie hoặc gửi thêm trường `role=admin` không thay thế bước duyệt.
+Trên **bản web**, đăng ký mới tạo tài khoản **Chờ duyệt**, không tự đăng nhập. Chỉ sau khi quản trị viên duyệt, người dùng mới đăng nhập được bằng mật khẩu đã đăng ký. Đặt lại mật khẩu, tạo cookie hoặc gửi thêm trường `role=admin` không thay thế bước duyệt.
+
+Trên **tool Windows**, kích hoạt key hợp lệ rồi tự đăng ký và đăng nhập sử dụng ngay, không cần duyệt. Tài khoản chờ duyệt còn từ bản Windows trước được cho phép sử dụng khi đăng nhập đúng mật khẩu với key hợp lệ. Tài khoản bị khóa/từ chối rõ ràng vẫn bị chặn; không tự cấp vai trò quản trị. Việc bỏ bước duyệt chỉ áp dụng trong runtime Windows có bộ kiểm tra license, không áp dụng cho website.
 
 ## Cập nhật VPS và thiết lập quản trị viên
 
@@ -49,9 +51,9 @@ Nút **Đăng xuất** nằm ở góc phải thanh trên cùng, hiện trên m�
 
 Chỉ sau khi VPS được xác nhận hoạt động đúng mới chạy workflow Windows thủ công với `vps_tested`. Cập nhật lần này không tự tạo bộ cài Windows.
 
-## Quản trị viên đầu tiên trên bản Windows sau này
+## Quyền quản trị cục bộ Windows khi chủ máy có nhu cầu
 
-Bản Windows có dữ liệu/tài khoản riêng, không nhận duyệt từ VPS. Sau khi đăng ký tài khoản chủ máy, đóng tool, mở PowerShell bằng quyền quản trị viên Windows trên đúng máy, chạy với bản EXE có tính năng này:
+Bản Windows có dữ liệu/tài khoản riêng, không nhận duyệt từ VPS. Người dùng bình thường không cần các bước dưới đây để đăng ký hoặc sử dụng tool sau khi kích hoạt key. Nếu chủ máy muốn quản lý/khóa các tài khoản cục bộ, sau khi đăng ký tài khoản chủ máy, đóng tool, mở PowerShell bằng quyền quản trị viên Windows trên đúng máy và chạy:
 
 ```powershell
 $zaloData = Join-Path $env:LOCALAPPDATA 'ZaloFlow'
