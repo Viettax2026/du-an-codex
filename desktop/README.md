@@ -1,5 +1,7 @@
 # ZaloFlow Windows
 
+Đợt cập nhật đăng ký dùng ngay của Windows được chủ ứng dụng yêu cầu riêng: mã `f4197288d9334438129e8cb27da45de4acc5f38c`, mốc phát hành `windows-self-registration-f419728`. Quy trình kiểm thử trực tiếp trong EXE và bộ cài phải xác nhận đăng ký không gọi lệnh duyệt. `SOURCE.txt` trong artifact ghi mã nguồn thực tế của bộ cài.
+
 Đợt cập nhật đã được chủ ứng dụng xác nhận kiểm thử VPS: mã `0a819608efffecd3dd4efaaf1a4d41448e2cef36`, hỗ trợ mật khẩu từ 8 ký tự. Mốc phát hành riêng `windows-vps-tested-0a81960` chỉ đóng gói đúng mã này; `SOURCE.txt` trong artifact ghi phiên bản bộ cài và mã nguồn. Ngoài mốc này, quy trình vẫn chạy thủ công với `vps_tested`; đẩy mã lên main không tự đóng gói Windows.
 
 **Bản Windows không cần duyệt đăng ký.** Kích hoạt key còn hiệu lực trên máy này, tạo tài khoản rồi đăng nhập sử dụng ngay; không cần PowerShell hoặc quản trị viên cấp quyền trước. Mật khẩu tối thiểu 8 ký tự. Nếu đã tạo tài khoản ở bản cũ và còn chờ duyệt, chỉ cần đăng nhập bằng đúng mật khẩu với key hợp lệ: hệ thống cho phép sử dụng tài khoản đó, giữ nguyên mật khẩu và dữ liệu. Tài khoản bị quản trị viên khóa/từ chối rõ ràng vẫn bị chặn. Tài khoản tự đăng ký có vai trò thường, không tự nhận quyền quản trị. Nút Đăng xuất ở góc phải mọi trang. Bản web vẫn cần quản trị viên duyệt.

@@ -1,10 +1,10 @@
 name: Build Windows desktop
 on:
-  # One explicit release requested after the owner confirmed VPS testing.
-  # This event builds the pinned application revision below, never the tag's
-  # newer workflow-only commit or future main commits.
+  # Explicit owner-requested releases only. The desktop registration change
+  # follows the owner's newer instruction for Windows; web approval remains
+  # covered by regression tests. Normal main pushes never build Windows.
   push:
-    tags: ['windows-vps-tested-0a81960']
+    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -20,7 +20,7 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && github.ref == 'refs/tags/windows-vps-tested-0a81960') }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728')) }}
     runs-on: windows-latest
     timeout-minutes: 25
     env:
@@ -28,12 +28,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'push' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.sha }}
-      - name: Record tested application revision
+          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.sha }}
+      - name: Record approved release revision
         shell: pwsh
         run: |
           $source = git rev-parse HEAD
-          if ('${{ github.event_name }}' -eq 'push' -and $source -ne '0a819608efffecd3dd4efaaf1a4d41448e2cef36') { throw 'The release must build the exact VPS-tested application revision.' }
+          if ('${{ github.event_name }}' -eq 'push') {
+            switch ('${{ github.ref }}') {
+              'refs/tags/windows-vps-tested-0a81960' { $expectedSource = '0a819608efffecd3dd4efaaf1a4d41448e2cef36' }
+              'refs/tags/windows-self-registration-f419728' { $expectedSource = 'f4197288d9334438129e8cb27da45de4acc5f38c' }
+              default { throw 'Not an owner-approved Windows release.' }
+            }
+            if ($source -ne $expectedSource) { throw 'Release source does not match the approved revision.' }
+          }
           "Application source: $source" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/setup-python@v5
         with:
@@ -48,7 +55,7 @@ jobs:
         run: |
           python -m pip install -r desktop/requirements.txt pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_runtime.py tests/test_license_system.py -q
+          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_registration.py tests/test_desktop_runtime.py tests/test_license_system.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Read public license configuration
         id: license_config
@@ -75,7 +82,7 @@ jobs:
           if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Packaged smoke test timed out.' }
           if ($process.ExitCode -ne 0) { throw 'Packaged smoke test failed.' }
           $report = Get-Content $reportPath -Raw | ConvertFrom-Json
-          if (-not $report.ok -or -not $report.stopped -or -not $report.node_available -or -not $report.licensed -or -not $report.password_recovery) { throw 'Incomplete smoke test.' }
+          if (-not $report.ok -or -not $report.stopped -or -not $report.node_available -or -not $report.licensed -or -not $report.password_recovery -or -not $report.self_registration) { throw 'Incomplete smoke test.' }
           Get-Content $reportPath
       - name: Smoke test native Edge WebView2 window
         shell: pwsh
