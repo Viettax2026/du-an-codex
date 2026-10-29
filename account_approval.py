@@ -99,7 +99,7 @@ def delete_empty_test_user(connection, username):
             if 'user_id' in columns:
                 references.add('user_id')
             for column in references:
-                if (table, column) in {('account_recovery_codes','user_id'), ('account_approval_events','user_id')}:
+                if (table, column) in {('account_recovery_codes','user_id'), ('account_email_codes','user_id'), ('account_approval_events','user_id')}:
                     continue
                 # Own approval events will be removed below; a reference from
                 # another account's history must still prevent deletion.
@@ -108,6 +108,7 @@ def delete_empty_test_user(connection, username):
                 if connection.execute('SELECT 1 FROM ' + quote(table) + ' WHERE ' + quote(column) + '=?' + extra + ' LIMIT 1', args).fetchone():
                     raise ValueError('Tài khoản còn dữ liệu hoặc liên kết trong ' + table + '. Chưa xóa tài khoản hay dữ liệu nào.')
         connection.execute('DELETE FROM account_recovery_codes WHERE user_id=?', (user['id'],))
+        connection.execute('DELETE FROM account_email_codes WHERE user_id=?', (user['id'],))
         connection.execute('DELETE FROM account_approval_events WHERE user_id=?', (user['id'],))
         connection.execute('INSERT INTO retired_user_ids(id) VALUES (?)', (user['id'],))
         connection.execute('DELETE FROM users WHERE id=?', (user['id'],))

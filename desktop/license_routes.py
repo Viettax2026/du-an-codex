@@ -13,7 +13,7 @@ def register_license_routes(app, license):
 
     @app.before_request
     def enforce_desktop_license():
-        if request.endpoint in ('static', 'desktop_license', 'login', 'logout', 'forgot_password', 'account_security', 'registration_pending', 'admin_users', 'admin_user_status'):
+        if request.endpoint in ('static', 'desktop_license', 'login', 'logout', 'forgot_password', 'forgot_password_email', 'account_security', 'account_email', 'registration_pending', 'admin_users', 'admin_user_status'):
             return
         if not license.allowed():
             if request.path.startswith('/api/'):

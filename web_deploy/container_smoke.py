@@ -61,7 +61,7 @@ def main():
                 time.sleep(.2)
         csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
         assert any(cookie.name == 'session' and cookie.secure for cookie in cookies)
-        with request('/register', dict(csrf=csrf, name='Synthetic smoke user', username='smoke-user', password='synthetic-test-password')) as response:
+        with request('/register', dict(csrf=csrf, name='Synthetic smoke user', username='smoke-user', email='smoke@example.com', password='synthetic-test-password')) as response:
             assert response.status == 200 and 'Chờ duyệt tài khoản' in response.read().decode()
         with request('/login') as response:
             page = response.read().decode()

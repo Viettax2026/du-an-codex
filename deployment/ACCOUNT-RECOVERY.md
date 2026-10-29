@@ -1,6 +1,6 @@
 # Quên mật khẩu ZaloFlow
 
-Màn hình đăng nhập có **Quên mật khẩu?** để đặt mật khẩu mới, không hiển thị lại mật khẩu cũ. Hiện tài khoản chưa có email khôi phục đã xác minh hoặc cấu hình gửi mail, nên dùng mã khôi phục. Bản Windows và web có tài khoản/mã riêng.
+Màn hình đăng nhập có **Quên mật khẩu?** để đặt mật khẩu mới, không hiển thị lại mật khẩu cũ. Bản web ưu tiên mã 5 số gửi đến email đã xác minh; xem [cấu hình Gmail và kiểm thử email](EMAIL-RECOVERY.md). Mã khôi phục bên dưới dùng dự phòng khi không truy cập email. Bản Windows và web có tài khoản/mã riêng.
 
 ## Khi còn đăng nhập được
 
@@ -8,7 +8,7 @@ Mở **Bảo mật tài khoản** → xác nhận mật khẩu hiện tại → 
 
 ## Khi quên mật khẩu
 
-Chọn **Quên mật khẩu?**, nhập tài khoản, mã đã lưu và hai lần mật khẩu mới (10–256 ký tự). Thành công sẽ trở về đăng nhập. Tất cả phiên đăng nhập và mã khôi phục cũ của tài khoản hết hiệu lực; đăng nhập lại rồi tạo mã mới.
+Chọn **Quên mật khẩu? → Chưa xác minh email hoặc không nhận được thư? → dùng mã khôi phục dự phòng**, nhập tài khoản, mã đã lưu và hai lần mật khẩu mới (10–256 ký tự). Thành công sẽ trở về đăng nhập. Tất cả phiên đăng nhập và mã khôi phục cũ của tài khoản hết hiệu lực; đăng nhập lại rồi tạo mã mới.
 
 Khách hàng, chiến dịch, lịch sử, tiến độ, hạn mức, phiên Zalo và key được giữ nguyên. Không xóa database hoặc đăng ký tài khoản khác để lấy lại dữ liệu. API token tích hợp và bộ lịch không bị thay đổi bởi đặt lại mật khẩu.
 

@@ -22,7 +22,7 @@ def verify_recovery_flow(url, approve):
 
     assert '/forgot-password' in get(browser, '/login')[1]
     assert 'password-toggle' in get(browser, '/static/account-security.js')[1]
-    post(browser, '/register', dict(name='Recovery smoke', username='recovery-smoke', password='temporary-old-password'))
+    post(browser, '/register', dict(name='Recovery smoke', username='recovery-smoke', email='smoke@example.com', password='temporary-old-password'))
     target, pending = post(browser, '/login', dict(username='recovery-smoke', password='temporary-old-password'))
     assert target.endswith('/login') and 'chờ quản trị viên duyệt' in pending
     approve('recovery-smoke')

@@ -3,7 +3,37 @@
 <div class="page-heading"><div><span class="eyebrow">TÀI KHOẢN CỦA BẠN</span><h1>Bảo mật tài khoản</h1><p class="muted">Chuẩn bị cách lấy lại tài khoản khi quên mật khẩu.</p></div><a class="ghost button" href="{{ url_for('dashboard') }}">Về tổng quan</a></div>
 <div class="security-grid">
   <section class="panel form-panel">
-    <h2>Mã khôi phục</h2>
+    <h2>Email khôi phục mật khẩu</h2>
+    <p>Tài khoản: <strong>{{ g.user.username }}</strong></p>
+    <p>Email: <strong>{{ email_user.email or 'Chưa bổ sung email' }}</strong></p>
+    <p class="badge {{ 'green' if email_user.email_verified else 'neutral' }}">{{ 'Đã xác minh email' if email_user.email_verified else 'Chưa xác minh email' }}</p>
+    <p>Khi quên mật khẩu, hệ thống gửi mã 5 số tới email đã xác minh. Mã có hiệu lực 10 phút và chỉ dùng một lần.</p>
+    {% if not mail_ready %}<div class="notice">Quản trị viên cần cấu hình dịch vụ gửi email trước khi bạn có thể nhận mã.</div>{% endif %}
+    <form method="post" action="{{ url_for('account_email') }}">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <label>Email của bạn<input type="email" name="email" value="{{ email_user.email }}" required maxlength="254" autocomplete="email"></label>
+      <label>Xác nhận mật khẩu hiện tại<span class="password-field"><input type="password" name="current_password" required maxlength="256" autocomplete="current-password"><button type="button" class="password-toggle" aria-label="Hiện mật khẩu để xác minh email" aria-pressed="false">Hiện</button></span></label>
+      <button class="primary" name="action" value="request">Gửi mã xác minh email</button>
+    </form>
+    {% if pending_email %}
+    <form method="post" action="{{ url_for('account_email') }}">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <input type="hidden" name="email" value="{{ pending_email.email }}">
+      <p>Nhập mã đã gửi tới <strong>{{ pending_email.email }}</strong>.</p>
+      <label>Mã xác minh 5 số<input name="code" inputmode="numeric" pattern="[0-9]{5}" minlength="5" maxlength="5" autocomplete="one-time-code" required></label>
+      <button class="primary" name="action" value="verify">Xác minh email</button>
+    </form>
+    {% endif %}
+    <p class="field-hint">Khi đổi email, email cũ vẫn được dùng cho đến khi bạn xác minh email mới.</p>
+  </section>
+  <section class="panel form-panel recovery-instructions">
+    <h2>Lấy lại mật khẩu qua email</h2>
+    <ol><li>Chọn <strong>Quên mật khẩu?</strong> ở màn hình đăng nhập.</li><li>Nhập tài khoản và email đã xác minh, bấm <strong>Gửi mã qua email</strong>.</li><li>Mở email, nhập mã 5 số rồi đặt mật khẩu mới.</li><li>Đăng nhập lại bằng mật khẩu mới. Các phiên đăng nhập cũ sẽ hết hiệu lực.</li></ol>
+    <div class="notice">Đặt lại mật khẩu giữ nguyên khách hàng, chiến dịch, lịch sử, tiến độ và bản quyền. Tài khoản chờ duyệt vẫn phải được quản trị viên duyệt trước khi đăng nhập.</div>
+    <p class="muted">Bản Windows và bản web có tài khoản và dữ liệu riêng.</p>
+  </section>
+  <section class="panel form-panel">
+    <h2>Mã khôi phục dự phòng</h2>
     <p>Tài khoản: <strong>{{ g.user.username }}</strong></p>
     <p class="badge {{ 'green' if has_code else 'neutral' }}">{{ 'Đã thiết lập mã khôi phục' if has_code else 'Chưa có mã khôi phục' }}</p>
     {% if recovery_code %}
@@ -23,8 +53,8 @@
     </form>
   </section>
   <section class="panel form-panel recovery-instructions">
-    <h2>Khi quên mật khẩu</h2>
-    <ol><li>Ở màn hình đăng nhập, chọn <strong>Quên mật khẩu?</strong></li><li>Nhập tài khoản và mã khôi phục đã lưu.</li><li>Đặt mật khẩu mới rồi đăng nhập lại. Các phiên đăng nhập cũ sẽ hết hiệu lực.</li><li>Tạo và lưu mã khôi phục mới để dùng cho lần sau.</li></ol>
+    <h2>Dùng mã dự phòng khi mất email</h2>
+    <ol><li>Ở màn hình đăng nhập, chọn <strong>Quên mật khẩu?</strong> → <strong>dùng mã khôi phục dự phòng</strong>.</li><li>Nhập tài khoản và mã khôi phục đã lưu.</li><li>Đặt mật khẩu mới rồi đăng nhập lại. Các phiên đăng nhập cũ sẽ hết hiệu lực.</li><li>Tạo và lưu mã khôi phục mới để dùng cho lần sau.</li></ol>
     <div class="notice">Đặt lại mật khẩu giữ nguyên khách hàng, chiến dịch, lịch sử, tiến độ và bản quyền.</div>
     <p class="muted">Bản Windows và bản web có tài khoản, mật khẩu và mã khôi phục riêng. Mã của bản này không dùng cho bản kia.</p>
   </section>

@@ -46,6 +46,7 @@ def issue_code(connection, user_id, *, support=False):
 
 def revoke_recovery(connection, user_id):
     connection.execute('DELETE FROM account_recovery_codes WHERE user_id=?', (user_id,))
+    connection.execute('DELETE FROM account_email_codes WHERE user_id=?', (user_id,))
 
 
 def allow_attempt(connection, username, address):
@@ -85,6 +86,8 @@ def client_address(app):
 def register_recovery(app, db, login_required):
     @app.route('/forgot-password', methods=['GET', 'POST'])
     def forgot_password():
+        if request.method == 'GET' and request.args.get('method') != 'code':
+            return render_template('forgot_password_email.html', username='', email='', stage='request')
         username = request.form.get('username', '').strip().lower()[:254]
         if request.method == 'POST':
             if not allow_attempt(db(), username, client_address(app)):
@@ -142,7 +145,11 @@ def register_recovery(app, db, login_required):
             if not valid:
                 flash('Mật khẩu hiện tại chưa đúng. Chưa tạo mã khôi phục mới.', 'error')
         has_code = db().execute("SELECT 1 FROM account_recovery_codes WHERE user_id=? AND kind='personal'", (g.user['id'],)).fetchone() is not None
-        return render_template('account_security.html', page='security', recovery_code=code, has_code=has_code)
+        from email_recovery import mail_ready
+        email_user = db().execute('SELECT email,email_verified FROM users WHERE id=?', (g.user['id'],)).fetchone()
+        pending_email = db().execute("SELECT email FROM account_email_codes WHERE user_id=? AND purpose='verify' AND sent=1 AND expires_at>?", (g.user['id'], int(time.time()))).fetchone()
+        return render_template('account_security.html', page='security', recovery_code=code, has_code=has_code,
+                               email_user=email_user, pending_email=pending_email, mail_ready=mail_ready(app))
 
     @app.cli.command('issue-recovery-code')
     @click.option('--username', required=True, help='Existing account; does not create users.')

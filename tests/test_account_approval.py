@@ -23,7 +23,7 @@ def admin_client(app):
 
 
 def submit(client, username='new-user', **extra):
-    return post(client, '/register', dict(name='New user', username=username, password='secure-password', **extra))
+    return post(client, '/register', dict(name='New user', username=username, password='secure-password', email='new@example.com', **extra))
 
 
 def test_new_account_needs_explicit_approval_and_cannot_promote_itself(app):

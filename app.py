@@ -26,6 +26,7 @@ from campaign_duplicates import save_duplicate_check
 from campaign_details import inline_detail, TABS as DETAIL_TABS
 from campaign_edits import edit_remaining
 from account_recovery import initialize_recovery, register_recovery, revoke_recovery
+from email_recovery import initialize_email, register_email, normalize_email
 from account_approval import initialize_approval, register_approval, grant_admin, create_pending_account
 
 
@@ -138,6 +139,7 @@ def create_app(test_config=None,instance_path=None):
         initialize_campaign_actions(db)
         initialize_recovery(db)
         initialize_approval(db)
+        initialize_email(db)
 
     def action_settings():
         if request.form.get('options_present') == 'yes':
@@ -294,13 +296,18 @@ def create_app(test_config=None,instance_path=None):
                 flash('Tên admin dành cho tài khoản quản trị. Vui lòng chọn tên khác.', 'error')
             else:
                 try:
-                    create_pending_account(db(), name, username, generate_password_hash(password))
+                    email = normalize_email(request.form.get('email', ''))
+                    created = create_pending_account(db(), name, username, generate_password_hash(password))
+                    db().execute('UPDATE users SET email=? WHERE id=?', (email, created.lastrowid))
                     db().commit()
                     session.clear()
                     flash('Đăng ký thành công. Tài khoản đang chờ quản trị viên duyệt; bạn chưa thể đăng nhập.', 'success')
                     return redirect(url_for('registration_pending'))
                 except sqlite3.IntegrityError:
+                    db().rollback()
                     flash('Tài khoản này đã được đăng ký.', 'error')
+                except ValueError as error:
+                    flash(str(error), 'error')
         return render_template('auth.html', register=True)
 
     @app.route('/login', methods=['GET', 'POST'])
@@ -976,6 +983,7 @@ def create_app(test_config=None,instance_path=None):
         click.echo('Đã đặt mật khẩu mới cho tài khoản admin. Dữ liệu hiện có được giữ nguyên.')
 
     register_recovery(app, db, login_required)
+    register_email(app, db, login_required)
     register_approval(app, db, login_required)
 
     from data_groups import register_data_groups
