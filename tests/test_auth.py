@@ -32,6 +32,21 @@ def test_invalid_username(app):
             assert 'user_id' not in session
 
 
+def test_registration_and_login_accept_eight_characters_but_reject_seven(app):
+    client = app.test_client()
+    values = dict(name='An', username='eight-user', email='an@example.com', password='1234567')
+    assert '8 đến 256' in post(client, '/register', values).text
+    values['password'] = 'pass8888'
+    assert 'Chờ duyệt' in post(client, '/register', values).text
+    assert app.test_cli_runner().invoke(args=['approve-user', '--username', 'eight-user']).exit_code == 0
+    post(client, '/login', dict(username='eight-user', password='pass8888'))
+    assert client.get('/account/security').status_code == 200
+    # Browser validation must also accept eight characters at each entry point.
+    for path in ('/login', '/register', '/forgot-password?method=code'):
+        assert 'minlength="10"' not in client.get(path).text
+        assert 'minlength="8"' in client.get(path).text
+
+
 def test_legacy_email_account_migration(tmp_path):
     database = str(tmp_path / 'legacy.sqlite3')
     with sqlite3.connect(database) as conn:
@@ -97,13 +112,13 @@ def test_reset_admin_creates_and_resets_same_account(app):
     post(client, '/contacts', {'name': 'Lan', 'phone': '0901234567'})
     with client.session_transaction() as session:
         user_id = session['user_id']
-    result = runner.invoke(args=['reset-admin'], input='new-password-123\nnew-password-123\n')
+    result = runner.invoke(args=['reset-admin'], input='admin888\nadmin888\n')
     assert result.exit_code == 0
     post(client, '/logout')
     post(client, '/login', {'username': 'admin', 'password': 'first-password'})
     with client.session_transaction() as session:
         assert 'user_id' not in session
-    post(client, '/login', {'username': 'admin', 'password': 'new-password-123'})
+    post(client, '/login', {'username': 'admin', 'password': 'admin888'})
     with client.session_transaction() as session:
         assert session['user_id'] == user_id
     assert 'Lan' in client.get('/contacts').text
@@ -111,7 +126,7 @@ def test_reset_admin_creates_and_resets_same_account(app):
 
 def test_reset_admin_rejects_short_or_mismatched_passwords(app):
     runner = app.test_cli_runner()
-    for value in ['short\nshort\n', 'long-password\ndifferent-password\n']:
+    for value in ['1234567\n1234567\n', 'long-password\ndifferent-password\n']:
         assert runner.invoke(args=['reset-admin'], input=value).exit_code != 0
     with sqlite3.connect(app.config['DATABASE']) as conn:
         assert conn.execute('SELECT count(*) FROM users').fetchone()[0] == 0

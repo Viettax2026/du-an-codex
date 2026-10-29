@@ -136,7 +136,7 @@ Tài khoản cũ `lienhe.viettaxco@gmail.com` được đổi thành `admin` khi
 
 ## Đặt lại mật khẩu admin trên VPS
 
-Chạy `sudo -u zaloflow /opt/zaloflow/.venv/bin/flask --app app:create_app reset-admin` trong `/opt/zaloflow`. Nhập mật khẩu mới hai lần khi được hỏi (không hiển thị khi gõ), từ 10–256 ký tự. Lệnh tạo admin nếu chưa có, hoặc đổi mật khẩu trên chính tài khoản admin hiện có, giữ nguyên dữ liệu. Không truyền mật khẩu trong dòng lệnh.
+Chạy `sudo -u zaloflow /opt/zaloflow/.venv/bin/flask --app app:create_app reset-admin` trong `/opt/zaloflow`. Nhập mật khẩu mới hai lần khi được hỏi (không hiển thị khi gõ), từ 8–256 ký tự. Lệnh tạo admin nếu chưa có, hoặc đổi mật khẩu trên chính tài khoản admin hiện có, giữ nguyên dữ liệu. Không truyền mật khẩu trong dòng lệnh.
 
 ## Menu Hành động chiến dịch
 

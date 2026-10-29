@@ -24,7 +24,7 @@ def create_code(client):
     return re.search(r'<code id="issued-recovery-code">(ZFR-[A-F0-9-]+)</code>', result.text).group(1)
 
 
-def reset(client, username, code, password='a-new-password-123'):
+def reset(client, username, code, password='newpass8'):
     return post(client, '/forgot-password', dict(username=username, recovery_code=code,
         password=password, confirm_password=password))
 
@@ -70,7 +70,7 @@ def test_reset_is_single_use_revokes_sessions_and_preserves_campaign_data(app):
     post(alice, '/login', {'username': 'an01', 'password': 'secure-password'})
     with alice.session_transaction() as session:
         assert 'user_id' not in session
-    post(alice, '/login', {'username': 'an01', 'password': 'a-new-password-123'})
+    post(alice, '/login', {'username': 'an01', 'password': 'newpass8'})
     assert 'Lan' in alice.get('/contacts').text
 
 
@@ -93,9 +93,9 @@ def test_bad_password_confirmation_and_csrf_never_consume_code(app):
     client = app.test_client(); register(client); code = create_code(client)
     post(client, '/logout')
     assert client.post('/forgot-password', data={'username': 'an01', 'recovery_code': code}).status_code == 400
-    assert '10 đến 256' in reset(client, 'an01', code, password='short').text
+    assert '8 đến 256' in reset(client, 'an01', code, password='1234567').text
     result = post(client, '/forgot-password', dict(username='an01', recovery_code=code,
-        password='a-new-password-123', confirm_password='different-password'))
+        password='newpass8', confirm_password='different-password'))
     assert 'chưa trùng nhau' in result.text
     assert len(query(app, 'SELECT * FROM account_recovery_codes')) == 1
     assert 'Đã đặt mật khẩu mới.' in reset(client, 'an01', code).text

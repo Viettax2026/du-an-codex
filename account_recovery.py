@@ -94,8 +94,8 @@ def register_recovery(app, db, login_required):
                 flash('Bạn đã thử nhiều lần. Vui lòng chờ 15 phút rồi thử lại.', 'error')
                 return render_template('forgot_password.html', username=username), 429
             password = request.form.get('password', '')
-            if not 10 <= len(password) <= 256:
-                flash('Mật khẩu mới phải từ 10 đến 256 ký tự.', 'error')
+            if not 8 <= len(password) <= 256:
+                flash('Mật khẩu mới phải từ 8 đến 256 ký tự.', 'error')
             elif password != request.form.get('confirm_password', ''):
                 flash('Hai mật khẩu chưa trùng nhau. Vui lòng nhập lại.', 'error')
             else:

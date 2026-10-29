@@ -290,8 +290,8 @@ def create_app(test_config=None,instance_path=None):
     def register():
         if request.method == 'POST':
             name, username, password = request.form.get('name', '').strip(), request.form.get('username', '').strip().lower(), request.form.get('password', '')
-            if not name or len(name) > 100 or not re.fullmatch(r'[a-z0-9_.-]{3,64}', username) or not 10 <= len(password) <= 256:
-                flash('Nhập họ tên, tài khoản từ 3 đến 64 ký tự (chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang) và mật khẩu từ 10 đến 256 ký tự.', 'error')
+            if not name or len(name) > 100 or not re.fullmatch(r'[a-z0-9_.-]{3,64}', username) or not 8 <= len(password) <= 256:
+                flash('Nhập họ tên, tài khoản từ 3 đến 64 ký tự (chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang) và mật khẩu từ 8 đến 256 ký tự.', 'error')
             elif username == 'admin':
                 flash('Tên admin dành cho tài khoản quản trị. Vui lòng chọn tên khác.', 'error')
             else:
@@ -969,8 +969,8 @@ def create_app(test_config=None,instance_path=None):
     @click.password_option(prompt='Mật khẩu mới cho admin', confirmation_prompt='Nhập lại mật khẩu mới')
     def reset_admin(password):
         """Create admin or reset its password while preserving existing data."""
-        if not 10 <= len(password) <= 256:
-            raise click.ClickException('Mật khẩu phải từ 10 đến 256 ký tự.')
+        if not 8 <= len(password) <= 256:
+            raise click.ClickException('Mật khẩu phải từ 8 đến 256 ký tự.')
         user = db().execute('SELECT id FROM users WHERE username=?', ('admin',)).fetchone()
         password_hash = generate_password_hash(password)
         if user:

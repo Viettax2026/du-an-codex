@@ -204,8 +204,8 @@ def register_email(app, db, login_required):
                     flash('Nếu tài khoản và email đã xác minh khớp nhau, mã 5 số sẽ được gửi tới email của bạn. Mã có hiệu lực 10 phút; chờ ít nhất 60 giây trước khi gửi lại. Kiểm tra cả thư rác.', 'success')
                 elif action == 'reset':
                     password = request.form.get('password', '')
-                    if not 10 <= len(password) <= 256:
-                        raise ValueError('Mật khẩu mới phải từ 10 đến 256 ký tự.')
+                    if not 8 <= len(password) <= 256:
+                        raise ValueError('Mật khẩu mới phải từ 8 đến 256 ký tự.')
                     if password != request.form.get('confirm_password', ''):
                         raise ValueError('Hai mật khẩu chưa trùng nhau. Vui lòng nhập lại.')
                     if consume_code(app, db(), username, email, request.form.get('code', '')[:100], 'reset', client_address(app), password=password):

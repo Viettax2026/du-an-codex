@@ -8,7 +8,7 @@ Mở **Bảo mật tài khoản** → xác nhận mật khẩu hiện tại → 
 
 ## Khi quên mật khẩu
 
-Chọn **Quên mật khẩu? → Chưa xác minh email hoặc không nhận được thư? → dùng mã khôi phục dự phòng**, nhập tài khoản, mã đã lưu và hai lần mật khẩu mới (10–256 ký tự). Thành công sẽ trở về đăng nhập. Tất cả phiên đăng nhập và mã khôi phục cũ của tài khoản hết hiệu lực; đăng nhập lại rồi tạo mã mới.
+Chọn **Quên mật khẩu? → Chưa xác minh email hoặc không nhận được thư? → dùng mã khôi phục dự phòng**, nhập tài khoản, mã đã lưu và hai lần mật khẩu mới (8–256 ký tự). Thành công sẽ trở về đăng nhập. Tất cả phiên đăng nhập và mã khôi phục cũ của tài khoản hết hiệu lực; đăng nhập lại rồi tạo mã mới.
 
 Khách hàng, chiến dịch, lịch sử, tiến độ, hạn mức, phiên Zalo và key được giữ nguyên. Không xóa database hoặc đăng ký tài khoản khác để lấy lại dữ liệu. API token tích hợp và bộ lịch không bị thay đổi bởi đặt lại mật khẩu.
 

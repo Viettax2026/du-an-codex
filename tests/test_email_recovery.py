@@ -37,7 +37,7 @@ def send_reset(client, email='an@example.com', username='an01'):
 
 def reset(client, code, email='an@example.com', username='an01', **extra):
     return post(client, '/forgot-password/email', dict(action='reset', username=username, email=email, code=code,
-        password='changed-password-123', confirm_password='changed-password-123', **extra))
+        password='newpass8', confirm_password='newpass8', **extra))
 
 
 def clear_cooldown(app):
@@ -96,7 +96,7 @@ def test_reset_single_use_invalidates_all_sessions_codes_and_keeps_data(app, out
     assert other.get('/account/security').status_code == 302
     assert client.get('/contacts').status_code == 302
     assert 'không hợp lệ' in reset(client,code).text
-    post(client,'/login',dict(username='an01',password='changed-password-123'))
+    post(client,'/login',dict(username='an01',password='newpass8'))
     assert 'Keep customer' in client.get('/contacts').text
 
 
@@ -185,7 +185,7 @@ def test_reset_does_not_approve_blocked_or_pending_account(app,outbox):
     with sqlite3.connect(app.config['DATABASE']) as connection:
         connection.execute("UPDATE users SET approval_status='pending' WHERE id=1")
     assert 'Đã đặt mật khẩu mới.' in reset(client,code).text
-    assert 'chờ quản trị viên duyệt' in post(client,'/login',dict(username='an01',password='changed-password-123')).text
+    assert 'chờ quản trị viên duyệt' in post(client,'/login',dict(username='an01',password='newpass8')).text
 
 
 def test_csrf_wrong_password_and_bad_password_never_change_email_or_consume_code(app,outbox):
@@ -193,8 +193,8 @@ def test_csrf_wrong_password_and_bad_password_never_change_email_or_consume_code
     clear_cooldown(app); send_reset(client); code=outbox[-1][1]
     assert client.post('/forgot-password/email',data=dict(action='reset',code=code)).status_code==400
     assert client.post('/account/security/email',data=dict(email='other@example.com')).status_code==400
-    response=post(client,'/forgot-password/email',dict(action='reset',username='an01',email='an@example.com',code=code,password='short',confirm_password='short'))
-    assert '10 đến 256' in response.text
+    response=post(client,'/forgot-password/email',dict(action='reset',username='an01',email='an@example.com',code=code,password='1234567',confirm_password='1234567'))
+    assert '8 đến 256' in response.text
     assert query(app,'SELECT attempts FROM account_email_codes')==[(0,)]
     assert 'Đã đặt mật khẩu mới.' in reset(client,code).text
 
