@@ -8,10 +8,10 @@ import shutil
 import subprocess
 import zipfile
 
-APP_COMMIT = 'd8c9ef3133b6488e159f8edeb8586ed99233d2c9'
+APP_COMMIT = '73f38a058680535486990dfcc1a4890ae4e2726e'
 CODE_NAME = 'ZaloFlow-toan-bo-code-va-cai-VPS-2026-10-30.zip'
 FULL_NAME = 'ZaloFlow-code-web-va-tool-Windows-2026-10-30.zip'
-TAG = 'windows-owner-package-20261030'
+TAG = 'windows-owner-package-20261030-r2'
 
 
 def digest(path):

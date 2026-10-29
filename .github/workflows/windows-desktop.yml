@@ -4,7 +4,7 @@ on:
   # follows the owner's newer instruction for Windows; web approval remains
   # covered by regression tests. Normal main pushes never build Windows.
   push:
-    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030']
+    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030-r2']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -20,7 +20,7 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030')) }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030-r2')) }}
     permissions:
       contents: write
     runs-on: windows-latest
@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030' && 'd8c9ef3133b6488e159f8edeb8586ed99233d2c9' || github.sha }}
+          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' && '73f38a058680535486990dfcc1a4890ae4e2726e' || github.sha }}
           persist-credentials: false
       - name: Record approved release revision
         shell: pwsh
@@ -40,7 +40,7 @@ jobs:
             switch ('${{ github.ref }}') {
               'refs/tags/windows-vps-tested-0a81960' { $expectedSource = '0a819608efffecd3dd4efaaf1a4d41448e2cef36' }
               'refs/tags/windows-self-registration-f419728' { $expectedSource = 'f4197288d9334438129e8cb27da45de4acc5f38c' }
-              'refs/tags/windows-owner-package-20261030' { $expectedSource = 'd8c9ef3133b6488e159f8edeb8586ed99233d2c9' }
+              'refs/tags/windows-owner-package-20261030-r2' { $expectedSource = '73f38a058680535486990dfcc1a4890ae4e2726e' }
               default { throw 'Not an owner-approved Windows release.' }
             }
             if ($source -ne $expectedSource) { throw 'Release source does not match the approved revision.' }
@@ -54,6 +54,28 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: connector/package-lock.json
+      - name: Test pinned Zalo SDK text and document delivery without live sends
+        shell: pwsh
+        working-directory: connector
+        run: |
+          npm.cmd ci --omit=dev --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sdkLog = Join-Path $env:RUNNER_TEMP 'zaloflow-sdk-tests.log'
+          $ErrorActionPreference = 'Continue'
+          npm.cmd test -- --test-reporter=tap 2>&1 | Tee-Object -FilePath $sdkLog
+          $sdkExit = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          '### Offline pinned SDK tests' >> $env:GITHUB_STEP_SUMMARY
+          '```text' >> $env:GITHUB_STEP_SUMMARY
+          Get-Content $sdkLog >> $env:GITHUB_STEP_SUMMARY
+          '```' >> $env:GITHUB_STEP_SUMMARY
+          if ($sdkExit -ne 0) {
+            $sdkDiagnostic = Get-Content $sdkLog -Raw
+            if ($sdkDiagnostic.Length -gt 50000) { $sdkDiagnostic = $sdkDiagnostic.Substring($sdkDiagnostic.Length - 50000) }
+            $sdkDiagnostic = $sdkDiagnostic.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Offline SDK diagnostics::$sdkDiagnostic"
+            exit $sdkExit
+          }
       - name: Install desktop dependencies and test Windows lifecycle
         shell: pwsh
         run: |
@@ -69,12 +91,6 @@ jobs:
       - name: Build native Windows package
         shell: pwsh
         run: ./desktop/build-windows.ps1 -AllowUnconfigured
-      - name: Test pinned Zalo SDK text and document delivery without live sends
-        shell: pwsh
-        working-directory: connector
-        run: |
-          npm.cmd test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify bundled public license configuration
         if: steps.license_config.outputs.configured == 'true'
         shell: pwsh
@@ -139,7 +155,7 @@ jobs:
         shell: pwsh
         run: ./desktop/test-installer.ps1
       - name: Prepare owner-requested complete public download
-        if: github.ref == 'refs/tags/windows-owner-package-20261030'
+        if: github.ref == 'refs/tags/windows-owner-package-20261030-r2'
         shell: pwsh
         env:
           RELEASE_WORKFLOW_REF: ${{ github.sha }}
@@ -160,12 +176,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish complete code and Windows installer for direct public download
-        if: github.ref == 'refs/tags/windows-owner-package-20261030'
+        if: github.ref == 'refs/tags/windows-owner-package-20261030-r2'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $releaseTag = 'windows-owner-package-20261030'
+          $releaseTag = 'windows-owner-package-20261030-r2'
           $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-public-release'
           $draft = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>$null
           $exists = $LASTEXITCODE -eq 0
