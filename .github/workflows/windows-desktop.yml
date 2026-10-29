@@ -4,7 +4,7 @@ on:
   # follows the owner's newer instruction for Windows; web approval remains
   # covered by regression tests. Normal main pushes never build Windows.
   push:
-    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728']
+    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -20,7 +20,9 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728')) }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030')) }}
+    permissions:
+      contents: write
     runs-on: windows-latest
     timeout-minutes: 25
     env:
@@ -28,7 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.sha }}
+          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030' && 'd8c9ef3133b6488e159f8edeb8586ed99233d2c9' || github.sha }}
+          persist-credentials: false
       - name: Record approved release revision
         shell: pwsh
         run: |
@@ -37,6 +40,7 @@ jobs:
             switch ('${{ github.ref }}') {
               'refs/tags/windows-vps-tested-0a81960' { $expectedSource = '0a819608efffecd3dd4efaaf1a4d41448e2cef36' }
               'refs/tags/windows-self-registration-f419728' { $expectedSource = 'f4197288d9334438129e8cb27da45de4acc5f38c' }
+              'refs/tags/windows-owner-package-20261030' { $expectedSource = 'd8c9ef3133b6488e159f8edeb8586ed99233d2c9' }
               default { throw 'Not an owner-approved Windows release.' }
             }
             if ($source -ne $expectedSource) { throw 'Release source does not match the approved revision.' }
@@ -134,6 +138,20 @@ jobs:
       - name: Test installer, shortcuts, upgrade and uninstall on Windows
         shell: pwsh
         run: ./desktop/test-installer.ps1
+      - name: Prepare owner-requested complete public download
+        if: github.ref == 'refs/tags/windows-owner-package-20261030'
+        shell: pwsh
+        env:
+          RELEASE_WORKFLOW_REF: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$env:RELEASE_WORKFLOW_REF"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch release packaging metadata.' }
+          $packager = Join-Path $env:RUNNER_TEMP 'zaloflow-package-release.py'
+          $env:ZALOFLOW_RELEASE_PACKAGER = $packager
+          python -c "import os,pathlib,subprocess; pathlib.Path(os.environ['ZALOFLOW_RELEASE_PACKAGER']).write_bytes(subprocess.check_output(['git','show',os.environ['RELEASE_WORKFLOW_REF']+':release_tools/package_windows.py']))"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot load release packaging tools.' }
+          python $packager --workflow-ref "$env:RELEASE_WORKFLOW_REF" --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-release"
+          if ($LASTEXITCODE -ne 0) { throw 'Release archive failed integrity/source validation.' }
       - uses: actions/upload-artifact@v4
         if: steps.license_config.outputs.configured == 'true'
         with:
@@ -141,3 +159,25 @@ jobs:
           path: desktop/dist/installer/
           if-no-files-found: error
           retention-days: 30
+      - name: Publish complete code and Windows installer for direct public download
+        if: github.ref == 'refs/tags/windows-owner-package-20261030'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $releaseTag = 'windows-owner-package-20261030'
+          $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-public-release'
+          $draft = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>$null
+          $exists = $LASTEXITCODE -eq 0
+          if ($exists) {
+            if ($draft -ne 'true') { throw 'This release is already public; do not overwrite published files.' }
+          } else {
+            gh release create $releaseTag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title 'ZaloFlow 30/10/2026 - Ma nguon va tool Windows' --notes-file "$releaseFolder/RELEASE-NOTES.md"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot create release draft.' }
+          }
+          $assets = @(Get-ChildItem $releaseFolder -File | Where-Object { $_.Name -ne 'RELEASE-NOTES.md' } | ForEach-Object { $_.FullName })
+          gh release upload $releaseTag @assets --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot upload release files.' }
+          gh release edit $releaseTag --draft=false --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot publish the checked release.' }
+          gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json url,assets
