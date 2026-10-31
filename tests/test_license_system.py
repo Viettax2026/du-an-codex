@@ -259,6 +259,86 @@ def test_owner_admin_requires_login_csrf_and_reauth_after_password_change(author
     assert not authority.folder.joinpath('admin-password.txt').exists()
 
 
+def test_delete_revoked_license_removes_credentials_and_preserves_other_keys(authority):
+    removed = authority.issue('Remove')
+    kept = authority.issue('Keep')
+    activation = authority.exchange('activate', DEVICE_A, removed['key'])
+    other = authority.exchange('activate', DEVICE_B, kept['key'])
+    signing_key = authority.key_path.read_bytes()
+    admin_epoch = authority.setting('admin_epoch')
+    authority.manage(removed['id'], 'revoke')
+    authority.manage(removed['id'], 'delete')
+    assert [row['id'] for row in authority.list_licenses()] == [kept['id']]
+    with authority.connection() as db:
+        assert db.execute('SELECT count(*) FROM activations WHERE license_id=?', (removed['id'],)).fetchone()[0] == 0
+        assert db.execute('SELECT count(*) FROM licenses WHERE key_hash=?', (secret_hash(removed['key']),)).fetchone()[0] == 0
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+    with pytest.raises(LicenseError):
+        authority.exchange('activate', DEVICE_A, removed['key'])
+    with pytest.raises(ActivationInvalid):
+        authority.exchange('refresh', DEVICE_A, activation['activation_token'])
+    with pytest.raises(LicenseError, match='Không tìm thấy'):
+        authority.manage(removed['id'], 'extend')
+    assert authority.exchange('refresh', DEVICE_B, other['activation_token'])['lease']
+    assert authority.key_path.read_bytes() == signing_key
+    assert authority.setting('admin_epoch') == admin_epoch
+
+
+@pytest.mark.parametrize('expired', [False, True])
+def test_delete_requires_revocation_even_for_expired_keys(authority, expired):
+    issued = authority.issue('Keep', now=1 if expired else None)
+    with pytest.raises(LicenseError, match='Chỉ được xóa key đã thu hồi'):
+        authority.manage(issued['id'], 'delete')
+    assert authority.list_licenses()[0]['id'] == issued['id']
+    assert not authority.setting('license_id_high_water')
+
+
+def test_deleted_license_ids_are_never_reused_after_restarting_authority(authority):
+    first = authority.issue('First')
+    second = authority.issue('Second')
+    for issued in (second, first):
+        authority.manage(issued['id'], 'revoke')
+        authority.manage(issued['id'], 'delete')
+    assert not authority.list_licenses()
+    reopened = Authority(authority.folder)
+    third = reopened.issue('Third')
+    assert third['id'] > second['id']
+    reopened.manage(third['id'], 'revoke')
+    reopened.manage(third['id'], 'delete')
+    assert reopened.issue('Fourth')['id'] > third['id']
+
+
+def test_owner_delete_requires_session_csrf_confirmation_and_revoked_state(authority):
+    issued = authority.issue('Remove')
+    kept = authority.issue('Keep')
+    authority.manage(issued['id'], 'revoke')
+    app = create_license_app(authority.folder)
+    client = app.test_client()
+    form = dict(action='delete', license_id=issued['id'], confirm_delete='1')
+    assert client.get('/admin', query_string=form).status_code == 302
+    # A valid CSRF token by itself never authenticates an owner.
+    assert client.post('/admin', data=dict(form, csrf=admin_csrf(client))).status_code == 302
+    assert len(authority.list_licenses()) == 2
+    password = authority.folder.joinpath('admin-password.txt').read_text().strip()
+    client.post('/admin/login', data=dict(csrf=admin_csrf(client), password=password))
+    csrf = admin_csrf(client, '/admin')
+    page = client.get('/admin').text
+    assert page.count('value="delete"') == 1  # Only the revoked row offers deletion.
+    assert client.get('/admin', query_string=form).status_code == 200
+    assert client.post('/admin', data=form).status_code == 400
+    response = client.post('/admin', data=dict(csrf=csrf, action='delete', license_id=issued['id']))
+    assert 'Vui lòng xác nhận' in response.text
+    response = client.post('/admin', data=dict(form, csrf=csrf, license_id=kept['id']))
+    assert 'Chỉ được xóa key đã thu hồi' in response.text
+    assert len(authority.list_licenses()) == 2
+    response = client.post('/admin', data=dict(form, csrf=csrf), follow_redirects=True)
+    assert response.status_code == 200 and 'Đã xóa vĩnh viễn key đã thu hồi' in response.text
+    assert 'value="delete"' not in response.text
+    assert [row['id'] for row in authority.list_licenses()] == [kept['id']]
+    response = client.post('/admin', data=dict(form, csrf=csrf), follow_redirects=True)
+    assert 'Không tìm thấy bản quyền' in response.text
+
+
 def test_expired_license_blocks_guard_without_consuming_attempt_or_preview(app, authority, clock, tmp_path):
     license = make_client(tmp_path, authority, clock)
     license.activate(authority.issue('A', now=clock.wall)['key'])

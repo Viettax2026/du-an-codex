@@ -58,8 +58,11 @@ def register_admin(app, authority):
                     issued = authority.issue(request.form.get('customer', ''), int(request.form.get('days', '30')), seats=1)
                     flash('Đã tạo key. Sao chép ngay: hệ thống chỉ lưu mã kiểm tra, không lưu lại key gốc.')
                 else:
+                    if action == 'delete' and request.form.get('confirm_delete') != '1':
+                        raise LicenseError('Vui lòng xác nhận xóa vĩnh viễn key đã thu hồi.')
                     authority.manage(int(request.form.get('license_id', '0')), action, int(request.form.get('days', '30')))
-                    flash({'revoke': 'Đã thu hồi key.', 'extend': 'Đã gia hạn key.', 'reset-devices': 'Đã hủy các máy đang kích hoạt.'}[action])
+                    flash({'revoke': 'Đã thu hồi key.', 'extend': 'Đã gia hạn key.', 'reset-devices': 'Đã hủy các máy đang kích hoạt.',
+                           'delete': 'Đã xóa vĩnh viễn key đã thu hồi và các kích hoạt của key này.'}[action])
                     return redirect(url_for('admin_panel'))
             except (LicenseError, ValueError) as error:
                 flash(str(error) or 'Thông tin không hợp lệ.')

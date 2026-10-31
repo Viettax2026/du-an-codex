@@ -1,4 +1,4 @@
-"""No customer login can administer this database; administration is local CLI only."""
+"""License authority; administration is restricted to the owner web UI and CLI."""
 import hashlib
 import json
 import os
@@ -105,8 +105,14 @@ class Authority:
             raise LicenseError('Nhập tên khách hàng, hạn dùng 1–36500 ngày và số máy 1–100.')
         key = 'ZF-' + secrets.token_urlsafe(24)
         with self.connection() as db:
-            cur = db.execute('INSERT INTO licenses(key_hash,customer,expires_at,seats,created_at) VALUES(?,?,?,?,?)',
-                             (secret_hash(key), customer.strip(), now + days * 86400, seats, now))
+            db.execute('BEGIN IMMEDIATE')
+            # Signed leases carry license IDs. Never reuse one after deletion,
+            # including when the owner has removed every license in the list.
+            highest = db.execute('SELECT coalesce(max(id),0) FROM licenses').fetchone()[0]
+            retired = db.execute("SELECT value FROM settings WHERE name='license_id_high_water'").fetchone()
+            license_id = max(highest, int(retired['value']) if retired else 0) + 1
+            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at) VALUES(?,?,?,?,?,?)',
+                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now))
         return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats)
 
     def manage(self, license_id, action, days=30, now=None):
@@ -124,6 +130,15 @@ class Authority:
                 db.execute('UPDATE licenses SET revoked=0,expires_at=? WHERE id=?', (max(now, row['expires_at']) + days * 86400, license_id))
             elif action == 'reset-devices':
                 db.execute('UPDATE activations SET active=0 WHERE license_id=?', (license_id,))
+            elif action == 'delete':
+                if not row['revoked']:
+                    raise LicenseError('Chỉ được xóa key đã thu hồi. Hãy thu hồi key trước.')
+                highest = db.execute('SELECT max(id) FROM licenses').fetchone()[0]
+                db.execute("""INSERT INTO settings(name,value) VALUES('license_id_high_water',?)
+                    ON CONFLICT(name) DO UPDATE SET value=max(CAST(settings.value AS INTEGER),CAST(excluded.value AS INTEGER))""",
+                           (highest,))
+                db.execute('DELETE FROM activations WHERE license_id=?', (license_id,))
+                db.execute('DELETE FROM licenses WHERE id=?', (license_id,))
             else:
                 raise LicenseError('Thao tác không hợp lệ.')
 
