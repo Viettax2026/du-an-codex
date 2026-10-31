@@ -1,14 +1,97 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản lý bản quyền ZaloFlow</title><style>body{font:16px system-ui;max-width:1200px;margin:32px auto;padding:16px;color:#173053}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #dce5ef;text-align:left}button,input{font:inherit;padding:8px;margin:4px}form{margin:12px 0}input[readonly]{width:80%}.key{padding:20px;background:#e5f6ef}</style></head><body>
-<h1>Quản lý bản quyền ZaloFlow</h1>
-{% for message in get_flashed_messages() %}<p role="status">{{ message }}</p>{% endfor %}
-{% if issued %}<section class="key"><h2>Key vừa tạo — #{{ issued.id }}</h2><input readonly aria-label="Key vừa tạo" value="{{ issued.key }}"><p>Sao chép key và gửi riêng cho khách hàng. Key dùng trên 1 máy, có thể chuyển máy sau khi hủy kích hoạt.</p></section>{% endif %}
-<h2>Cấp key mới</h2><form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="issue"><label>Khách hàng <input name="customer" required maxlength="150"></label><label>Số ngày từ lúc cấp <input name="days" type="number" min="1" max="36500" value="30" required></label><button>Tạo key — 1 máy</button></form>
-<p>Thời gian hiển thị theo giờ Việt Nam. Khi có mạng, tool kiểm tra lại mỗi 5 phút. Nếu mất mạng, phiên đã xác thực dùng tối đa 1 giờ và không vượt hạn key.</p>
-<table><thead><tr><th>ID / khách hàng</th><th>Hạn sử dụng</th><th>Máy</th><th>Trạng thái / thao tác</th></tr></thead><tbody>
-{% for license in licenses %}<tr><td>#{{ license.id }} · {{ license.customer }}</td><td>{{ license.expires_at|license_time }}</td><td>{{ license.machines }}/{{ license.seats }}</td><td><strong>{{ 'Đã thu hồi' if license.revoked else 'Đã hết hạn' if license.expired else 'Đang có hiệu lực' }}</strong>
-<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}"><label>Gia hạn thêm <input type="number" name="days" min="1" max="36500" value="30" required> ngày</label><button name="action" value="extend">Gia hạn / mở lại key</button></form>
-<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}"><label><input type="checkbox" required> Xác nhận thao tác</label><button name="action" value="reset-devices">Hủy máy để chuyển máy</button><button name="action" value="revoke">Thu hồi key</button></form>
-{% if license.revoked %}<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}"><label><input type="checkbox" name="confirm_delete" value="1" required> Xác nhận xóa vĩnh viễn key #{{ license.id }}. Không thể gia hạn hoặc mở lại key sau khi xóa.</label><button name="action" value="delete" style="color:#b42318;border:1px solid #b42318">Xóa key đã thu hồi</button></form>{% endif %}
-</td></tr>{% else %}<tr><td colspan="4">Chưa cấp key nào.</td></tr>{% endfor %}</tbody></table>
-<form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button>Đăng xuất quản trị</button></form>
-</body></html>
+{% extends 'license_admin_base.html' %}
+{% block body %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">Z</span><span class="brand-name">ZaloFlow</span><span class="brand-divider"></span><span class="brand-section">Quản trị bản quyền</span></div>
+    <div class="header-actions">
+      <span class="owner-label">{{ icon('shield') }} Khu vực chủ phần mềm</span>
+      <form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf" value="{{ session.csrf }}"><button class="button button-secondary logout">{{ icon('logout') }} Đăng xuất quản trị</button></form>
+    </div>
+  </div>
+</header>
+<main class="page">
+  <div class="page-heading">
+    <div><div class="eyebrow">Trung tâm quản trị</div><h1>Quản lý bản quyền ZaloFlow</h1><p>Cấp key, quản lý hạn dùng và thiết bị của khách hàng.</p></div>
+    <span class="private-badge">{{ icon('shield') }} Quyền quản trị</span>
+  </div>
+  {% for message in get_flashed_messages() %}<div class="flash" role="status">{{ icon('info') }}<span>{{ message }}</span></div>{% endfor %}
+  <section class="stats" aria-label="Tổng quan bản quyền">
+    <div class="stat"><div><p class="stat-label">Tổng số key</p><p class="stat-value">{{ licenses|length }}</p></div><span class="stat-icon">{{ icon('key') }}</span></div>
+    <div class="stat stat-green"><div><p class="stat-label">Đang có hiệu lực</p><p class="stat-value">{{ licenses|rejectattr('revoked')|rejectattr('expired')|list|length }}</p></div><span class="stat-icon">{{ icon('shield') }}</span></div>
+    <div class="stat stat-amber"><div><p class="stat-label">Đã hết hạn</p><p class="stat-value">{{ licenses|rejectattr('revoked')|selectattr('expired')|list|length }}</p></div><span class="stat-icon">{{ icon('clock') }}</span></div>
+    <div class="stat stat-red"><div><p class="stat-label">Đã thu hồi</p><p class="stat-value">{{ licenses|selectattr('revoked')|list|length }}</p></div><span class="stat-icon">{{ icon('ban') }}</span></div>
+  </section>
+  {% if issued %}
+  <section class="card issued" aria-label="Key vừa tạo">
+    <h2>Key vừa tạo — #{{ issued.id }}</h2>
+    <input readonly aria-label="Key vừa tạo" value="{{ issued.key }}">
+    <p>Sao chép key và gửi riêng cho khách hàng ngay bây giờ. Hệ thống không lưu lại key gốc để xem lần sau.</p>
+  </section>
+  {% endif %}
+  <div class="create-layout">
+    <section class="card create-card" aria-labelledby="create-title">
+      <div class="card-heading"><span class="heading-icon">{{ icon('plus') }}</span><h2 id="create-title">Cấp key mới</h2></div>
+      <p class="card-description">Mỗi key sử dụng trên 1 máy, có thể hủy kích hoạt để chuyển máy.</p>
+      <form method="post" class="create-form">
+        <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="issue">
+        <label class="field"><span>Khách hàng <span class="required">*</span></span><input name="customer" required maxlength="150" placeholder="Nhập tên khách hàng" autocomplete="off"></label>
+        <label class="field"><span>Số ngày từ lúc cấp</span><input name="days" type="number" min="1" max="36500" value="30" required></label>
+        <button class="button">{{ icon('plus') }} Tạo key — 1 máy</button>
+      </form>
+    </section>
+    <aside class="info-card" aria-labelledby="policy-title">
+      <h2 id="policy-title">{{ icon('shield') }} Bảo vệ quyền sử dụng</h2>
+      <p>Tool kiểm tra bản quyền mỗi lần mở và mỗi 5 phút khi có mạng.</p>
+      <p>Khi mất mạng, phiên đã xác thực dùng tối đa 1 giờ và không vượt quá hạn key.</p>
+      <span class="info-foot"><span class="dot"></span> Thu hồi được áp dụng khi tool kiểm tra lại</span>
+    </aside>
+  </div>
+  <section class="card" aria-labelledby="list-title">
+    <div class="list-header">
+      <div><div class="list-title"><h2 id="list-title">Danh sách key</h2><span class="count">{{ licenses|length }}</span></div><p>Theo dõi trạng thái và quản lý từng bản quyền.</p></div>
+      <span class="time-zone">Giờ Việt Nam · UTC+7</span>
+    </div>
+    <table aria-labelledby="list-title">
+      <thead><tr><th scope="col">Khách hàng / ID</th><th scope="col">Trạng thái</th><th scope="col">Hạn sử dụng</th><th scope="col">Thiết bị</th><th scope="col">Thao tác</th></tr></thead>
+      <tbody>
+      {% for license in licenses %}
+        <tr>
+          <td data-label="Khách hàng"><p class="customer">{{ license.customer }}</p><span class="license-id">KEY #{{ license.id }}</span></td>
+          <td data-label="Trạng thái"><span class="status {{ 'status-revoked' if license.revoked else 'status-expired' if license.expired else '' }}"><span class="dot"></span>{{ 'Đã thu hồi' if license.revoked else 'Đã hết hạn' if license.expired else 'Đang có hiệu lực' }}</span></td>
+          {% set expiry = (license.expires_at|license_time).split(' ') %}
+          <td data-label="Hạn sử dụng"><span class="expiry">{{ expiry[1] }}<span class="expiry-time">{{ expiry[0] }} · UTC+7</span></span></td>
+          <td data-label="Thiết bị"><span class="machines">{{ icon('device') }} {{ license.machines }}<small>/ {{ license.seats }} máy</small></span></td>
+          <td data-label="Thao tác">
+            <form method="post" class="extend-form">
+              <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
+              <label for="days-{{ license.id }}">Gia hạn thêm (ngày)</label>
+              <div class="extend-controls"><input id="days-{{ license.id }}" type="number" name="days" min="1" max="36500" value="30" required><button class="button button-soft button-small" name="action" value="extend">Gia hạn / mở lại key</button></div>
+            </form>
+            <details class="manage">
+              <summary>{{ icon('chevron') }} Thao tác khác <span class="muted">· #{{ license.id }}</span></summary>
+              <div class="manage-content">
+                <form method="post">
+                  <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
+                  <label class="confirmation"><input type="checkbox" required> Xác nhận thao tác cho key #{{ license.id }}</label>
+                  <div class="manage-buttons"><button class="button button-secondary button-small" name="action" value="reset-devices">Hủy máy để chuyển máy</button><button class="button button-danger button-small" name="action" value="revoke">Thu hồi key</button></div>
+                </form>
+                {% if license.revoked %}
+                <form method="post" class="delete-form">
+                  <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
+                  <label class="confirmation"><input type="checkbox" name="confirm_delete" value="1" required> Xác nhận xóa vĩnh viễn key #{{ license.id }}. Không thể gia hạn hoặc mở lại key sau khi xóa.</label>
+                  <button class="button button-danger button-small" name="action" value="delete">{{ icon('trash') }} Xóa key đã thu hồi</button>
+                </form>
+                {% endif %}
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty"><span class="stat-icon">{{ icon('key') }}</span><h2>Chưa cấp key nào.</h2><p>Tạo key đầu tiên bằng biểu mẫu phía trên.</p></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <footer class="footer"><span>ZaloFlow · Quản trị bản quyền</span><span>{{ icon('clock') }} Thời gian hiển thị theo giờ Việt Nam (UTC+7)</span></footer>
+</main>
+{% endblock %}

@@ -1,5 +1,19 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị key ZaloFlow</title></head><body>
-<h1>Quản trị key ZaloFlow</h1><p>Chỉ dành cho chủ phần mềm. Tài khoản ZaloFlow của khách hàng không có quyền vào đây.</p>
-{% for message in get_flashed_messages() %}<p role="alert">{{ message }}</p>{% endfor %}
-<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><label>Mật khẩu quản trị <input type="password" name="password" required maxlength="256" autocomplete="current-password"></label> <button>Đăng nhập</button></form>
-</body></html>
+{% extends 'license_admin_base.html' %}
+{% block title %}Quản trị key ZaloFlow{% endblock %}
+{% block body %}
+<main class="auth-page">
+  <div class="card auth-card">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">Z</span><span class="brand-name">ZaloFlow</span></div>
+    <div class="eyebrow">Khu vực chủ phần mềm</div>
+    <h1>Quản trị key ZaloFlow</h1>
+    <p>Đăng nhập để cấp key, gia hạn và quản lý thiết bị của khách hàng.</p>
+    {% for message in get_flashed_messages() %}<div class="flash" role="alert" style="margin-top:20px">{{ icon('info') }}<span>{{ message }}</span></div>{% endfor %}
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <label class="field"><span>Mật khẩu quản trị</span><input type="password" name="password" required maxlength="256" autocomplete="current-password" placeholder="Nhập mật khẩu quản trị"></label>
+      <button class="button">{{ icon('shield') }} Đăng nhập</button>
+    </form>
+  </div>
+  <p class="auth-note muted">Chỉ dành cho chủ phần mềm. Tài khoản ZaloFlow của khách hàng không có quyền vào đây.</p>
+</main>
+{% endblock %}
