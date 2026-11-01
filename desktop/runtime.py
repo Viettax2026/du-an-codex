@@ -71,7 +71,13 @@ class DesktopRuntime:
         # Validate a saved activation before the first page is loaded, so a
         # returning user is not incorrectly prompted to enter the key again.
         # This does not start campaign work; only the window's shown event does.
-        if self.license is not None:self.license.refresh(force=True)
+        if self.license is not None:
+            self.license.refresh(force=True)
+            if self.license.allowed():
+                from desktop.admin_accounts import sync_license_admin
+                from license_system.signatures import LicenseError
+                try:sync_license_admin(self.app,self.license)
+                except LicenseError as error:self.app.extensions['desktop_admin_error']=str(error)
         with self.lifecycle:
             if self.started or self.stop_event.is_set():raise RuntimeError('Tool không thể khởi động lại trong phiên đã đóng.')
             try:

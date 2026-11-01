@@ -1,9 +1,11 @@
 """Explicit account approval, separate from Windows license administration."""
 from functools import wraps
 import re
+import sqlite3
 
 import click
 from flask import abort, flash, g, redirect, render_template, request, url_for
+from werkzeug.security import generate_password_hash
 
 STATES = {'pending': 'Chờ duyệt', 'approved': 'Đã duyệt', 'rejected': 'Từ chối', 'blocked': 'Đã khóa'}
 
@@ -215,6 +217,52 @@ def register_approval(app, db, login_required):
         flash(('Đã cập nhật: ' + STATES[state] + '.') if changed else 'Tài khoản đã ở trạng thái này.', 'success')
         selected = request.form.get('filter_status', 'pending')
         return redirect(url_for('admin_users', status=selected if selected in (*STATES, 'all') else 'pending', q=request.form.get('q', '')[:100]))
+
+    @app.post('/admin/users/create')
+    @admin_required
+    def admin_create_user():
+        license = app.extensions.get('desktop_license')
+        if license is None:
+            abort(404)
+        connection = db()
+        try:
+            if not license.allowed():
+                raise ValueError('Kích hoạt key còn hiệu lực trước khi tạo tài khoản.')
+            name = request.form.get('name','').strip()
+            username = request.form.get('username','').strip().lower()
+            password = request.form.get('password','')
+            if not name or len(name)>100 or not re.fullmatch(r'[a-z0-9_.-]{3,64}',username) or username=='admin':
+                raise ValueError('Nhập họ tên và tài khoản 3–64 ký tự hợp lệ; tên admin được dành riêng.')
+            if not 8<=len(password)<=256 or password!=request.form.get('confirm_password',''):
+                raise ValueError('Mật khẩu cần 8–256 ký tự và nhập lại trùng khớp.')
+            from email_recovery import normalize_email
+            email = normalize_email(request.form['email']) if request.form.get('email','').strip() else ''
+            password_hash = generate_password_hash(password)
+            connection.execute('BEGIN IMMEDIATE')
+            actor = connection.execute('SELECT role,approval_status,auth_version FROM users WHERE id=?',(g.user['id'],)).fetchone()
+            if not actor or actor['role']!='admin' or actor['approval_status']!='approved' or actor['auth_version']!=g.user['auth_version']:
+                abort(403)
+            if not license.allowed():
+                raise ValueError('Key không còn hiệu lực. Chưa tạo tài khoản.')
+            created = create_pending_account(connection,name,username,password_hash)
+            connection.execute('UPDATE users SET email=? WHERE id=?',(email,created.lastrowid))
+            set_approval(connection,created.lastrowid,'approved',actor_id=g.user['id'])
+            connection.execute("INSERT INTO account_approval_events(user_id,actor_id,action) VALUES (?,?,'admin_create')",
+                               (created.lastrowid,g.user['id']))
+            if not license.allowed():
+                raise ValueError('Key không còn hiệu lực. Chưa tạo tài khoản.')
+            connection.commit()
+            flash('Đã tạo tài khoản thường. Người dùng có thể đăng nhập trong tool này ngay.','success')
+        except sqlite3.IntegrityError:
+            connection.rollback()
+            flash('Tên tài khoản đã tồn tại. Chọn tên khác.','error')
+        except ValueError as error:
+            connection.rollback()
+            flash(str(error),'error')
+        except BaseException:
+            connection.rollback()
+            raise
+        return redirect(url_for('admin_users',status='approved'))
 
     @app.cli.command('grant-admin')
     @click.option('--username', required=True)

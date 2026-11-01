@@ -56,3 +56,10 @@ CHUYỂN DỮ LIỆU TỪ VPS
 Nếu cửa sổ không mở: cài Microsoft Edge WebView2 Runtime từ trang Microsoft:
 https://developer.microsoft.com/microsoft-edge/webview2/
 Ứng dụng chưa được ký chứng thư nhà phát hành. Chỉ dùng gói được tạo từ kho GitHub Viettax2026/du-an-codex của bạn.
+
+TÀI KHOẢN QUẢN TRỊ ĐƯỢC CẤP KÈM KEY
+- Nếu chủ phần mềm cấp tên quản trị + mật khẩu khởi tạo + key: vào Bản quyền để kích hoạt key trước, sau đó đăng nhập bằng tài khoản đã được cấp.
+- Quản trị vào Quản lý tài khoản > Tạo tài khoản trong tool để tạo nhiều tài khoản thường. Mật khẩu ít nhất 8 ký tự; người dùng đăng nhập dùng ngay, không cần key riêng.
+- Mỗi tài khoản có dữ liệu riêng trên máy này, không tự đồng bộ sang máy khác. Nhiều tài khoản vẫn cùng sử dụng một phiên tool theo key; mở tool thứ hai với cùng key vẫn bị chặn.
+- Tài khoản thường không có quyền quản lý tài khoản. Quản trị tool không phải quản trị kho key trên VPS.
+- Nếu đã có tên tài khoản trùng trong tool, không ghi đè mật khẩu hoặc tự nâng quyền; liên hệ người cấp key. Mở lại/gia hạn không đặt lại mật khẩu đã đổi/khôi phục.

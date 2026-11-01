@@ -25,6 +25,11 @@
   <section class="card issued" aria-label="Key vừa tạo">
     <h2>Key vừa tạo — #{{ issued.id }}</h2>
     <input readonly aria-label="Key vừa tạo" value="{{ issued.key }}">
+    {% if issued.admin_username %}
+    <p><strong>Tài khoản quản trị tool:</strong> {{ issued.admin_username }}</p>
+    <label>Mật khẩu khởi tạo<input readonly aria-label="Mật khẩu khởi tạo quản trị tool" autocomplete="off" value="{{ issued.admin_password }}"></label>
+    <p>Gửi riêng cả tài khoản, mật khẩu và key cho khách. Mật khẩu chỉ hiện lần này; đây là quản trị trong tool của khách, không phải quản trị kho key trên VPS.</p>
+    {% endif %}
     <p>Sao chép key và gửi riêng cho khách hàng ngay bây giờ. Hệ thống không lưu lại key gốc để xem lần sau.</p>
   </section>
   {% endif %}
@@ -34,7 +39,8 @@
       <p class="card-description">Mỗi key dùng trong 1 tool tại một thời điểm, trên bất kỳ máy nào.</p>
       <form method="post" class="create-form">
         <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="issue">
-        <label class="field"><span>Khách hàng <span class="required">*</span></span><input name="customer" required maxlength="150" placeholder="Nhập tên khách hàng" autocomplete="off"></label>
+        <label class="field" style="grid-column:1/-1"><span>Khách hàng <span class="required">*</span></span><input name="customer" required maxlength="150" placeholder="Nhập tên khách hàng" autocomplete="off"></label>
+        <label class="field"><span>Tài khoản quản trị tool (tùy chọn)</span><input name="admin_username" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.\-]{3,64}" placeholder="Ví dụ: quantri-congty" autocomplete="off"></label>
         <label class="field"><span>Số ngày từ lúc cấp</span><input name="days" type="number" min="1" max="36500" value="30" required></label>
         <button class="button">{{ icon('plus') }} Tạo key — 1 tool</button>
       </form>
@@ -56,7 +62,7 @@
       <tbody>
       {% for license in licenses %}
         <tr>
-          <td data-label="Khách hàng"><p class="customer">{{ license.customer }}</p><span class="license-id">KEY #{{ license.id }}</span><p class="muted" style="font-size:11px;margin-top:7px">{{ '1 phiên tool · không khóa máy' if license.mode == 'floating' else 'Theo máy · key cũ' }}</p></td>
+          <td data-label="Khách hàng"><p class="customer">{{ license.customer }}</p><span class="license-id">KEY #{{ license.id }}</span><p class="muted" style="font-size:11px;margin-top:7px">{{ '1 phiên tool · không khóa máy' if license.mode == 'floating' else 'Theo máy · key cũ' }}</p>{% if license.admin_username %}<p class="muted" style="font-size:11px;margin-top:7px;overflow-wrap:anywhere">Quản trị tool: {{ license.admin_username }}</p>{% endif %}</td>
           <td data-label="Trạng thái"><span class="status {{ 'status-revoked' if license.revoked else 'status-expired' if license.expired else '' }}"><span class="dot"></span>{{ 'Đã thu hồi' if license.revoked else 'Đã hết hạn' if license.expired else 'Đang có hiệu lực' }}</span></td>
           {% set expiry = (license.expires_at|license_time).split(' ') %}
           <td data-label="Hạn sử dụng"><span class="expiry">{{ expiry[1] }}<span class="expiry-time">{{ expiry[0] }} · UTC+7</span></span></td>

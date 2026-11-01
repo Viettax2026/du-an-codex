@@ -55,7 +55,8 @@ def register_admin(app, authority):
             try:
                 action = request.form.get('action')
                 if action == 'issue':
-                    issued = authority.issue(request.form.get('customer', ''), int(request.form.get('days', '30')), seats=1, mode='floating')
+                    issued = authority.issue(request.form.get('customer', ''), int(request.form.get('days', '30')), seats=1, mode='floating',
+                                             admin_username=request.form.get('admin_username', ''))
                     flash('Đã tạo key. Sao chép ngay: hệ thống chỉ lưu mã kiểm tra, không lưu lại key gốc.')
                 else:
                     if action == 'delete' and request.form.get('confirm_delete') != '1':

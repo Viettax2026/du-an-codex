@@ -83,3 +83,15 @@ Sao lưu toàn bộ `/var/lib/zaloflow-licenses` trong lúc riêng dịch vụ k
 Nếu cửa sổ key cần cấu hình máy chủ, kiểm tra gói được dựng với đúng `client-config.json`. Nếu xác thực thất bại do thời gian, bật đồng bộ ngày giờ Windows. Nếu key đủ số máy, hủy máy cũ hoặc nhờ chủ phần mềm reset; việc đăng ký tài khoản ZaloFlow mới không tăng số máy được phép.
 
 Giới hạn: cơ chế áp dụng cho bản Windows mới có tích hợp kiểm tra key. Bản cũ chưa có kiểm tra vẫn hoạt động như trước; không thể thêm kiểm tra từ xa cho tệp EXE đã phát. Kho mã hiện công khai, nên đây là quản lý kích hoạt cho bản phân phối của chủ phần mềm, không phải cơ chế chống sửa mã tuyệt đối.
+
+## Cấp tài khoản quản trị tool kèm key
+
+Trên trang `/licenses/admin`, nhập **Khách hàng**, **Tài khoản quản trị tool (tùy chọn)** và số ngày, rồi bấm **Tạo key — 1 tool**. Hệ thống tạo key và mật khẩu khởi tạo ngẫu nhiên, hiển thị một lần. Gửi riêng cả ba thông tin: tên đăng nhập, mật khẩu và key. Bỏ trống tên quản trị thì chỉ cấp key như trước. Có thể cấp nhiều bộ cho các khách hàng khác nhau; kho key chỉ lưu hash mật khẩu, không có chức năng xem lại mật khẩu gốc.
+
+Khách cần bản Windows mới hỗ trợ cấp tài khoản từ key. Trong tool: **Bản quyền → nhập key → Kích hoạt**, sau đó đăng nhập bằng tên/mật khẩu đã được cấp. Tài khoản quản trị được tạo từ thông tin có chữ ký của máy chủ. Trang **Quản lý tài khoản → Tạo tài khoản trong tool** cho phép tạo nhiều tài khoản thường, mật khẩu 8–256 ký tự, có thể dùng ngay; email tùy chọn và chưa tự xác minh. Người dùng tự đăng ký với key hợp lệ vẫn dùng ngay như trước, không được tự cấp quyền quản trị.
+
+Quản trị tool chỉ quản lý tài khoản trong hồ sơ tool đó, không được vào trang quản trị kho key trên VPS. Những tài khoản này dùng chung bản quyền của tool, không cần cấp key riêng cho từng tài khoản; giới hạn một phiên tool cho mỗi key vẫn áp dụng. Mỗi tài khoản giữ dữ liệu riêng theo cơ chế hiện có. Tài khoản/dữ liệu không tự đồng bộ sang máy khác. Đăng xuất tài khoản không đóng tool hoặc giải phóng phiên key.
+
+Nếu tên quản trị được cấp đã trùng tài khoản có sẵn, tool không ghi đè mật khẩu hoặc tự nâng quyền. Liên hệ chủ phần mềm để xử lý tên trùng. Sau khi tạo thành công, việc kiểm tra/gia hạn/mở lại key không đặt lại mật khẩu, không tự khôi phục quyền đã bị thay đổi. Giữ nguyên `instance`, gồm bảng ghi nhận cấp quản trị, khi nâng cấp/chuyển dữ liệu. Để khôi phục mật khẩu cục bộ dùng quy trình khôi phục tài khoản hiện có. Tên `admin` vẫn không được tự đăng ký qua biểu mẫu công khai.
+
+CLI tương ứng: `issue --customer TEN --days 30 --admin-username quantri-tencongty`. Lệnh in mật khẩu khởi tạo một lần; không đưa đầu ra vào log, Git hoặc ảnh chia sẻ công khai. Bộ cài chỉ mang khóa công khai, không đóng gói sẵn tài khoản/mật khẩu của khách. Cần cập nhật và kiểm tra VPS trước khi dựng Windows; lệnh `python -m license_system.smoke_sessions` kiểm tra thêm cấp quản trị và tạo tài khoản bằng dữ liệu tạm, kết quả có `"tool_admin_accounts": true`.

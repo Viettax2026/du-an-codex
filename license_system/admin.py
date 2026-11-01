@@ -15,6 +15,7 @@ def main():
     init = sub.add_parser('init'); init.add_argument('--url', required=True)
     issue = sub.add_parser('issue'); issue.add_argument('--customer', required=True); issue.add_argument('--days', type=int, default=30)
     issue.add_argument('--mode', choices=('floating', 'device'), default='floating')
+    issue.add_argument('--admin-username', default='', help='Issue a local tool administrator and initial password with the key')
     sub.add_parser('list')
     sub.add_parser('set-admin-password')
     for name in ('revoke', 'extend', 'reset-devices'):
@@ -26,7 +27,7 @@ def main():
         if args.action == 'init':
             result = authority.initialize(args.url)
         elif args.action == 'issue':
-            result = authority.issue(args.customer, args.days, seats=1, mode=args.mode)
+            result = authority.issue(args.customer, args.days, seats=1, mode=args.mode, admin_username=args.admin_username)
         elif args.action == 'list':
             result = authority.list_licenses()
         elif args.action == 'set-admin-password':

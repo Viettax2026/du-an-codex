@@ -15,7 +15,8 @@ def main():
         authority = Authority(root/'synthetic-authority')
         config = authority.initialize('https://synthetic.invalid/licenses')
         http = create_app(authority.folder).test_client()
-        key = authority.issue('Synthetic self-test only', mode='floating')['key']
+        issued = authority.issue('Synthetic self-test only', mode='floating', admin_username='smoke-admin')
+        key = issued['key']
         device_a = 'ZFM1-'+'A'*64
         device_b = 'ZFM1-'+'B'*64
 
@@ -45,6 +46,26 @@ def main():
         same_machine = DesktopLicense(root/'tool-c', config, transport, device_b)
         first.activate(key)
         check(first.allowed(), 'First tool was not activated')
+        # Exercise the local account database in a disposable tool profile too.
+        from desktop.runtime import DesktopRuntime
+        from desktop.admin_accounts import sync_license_admin
+        import re
+        runtime = DesktopRuntime(root/'temporary-tool', config={'TESTING':True,'ZALO_QR_ENABLED':False}, license=first)
+        try:
+            check(sync_license_admin(runtime.app,first)=='smoke-admin', 'Tool admin was not provisioned')
+            browser=runtime.app.test_client()
+            def post(path, values, source):
+                page=browser.get(source).text
+                csrf=re.search(r'name="csrf" value="([a-f0-9]+)"',page).group(1)
+                return browser.post(path,data=dict(csrf=csrf,**values),follow_redirects=True)
+            post('/login',dict(username='smoke-admin',password=issued['admin_password']),'/login')
+            response=post('/admin/users/create',dict(name='Temporary staff',username='smoke-staff',
+                password='staff888',confirm_password='staff888'),'/admin/users')
+            check('Đã tạo tài khoản thường' in response.text,'Tool admin could not create a regular account')
+        finally:
+            # This temporary runtime never starts a scheduler or Zalo traffic.
+            runtime.stop(5)
+        check(first.refresh(force=True),'Saved key did not reopen after temporary tool closed')
         blocked(second)
         first.release_session()
         check(not first.allowed(), 'Closing tool did not disable local access')
@@ -58,7 +79,7 @@ def main():
         check(legacy.status_code == 403, 'Old client was given a floating lease')
         print(json.dumps(dict(ok=True, one_tool=True, same_machine_blocked=True,
             move_to_another_machine=True, saved_key_reopened=True,
-            old_tool_rejected=True, real_license_store_untouched=True), indent=2))
+            old_tool_rejected=True, tool_admin_accounts=True, real_license_store_untouched=True), indent=2))
 
 
 if __name__ == '__main__':

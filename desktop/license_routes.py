@@ -31,6 +31,11 @@ def register_license_routes(app, license):
             try:
                 if action == 'activate':
                     license.activate(request.form.get('key', ''))
+                    from desktop.admin_accounts import sync_license_admin
+                    try:sync_license_admin(app,license)
+                    except LicenseError as error:
+                        app.extensions['desktop_admin_error']=str(error)
+                        raise
                     flash('Đã kích hoạt bản quyền trong tool này.', 'success')
                 elif action == 'deactivate':
                     license.deactivate()
@@ -47,4 +52,5 @@ def register_license_routes(app, license):
         expiry = ''
         if status['claims']:
             expiry = datetime.fromtimestamp(status['claims']['license_expires_at'], timezone.utc).astimezone(ZoneInfo('Asia/Bangkok')).strftime('%H:%M %d/%m/%Y')
-        return render_template('desktop_license.html', page='license', license_status=status, expiry=expiry)
+        return render_template('desktop_license.html', page='license', license_status=status, expiry=expiry,
+                               admin_setup_error=app.extensions.get('desktop_admin_error',''))

@@ -47,6 +47,9 @@ class Authority:
             columns = {row['name'] for row in db.execute('PRAGMA table_info(licenses)')}
             if 'mode' not in columns:
                 db.execute("ALTER TABLE licenses ADD COLUMN mode TEXT NOT NULL DEFAULT 'device'")
+            for name in ('admin_username', 'admin_password_hash'):
+                if name not in columns:
+                    db.execute(f"ALTER TABLE licenses ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
             db.execute('''CREATE TABLE IF NOT EXISTS license_sessions (
                 license_id INTEGER PRIMARY KEY REFERENCES licenses(id),
                 activation_id INTEGER NOT NULL REFERENCES activations(id),
@@ -118,12 +121,17 @@ class Authority:
             db.execute('UPDATE settings SET value=? WHERE name=?', (secrets.token_hex(16), 'admin_epoch'))
         self.folder.joinpath('admin-password.txt').unlink(missing_ok=True)
 
-    def issue(self, customer, days=30, seats=1, now=None, mode='device'):
+    def issue(self, customer, days=30, seats=1, now=None, mode='device', admin_username=''):
         now = int(time.time() if now is None else now)
         if not customer.strip() or len(customer) > 150 or not 1 <= days <= 36500 or not 1 <= seats <= 100:
             raise LicenseError('Nhập tên khách hàng, hạn dùng 1–36500 ngày và số máy 1–100.')
         if mode not in ('device', 'floating') or (mode == 'floating' and seats != 1):
             raise LicenseError('Key theo phiên chỉ cho phép một tool sử dụng tại một thời điểm.')
+        admin_username = admin_username.strip().lower()
+        if admin_username and (mode != 'floating' or not re.fullmatch(r'[a-z0-9_.-]{3,64}', admin_username)):
+            raise LicenseError('Tài khoản quản trị tool cần 3–64 ký tự không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang và key theo phiên.')
+        admin_password = secrets.token_urlsafe(12) if admin_username else ''
+        password_hash = generate_password_hash(admin_password) if admin_password else ''
         key = 'ZF-' + secrets.token_urlsafe(24)
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -132,9 +140,10 @@ class Authority:
             highest = db.execute('SELECT coalesce(max(id),0) FROM licenses').fetchone()[0]
             retired = db.execute("SELECT value FROM settings WHERE name='license_id_high_water'").fetchone()
             license_id = max(highest, int(retired['value']) if retired else 0) + 1
-            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode) VALUES(?,?,?,?,?,?,?)',
-                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode))
-        return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats, mode=mode)
+            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash) VALUES(?,?,?,?,?,?,?,?,?)',
+                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash))
+        return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats, mode=mode,
+                    admin_username=admin_username, admin_password=admin_password)
 
     def manage(self, license_id, action, days=30, now=None):
         now = int(time.time() if now is None else now)
@@ -166,7 +175,7 @@ class Authority:
 
     def list_licenses(self):
         with self.connection() as db:
-            return [dict(row, expired=row['expires_at'] <= time.time()) for row in db.execute('''SELECT l.id,l.customer,l.expires_at,l.seats,l.revoked,l.mode,
+            return [dict(row, expired=row['expires_at'] <= time.time()) for row in db.execute('''SELECT l.id,l.customer,l.expires_at,l.seats,l.revoked,l.mode,l.admin_username,
                 CASE WHEN l.mode='floating' THEN
                     (SELECT count(*) FROM license_sessions s WHERE s.license_id=l.id AND s.reserved_until>?)
                 ELSE (SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.active=1) END AS machines
@@ -190,6 +199,8 @@ class Authority:
                      valid_until=min(now + duration, license_row['expires_at']), license_expires_at=license_row['expires_at'])
         if session_id:
             claims.update(license_mode='floating', session_id=session_id)
+            if license_row['admin_username'] and license_row['admin_password_hash']:
+                claims['tool_admin'] = dict(username=license_row['admin_username'], password_hash=license_row['admin_password_hash'])
             db.execute('''INSERT INTO license_sessions VALUES(?,?,?,?)
                 ON CONFLICT(license_id) DO UPDATE SET activation_id=excluded.activation_id,
                 session_id=excluded.session_id,reserved_until=excluded.reserved_until''',

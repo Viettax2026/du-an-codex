@@ -2,7 +2,36 @@
 import re
 from http.cookiejar import CookieJar
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
+
+
+def verify_admin_flow(url, username, password):
+    """A signed synthetic key provisions the owner before this HTTP check."""
+    owner = build_opener(HTTPCookieProcessor(CookieJar()))
+    child = build_opener(HTTPCookieProcessor(CookieJar()))
+
+    def post(opener, path, values, source):
+        with opener.open(url+source,timeout=10) as response:
+            page=response.read().decode('utf-8')
+        csrf=re.search(r'name="csrf" value="([a-f0-9]+)"',page).group(1)
+        request=Request(url+path,data=urlencode(dict(csrf=csrf,**values)).encode())
+        with opener.open(request,timeout=10) as response:
+            return response.url,response.read().decode('utf-8')
+
+    post(owner,'/login',dict(username=username,password=password),'/login')
+    _,page=post(owner,'/admin/users/create',dict(name='Native staff',username='native-staff',password='staff888',
+                    confirm_password='staff888'),'/admin/users')
+    assert 'Đã tạo tài khoản thường' in page
+    target,_=post(child,'/login',dict(username='native-staff',password='staff888'),'/login')
+    assert target.rstrip('/')==url
+    try:
+        child.open(url+'/admin/users',timeout=10)
+    except HTTPError as error:
+        assert error.code==403
+    else:
+        raise AssertionError('A regular account acquired admin rights')
+    return True
 
 
 def verify_recovery_flow(url):
