@@ -1,8 +1,10 @@
 # Bản quyền ZaloFlow Windows
 
-Mỗi key dùng trên một máy Windows. Chủ phần mềm cấp key, đặt số ngày sử dụng, gia hạn, thu hồi hoặc hủy máy cũ qua trang quản trị riêng. Key khác với mật khẩu tài khoản ZaloFlow và mật khẩu root VPS.
+Key cấp mới dùng trong **một phiên tool tại một thời điểm, không khóa theo máy**. Khi key đang dùng ở tool A, tool B bị chặn, kể cả trên cùng máy. Đóng tool A rồi mới dùng ở B. Chủ phần mềm cấp key, gia hạn, thu hồi hoặc ngắt phiên qua trang quản trị riêng. Key khác với mật khẩu tài khoản ZaloFlow và mật khẩu root VPS.
 
-Tool kiểm tra máy chủ mỗi lần mở và mỗi 5 phút khi đang mở. Máy chủ cấp phiên có chữ ký Ed25519, gắn với mã máy; phiên tối đa 1 giờ và không vượt hạn key. Khi mất mạng trong lúc đang dùng, phiên còn hạn được dùng tiếp tới thời điểm đó. Khi hết phiên/key hoặc máy chủ từ chối, không nhận thêm lượt chạy. Lượt đã bắt đầu được kết thúc; kết quả, bước chờ và hạn mức giữ nguyên. Gia hạn không tạo chiến dịch mới và không gửi lại bước đã làm.
+Tool mới kiểm tra máy chủ khi mở và mỗi **20 giây**, bằng luồng riêng để vẫn gia hạn trong lúc chờ Zalo trả lời. Phiên có chữ ký Ed25519, gắn với mã ngẫu nhiên của lần mở tool, hiệu lực tối đa **60 giây** và không vượt hạn key. Hết phiên, mất kết nối quá 60 giây hoặc máy chủ từ chối thì dừng nhận lượt mới; lượt đã bắt đầu được kết thúc, giữ kết quả/tiến độ/hạn mức. Đóng tool bình thường: dừng nhận lượt, chờ lượt đang xử lý và yêu cầu HTTP xong rồi mới giải phóng phiên; lần mở sau vẫn nhớ kích hoạt. Nếu tắt đột ngột hoặc mất thông báo đóng, phiên dành chỗ tự hết sau tối đa **110 giây** (hướng dẫn khách chờ tối đa 2 phút), gồm khoảng chờ lượt gửi có thể đang xử lý. Khi tool B bị chặn, không tự ngắt tool A.
+
+**Tương thích:** cần cập nhật cả máy chủ và bản Windows. Tool cũ bị từ chối với key theo phiên, không được cấp nhầm phiên 1 giờ. Key đã cấp trước nâng cấp vẫn giữ chế độ theo máy, kiểm tra 5 phút/phiên ngoại tuyến tối đa 1 giờ; không tự chuyển đổi hoặc thu hồi các key này. Danh sách hiển thị rõ chế độ từng key. Đăng xuất tài khoản ZaloFlow hoặc thu nhỏ cửa sổ không giải phóng phiên; đóng tool mới giải phóng. Chuyển key không đồng bộ khách hàng, tài khoản hoặc chiến dịch giữa máy.
 
 ## Cài máy chủ trên VPS hiện tại
 
@@ -15,6 +17,14 @@ bash deployment/install-license-server.sh
 ```
 
 Script yêu cầu tên miền đã có HTTPS, sao lưu cấu hình trước khi thêm đường dẫn `/licenses/`, tạo dịch vụ riêng `zaloflow-license` trên `127.0.0.1:8010`. Không mở cổng 8010 ra Internet. Script không bật/tắt bộ lịch chiến dịch trên VPS và không sửa database khách hàng. Khi cập nhật dịch vụ key, script sao lưu cả kho bản quyền trước; không tạo lại khóa ký đã có. Nếu Nginx không hợp lệ, cấu hình website được khôi phục và việc cài dịch vụ key dừng lại.
+
+Sau cập nhật, kiểm tra giao thức trên chính VPS trước khi dựng Windows:
+
+```bash
+runuser -u zaloflow-license -- .venv/bin/python -m license_system.smoke_sessions
+```
+
+Kết quả phải có `"ok": true`. Lệnh dùng authority, key và hồ sơ tool hoàn toàn tạm trong thư mục riêng, tự xóa sau kiểm tra; không đọc/sửa kho key thật, dữ liệu khách hàng hoặc gửi tin Zalo. Kiểm tra tool A chặn B, đóng A cho B vào trên máy khác, hai tool cùng máy vẫn bị chặn, mở lại nhớ key và từ chối tool cũ. Sau đó mở `/licenses/admin` kiểm tra nút **Tạo key — 1 tool** và các key cũ vẫn hiển thị. Xác nhận VPS đạt rồi dựng/cài bản Windows mới và kiểm tra thực tế hai tool. Chỉ cập nhật VPS không thay đổi EXE đã cài.
 
 Mở **https://cskh.viettaxco.com/licenses/admin**. Xem mật khẩu quản trị ban đầu bằng:
 
@@ -43,19 +53,19 @@ Tệp chỉ có `version`, `server_url`, `public_key`. Có thể gửi nội dun
 
 Kiểm thử phiên bản mã trên VPS thành công trước. Sau đó GitHub Actions → **Build Windows desktop → Run workflow**: chọn đúng phiên bản đã thử, đánh dấu `vps_tested`, dán JSON công khai vào trường `license_config` nếu chưa có trong kho mã rồi Run workflow. Có thể commit `desktop/license-config.json` để các lần dựng sau dùng lại, nhưng không tự đóng gói khi push; mỗi lần dựng phải xác nhận bước VPS. Nếu chưa có cấu hình, workflow chỉ kiểm thử gói với danh tính tạm; không xuất bản gói khách hàng. Không dùng khóa thử để cấp key thật.
 
-Khi lượt dựng có dấu xanh và artifact, tải `ZaloFlow-Setup-Windows-x64`, lấy `ZaloFlow-Setup-x64.exe` trong ZIP rồi chạy để cài. Bộ cài tạo biểu tượng Desktop/Start; tệp hỗ trợ được cài vào thư mục chương trình và ẩn mặc định. Chỉ gửi bộ cài cho khách. Ẩn tệp không ngăn được sao chép; key vẫn kiểm soát quyền dùng một máy. Gói khách hàng chỉ có khóa công khai; không đóng gói kho key hoặc công cụ quản trị server. Dựng thủ công trên Windows cũng yêu cầu cấu hình công khai hợp lệ trước. Cài đè/gỡ giữ dữ liệu và kích hoạt; gỡ không giải phóng chỗ máy đã kích hoạt. Muốn chuyển máy cần hủy kích hoạt trong tool hoặc quản trị viên reset máy.
+Khi lượt dựng có dấu xanh và artifact, tải `ZaloFlow-Setup-Windows-x64`, lấy `ZaloFlow-Setup-x64.exe` trong ZIP rồi chạy để cài. Bộ cài tạo biểu tượng Desktop/Start; tệp hỗ trợ được cài vào thư mục chương trình và ẩn mặc định. Chỉ gửi bộ cài cho khách. Ẩn tệp không ngăn được sao chép; key vẫn kiểm soát một phiên tool được sử dụng tại một thời điểm. Gói khách hàng chỉ có khóa công khai; không đóng gói kho key hoặc công cụ quản trị server. Dựng thủ công trên Windows cũng yêu cầu cấu hình công khai hợp lệ trước. Cài đè/gỡ giữ dữ liệu và thông tin kích hoạt. Đóng tool trước khi cài đè/gỡ. Với key theo phiên, chỉ cần đóng tool cũ để dùng key ở tool khác; với key cũ theo máy vẫn cần hủy kích hoạt hoặc quản trị viên reset máy.
 
 ## Cấp, gia hạn và chuyển máy
 
-1. Trang quản trị → nhập tên khách hàng và số ngày → **Tạo key — 1 máy**. Hạn tính từ lúc cấp key. Sao chép key ngay và gửi riêng cho khách: hệ thống chỉ lưu hash của key, không thể xem lại key gốc ở danh sách.
-2. Khách mở tool → **Bản quyền** → nhập key → kích hoạt. Sau đó tạo/đăng nhập tài khoản ZaloFlow và quét QR Zalo như trước.
+1. Trang quản trị → nhập tên khách hàng và số ngày → **Tạo key — 1 tool**. Hạn tính từ lúc cấp key. Sao chép key ngay và gửi riêng cho khách: hệ thống chỉ lưu hash của key, không thể xem lại key gốc ở danh sách.
+2. Khách cập nhật tool Windows hỗ trợ key theo phiên → **Bản quyền** → nhập key → kích hoạt. Sau đó tạo/đăng nhập tài khoản ZaloFlow và quét QR Zalo như trước. Key mới bị từ chối ở tool cũ; cần dùng bộ cài mới được dựng từ phiên bản này.
 3. Gia hạn: chọn key trong trang quản trị → nhập số ngày → **Gia hạn / mở lại key**. Thêm ngày từ hạn hiện tại nếu còn hạn, hoặc từ hiện tại nếu đã hết hạn. Khách bấm **Kiểm tra lại / cập nhật gia hạn**, hoặc chờ lần kiểm tra định kỳ.
-4. Chuyển máy: trên máy cũ, đăng nhập ZaloFlow → **Bản quyền → Hủy kích hoạt máy này**. Khi báo thành công, nhập cùng key trên máy mới. Đóng cửa sổ thông thường không hủy kích hoạt key. Không tự động đồng bộ dữ liệu chiến dịch sang máy mới.
-5. Máy cũ bị mất/hỏng: chủ phần mềm dùng **Hủy máy để chuyển máy** trên trang quản trị rồi cấp lại cùng key cho máy mới. Máy cũ bị chặn ở lần kiểm tra tiếp; nếu đang mất mạng, phiên cũ có thể còn hiệu lực tối đa 1 giờ. Tương tự, thu hồi key được áp dụng trong khoảng này; không thể thu hồi ngay một máy không kết nối mạng.
+4. Chuyển tool/máy: đóng tool cũ hoàn toàn rồi nhập cùng key ở tool mới. Không cần quản trị viên hủy máy. Nếu mở đồng thời, tool mới báo đang có tool khác sử dụng. Sau khi đóng bình thường, có thể dùng ngay; sau mất mạng/tắt đột ngột, chờ tối đa 2 phút. Key cũ theo máy vẫn dùng **Bản quyền → Hủy kích hoạt máy này** trước khi chuyển.
+5. Ngắt quyền tool hiện tại: **Thao tác khác → Ngắt phiên đang dùng** hoặc **Thu hồi key**. Tool đang chạy dừng lượt mới ở lần kiểm tra tiếp hoặc khi phiên 60 giây hết hạn. Giữ khoảng chờ lượt đang xử lý trước khi cấp phiên khác, tối đa 2 phút. Với key cũ theo máy, nút vẫn là **Hủy máy để chuyển máy**, phiên ngoại tuyến tối đa 1 giờ như trước.
 6. Đổi sang key khác: hủy kích hoạt key hiện tại trước, để không giữ nhầm suất máy của key cũ. Không xóa thư mục dữ liệu hoặc database để đổi key.
-7. Xóa key đã thu hồi: tại dòng **Đã thu hồi**, mở **Thao tác khác**, tích **Xác nhận xóa vĩnh viễn key** rồi bấm **Xóa key đã thu hồi**. Hệ thống chỉ cho xóa key đã thu hồi, kể cả khi gửi yêu cầu trực tiếp. Xóa sẽ gỡ key và các kích hoạt khỏi máy chủ, không thể gia hạn/mở lại; key cũ và token kích hoạt cũ không dùng lại được. ID key đã xóa không được cấp lại. Dữ liệu chiến dịch trong tool giữ nguyên; phiên ngoại tuyến đã ký vẫn chịu giới hạn tối đa 1 giờ như khi thu hồi.
+7. Xóa key đã thu hồi: tại dòng **Đã thu hồi**, mở **Thao tác khác**, tích **Xác nhận xóa vĩnh viễn key** rồi bấm **Xóa key đã thu hồi**. Hệ thống chỉ cho xóa key đã thu hồi, kể cả khi gửi yêu cầu trực tiếp. Xóa sẽ gỡ key và các kích hoạt khỏi máy chủ, không thể gia hạn/mở lại; key cũ và token kích hoạt cũ không dùng lại được. ID key đã xóa không được cấp lại. Dữ liệu chiến dịch trong tool giữ nguyên; phiên đã ký không thể vô hiệu hóa ngay trên máy mất mạng: key theo phiên tối đa 60 giây, key cũ theo máy tối đa 1 giờ.
 
-Để cập nhật chức năng quản trị key trên VPS hiện tại, chạy lại ba lệnh ở phần **Cài máy chủ trên VPS hiện tại**. Script sao lưu kho key trước khi cập nhật và giữ nguyên khóa ký, mật khẩu cùng các key khác. Không cần dựng hoặc cài lại tool Windows.
+Để cập nhật chức năng quản trị key trên VPS hiện tại, chạy lại ba lệnh ở phần **Cài máy chủ trên VPS hiện tại**. Script sao lưu kho key trước khi cập nhật và giữ nguyên khóa ký, mật khẩu cùng các key khác. Riêng thay đổi bố cục/xóa key không cần dựng lại tool. Chế độ key theo phiên cần bộ cài Windows mới; cập nhật và kiểm tra máy chủ trên VPS trước khi đóng gói theo quy trình đã thống nhất.
 
 ## Vận hành và khôi phục
 
@@ -66,7 +76,7 @@ cd /opt/zaloflow
 runuser -u zaloflow-license -- .venv/bin/python -m license_system.admin list
 ```
 
-CLI cũng có `issue --customer TEN --days 30`, `extend ID --days 30`, `revoke ID`, `reset-devices ID`. Mặc định cấp một máy. Không gửi key riêng qua kho mã hoặc log công khai.
+CLI cũng có `issue --customer TEN --days 30`, `extend ID --days 30`, `revoke ID`, `reset-devices ID`. CLI `issue` mặc định cấp key theo phiên; có thể dùng `--mode device` khi cần key tương thích tool cũ. API Python nội bộ giữ mặc định `device` cho tương thích; các điểm cấp key web/CLI đều chỉ định `floating`. Không gửi key riêng qua kho mã hoặc log công khai.
 
 Sao lưu toàn bộ `/var/lib/zaloflow-licenses` trong lúc riêng dịch vụ key đã dừng; giữ bản sao ở nơi chỉ chủ phần mềm truy cập. Khi khôi phục phải giữ cả database, `signing-private.pem` và `session-secret.txt`. Không chạy `init` lại hoặc tạo khóa ký khác cho bản Windows đã phát. Mất khóa ký cần dựng lại bản khách với khóa công khai mới và cấp lại key.
 

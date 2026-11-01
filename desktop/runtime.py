@@ -62,7 +62,7 @@ class DesktopRuntime:
             register_license_routes(self.app,self.license)
         self.gate=RequestGate(self.app,self.stop_event)
         self.tick=tick or self.app.extensions['campaign_scheduler'].tick
-        self.server=None;self.server_thread=None;self.worker=None;self.url=None
+        self.server=None;self.server_thread=None;self.worker=None;self.license_worker=None;self.url=None
         self.scheduler_lock=RuntimeLock(Path(self.app.config['DATABASE']).with_suffix('.scheduler.lock'))
         self.started=False
 
@@ -80,6 +80,9 @@ class DesktopRuntime:
                 self.url=f'http://127.0.0.1:{self.server.effective_port}'
                 self.server_thread=threading.Thread(target=self.server.run,name='ZaloFlow-web',daemon=True)
                 self.server_thread.start();self.started=True
+                if self.license is not None:
+                    self.license_worker=threading.Thread(target=self._renew_license,name='ZaloFlow-license',daemon=True)
+                    self.license_worker.start()
                 return self.url
             except BaseException:self.instance_lock.release();raise
 
@@ -96,11 +99,19 @@ class DesktopRuntime:
         while not self.stop_event.is_set():
             with self.app.app_context():
                 try:
-                    licensed=self.license is None or self.license.refresh()
+                    licensed=self.license is None or self.license.allowed()
                     if not self.stop_event.is_set() and licensed:self.tick()
                 except Exception:
                     self.app.extensions['campaign_manager'].db().rollback()
                     logging.getLogger('desktop').exception('Local schedule cycle failed')
+            self.stop_event.wait(1)
+
+    def _renew_license(self):
+        # Network renewal must continue while a campaign tick is waiting for a
+        # Zalo response. It never starts campaigns or bypasses dispatch guards.
+        while not self.stop_event.is_set():
+            try:self.license.refresh()
+            except Exception:logging.getLogger('desktop').warning('License renewal did not complete')
             self.stop_event.wait(1)
 
     def begin_stop(self):
@@ -134,6 +145,11 @@ class DesktopRuntime:
                 self.server.task_dispatcher.shutdown(timeout=5)
             if self.server_thread:self.server_thread.join(5)
             if self.server_thread and self.server_thread.is_alive():return False
+            if self.license_worker:
+                self.license_worker.join(remaining())
+                if self.license_worker.is_alive():return False
+            if self.license is not None and hasattr(self.license,'release_session'):
+                self.license.release_session()
             Path(self.app.config['DATABASE']).with_suffix('.scheduler.heartbeat').unlink(missing_ok=True)
             self.scheduler_lock.release();self.instance_lock.release();self.closed.set()
             return True

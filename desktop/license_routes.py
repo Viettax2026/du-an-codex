@@ -31,10 +31,10 @@ def register_license_routes(app, license):
             try:
                 if action == 'activate':
                     license.activate(request.form.get('key', ''))
-                    flash('Đã kích hoạt bản quyền cho máy này.', 'success')
+                    flash('Đã kích hoạt bản quyền trong tool này.', 'success')
                 elif action == 'deactivate':
                     license.deactivate()
-                    flash('Đã hủy kích hoạt. Bạn có thể nhập key trên máy khác.', 'success')
+                    flash('Đã hủy kích hoạt trong tool này. Với key theo phiên, có thể cần chờ tối đa 2 phút để dùng lại ở tool khác.', 'success')
                 elif action == 'refresh':
                     license.refresh(force=True)
                     flash('Đã kiểm tra lại bản quyền.' if license.allowed() else license.error or 'Nhập key còn hạn để tiếp tục.', 'success' if license.allowed() else 'error')

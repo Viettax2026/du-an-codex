@@ -31,19 +31,19 @@
   <div class="create-layout">
     <section class="card create-card" aria-labelledby="create-title">
       <div class="card-heading"><span class="heading-icon">{{ icon('plus') }}</span><h2 id="create-title">Cấp key mới</h2></div>
-      <p class="card-description">Mỗi key sử dụng trên 1 máy, có thể hủy kích hoạt để chuyển máy.</p>
+      <p class="card-description">Mỗi key dùng trong 1 tool tại một thời điểm, trên bất kỳ máy nào.</p>
       <form method="post" class="create-form">
         <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="issue">
         <label class="field"><span>Khách hàng <span class="required">*</span></span><input name="customer" required maxlength="150" placeholder="Nhập tên khách hàng" autocomplete="off"></label>
         <label class="field"><span>Số ngày từ lúc cấp</span><input name="days" type="number" min="1" max="36500" value="30" required></label>
-        <button class="button">{{ icon('plus') }} Tạo key — 1 máy</button>
+        <button class="button">{{ icon('plus') }} Tạo key — 1 tool</button>
       </form>
     </section>
     <aside class="info-card" aria-labelledby="policy-title">
       <h2 id="policy-title">{{ icon('shield') }} Bảo vệ quyền sử dụng</h2>
-      <p>Tool kiểm tra bản quyền mỗi lần mở và mỗi 5 phút khi có mạng.</p>
-      <p>Khi mất mạng, phiên đã xác thực dùng tối đa 1 giờ và không vượt quá hạn key.</p>
-      <span class="info-foot"><span class="dot"></span> Thu hồi được áp dụng khi tool kiểm tra lại</span>
+      <p>Key mới không khóa theo máy. Đóng tool cũ để dùng key ở tool khác; cần bản Windows hỗ trợ key theo phiên.</p>
+      <p>Tool kiểm tra mỗi 20 giây. Mất kết nối quá 1 phút sẽ dừng lượt mới; tắt đột ngột thì chờ tối đa 2 phút để dùng lại.</p>
+      <span class="info-foot"><span class="dot"></span> Key cũ theo máy giữ nguyên chế độ hiện tại</span>
     </aside>
   </div>
   <section class="card" aria-labelledby="list-title">
@@ -52,15 +52,15 @@
       <span class="time-zone">Giờ Việt Nam · UTC+7</span>
     </div>
     <table aria-labelledby="list-title">
-      <thead><tr><th scope="col">Khách hàng / ID</th><th scope="col">Trạng thái</th><th scope="col">Hạn sử dụng</th><th scope="col">Thiết bị</th><th scope="col">Thao tác</th></tr></thead>
+      <thead><tr><th scope="col">Khách hàng / ID</th><th scope="col">Trạng thái</th><th scope="col">Hạn sử dụng</th><th scope="col">Đang dùng</th><th scope="col">Thao tác</th></tr></thead>
       <tbody>
       {% for license in licenses %}
         <tr>
-          <td data-label="Khách hàng"><p class="customer">{{ license.customer }}</p><span class="license-id">KEY #{{ license.id }}</span></td>
+          <td data-label="Khách hàng"><p class="customer">{{ license.customer }}</p><span class="license-id">KEY #{{ license.id }}</span><p class="muted" style="font-size:11px;margin-top:7px">{{ '1 phiên tool · không khóa máy' if license.mode == 'floating' else 'Theo máy · key cũ' }}</p></td>
           <td data-label="Trạng thái"><span class="status {{ 'status-revoked' if license.revoked else 'status-expired' if license.expired else '' }}"><span class="dot"></span>{{ 'Đã thu hồi' if license.revoked else 'Đã hết hạn' if license.expired else 'Đang có hiệu lực' }}</span></td>
           {% set expiry = (license.expires_at|license_time).split(' ') %}
           <td data-label="Hạn sử dụng"><span class="expiry">{{ expiry[1] }}<span class="expiry-time">{{ expiry[0] }} · UTC+7</span></span></td>
-          <td data-label="Thiết bị"><span class="machines">{{ icon('device') }} {{ license.machines }}<small>/ {{ license.seats }} máy</small></span></td>
+          <td data-label="Đang dùng"><span class="machines">{{ icon('device') }} {{ license.machines }}<small>/ {{ license.seats }} {{ 'phiên' if license.mode == 'floating' else 'máy' }}</small></span></td>
           <td data-label="Thao tác">
             <form method="post" class="extend-form">
               <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
@@ -73,7 +73,7 @@
                 <form method="post">
                   <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
                   <label class="confirmation"><input type="checkbox" required> Xác nhận thao tác cho key #{{ license.id }}</label>
-                  <div class="manage-buttons"><button class="button button-secondary button-small" name="action" value="reset-devices">Hủy máy để chuyển máy</button><button class="button button-danger button-small" name="action" value="revoke">Thu hồi key</button></div>
+                  <div class="manage-buttons"><button class="button button-secondary button-small" name="action" value="reset-devices">{{ 'Ngắt phiên đang dùng' if license.mode == 'floating' else 'Hủy máy để chuyển máy' }}</button><button class="button button-danger button-small" name="action" value="revoke">Thu hồi key</button></div>
                 </form>
                 {% if license.revoked %}
                 <form method="post" class="delete-form">

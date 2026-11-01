@@ -26,20 +26,26 @@ def create_app(folder=None):
 
     @app.post('/v1/<action>')
     def exchange(action):
-        if action not in ('activate', 'refresh', 'deactivate'):
+        if action not in ('activate', 'refresh', 'deactivate', 'release'):
             return jsonify(error='Không tìm thấy thao tác.'), 404
         # Use the direct peer unless a trusted reverse proxy is configured outside
         # this app; never trust arbitrary client-supplied X-Forwarded-For headers.
-        if not authority.throttle(request.remote_addr or 'unknown'):
-            return jsonify(error='Quá nhiều yêu cầu. Vui lòng thử lại sau.'), 429
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(error='Yêu cầu không hợp lệ.'), 400
         device, credential = data.get('device'), data.get('key' if action == 'activate' else 'activation_token')
         if not isinstance(device, str) or not re.fullmatch(r'ZFM1-[A-F0-9]{64}', device) or not isinstance(credential, str) or not 16 <= len(credential) <= 200:
             return jsonify(error='Mã máy hoặc key không hợp lệ.'), 400
+        session_id = data.get('session_id')
+        if session_id is not None and (not isinstance(session_id, str) or not re.fullmatch(r'ZFS1-[A-F0-9]{64}', session_id)):
+            return jsonify(error='Mã phiên tool không hợp lệ.'), 400
+        peer = request.remote_addr or 'unknown'
+        # Twenty-second heartbeats from multiple licensed tools behind one NAT
+        # must not exhaust the legacy five-minute-client allowance.
+        if not authority.throttle('sessions:' + peer if session_id else peer, limit=3000 if session_id else 100):
+            return jsonify(error='Quá nhiều yêu cầu. Vui lòng thử lại sau.'), 429
         try:
-            return jsonify(authority.exchange(action, device, credential))
+            return jsonify(authority.exchange(action, device, credential, session_id=session_id))
         except ActivationInvalid as error:
             return jsonify(error=str(error), error_code='activation_invalid'), 403
         except LicenseError as error:

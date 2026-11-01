@@ -72,9 +72,11 @@ def smoke_check(report,gui=False):
     with tempfile.TemporaryDirectory(prefix='zaloflow-smoke-',ignore_cleanup_errors=True) as folder:
         signer=new_signer();device='ZFM1-'+'A'*64
         def transport(config,action,data):
+            if action=='release':return dict(released=True)
             now=int(time.time())
             lease=sign(signer,dict(product=PRODUCT,license_id=1,customer='Smoke test only',activation_id=1,
-                device=device,issued_at=now,valid_until=now+3600,license_expires_at=now+86400))
+                device=device,issued_at=now,valid_until=now+60,license_expires_at=now+86400,
+                license_mode='floating',session_id=data['session_id']))
             return dict(lease=lease,activation_token='temporary-smoke-activation-token')
         license=DesktopLicense(Path(folder)/'license',config=dict(server_url='https://smoke.invalid',public_key=public_text(signer)),transport=transport,device=device)
         runtime=DesktopRuntime(folder,license=license)
@@ -83,6 +85,7 @@ def smoke_check(report,gui=False):
             with urlopen(runtime.url+'/register',timeout=10) as response:assert response.url.endswith('/desktop/license')
             license.activate('ZF-'+'a'*32)
             assert license.allowed(),'Signed activation was not accepted'
+            assert license.claims()['license_mode']=='floating','Session license was not accepted'
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
             from desktop.smoke_recovery import verify_recovery_flow
@@ -94,7 +97,7 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True,floating_license=True)),encoding='utf-8')
         finally:runtime.stop()
 
 

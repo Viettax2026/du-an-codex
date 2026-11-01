@@ -1,7 +1,7 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
 1. Lấy ZaloFlow-Setup-x64.exe trong ZIP tải về, chạy để cài. Giữ tùy chọn tạo shortcut Desktop được chọn. Không cần quyền quản trị.
-2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt máy này. Sau đó tự đăng ký tài khoản ZaloFlow, mật khẩu tối thiểu 8 ký tự, rồi đăng nhập sử dụng ngay và kết nối Zalo bằng QR. Bản Windows không cần duyệt đăng ký.
+2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt tool này. Sau đó tự đăng ký tài khoản ZaloFlow, mật khẩu tối thiểu 8 ký tự, rồi đăng nhập sử dụng ngay và kết nối Zalo bằng QR. Bản Windows không cần duyệt đăng ký.
 3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
 4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
 5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
@@ -9,10 +9,10 @@ ZALOFLOW CHO WINDOWS 10/11 x64
 Cần có Internet để kết nối Zalo. Máy ngủ/tắt hoặc tool đóng thì không chạy lịch. Không cài dịch vụ chạy nền hoặc tự khởi động Windows.
 
 BẢN QUYỀN
-- Key sử dụng khác với mật khẩu đăng nhập ZaloFlow. Mỗi key dùng trên một máy Windows.
-- Cần mạng mỗi lần mở tool và kiểm tra định kỳ 5 phút. Nếu mất mạng trong khi đang dùng, phiên đã xác thực còn hiệu lực tối đa 1 giờ, không vượt quá hạn key.
+- Key sử dụng khác với mật khẩu đăng nhập ZaloFlow. Key mới dùng trong một tool tại một thời điểm, trên bất kỳ máy nào. Tool khác bị chặn khi key đang dùng, kể cả trên cùng máy.
+- Key theo phiên cần bản Windows mới và máy chủ đã cập nhật. Cần mạng khi mở và kiểm tra mỗi 20 giây; phiên hiệu lực tối đa 60 giây, không vượt hạn key. Quá thời gian này dừng lượt mới, giữ tiến độ.
 - Khi key hết hiệu lực, tool ngừng nhận lượt mới; giữ nguyên dữ liệu và tiến độ. Gia hạn rồi bấm Bản quyền > Kiểm tra lại để chạy tiếp.
-- Chuyển máy: đăng nhập trên máy cũ > Bản quyền > Hủy kích hoạt máy này; khi thành công, nhập cùng key trên máy mới. Đóng tool thông thường không hủy key.
+- Chuyển tool/máy: đóng tool cũ hoàn toàn rồi nhập key ở tool mới. Đóng bình thường giải phóng phiên sau khi lượt hiện tại kết thúc. Nếu tắt đột ngột hoặc mất kết nối lúc đóng, chờ tối đa 2 phút. Key cũ theo máy vẫn cần hủy kích hoạt trước khi chuyển, kiểm tra 5 phút và phiên ngoại tuyến tối đa 1 giờ.
 - Nếu máy cũ bị mất/hỏng hoặc quên key, liên hệ người cấp key; không xóa dữ liệu để thử kích hoạt lại.
 
 Dữ liệu riêng của máy tính lưu ở:
@@ -24,7 +24,7 @@ Chương trình cài ở %LOCALAPPDATA%\Programs\ZaloFlow. Thư mục hỗ trợ
 
 Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng tài khoản Windows. Dữ liệu nằm ngoài thư mục chương trình nên được giữ lại, cả khi gỡ cài đặt. Không xóa thư mục dữ liệu. Nếu đang dùng bản ZIP cũ, đóng bản đó trước khi cài; cùng tài khoản Windows sẽ dùng tiếp dữ liệu ở vị trí mặc định.
 
-Gỡ cài đặt không hủy kích hoạt key. Muốn chuyển máy, hủy kích hoạt trong tool trước khi gỡ.
+Đóng tool trước khi gỡ cài đặt. Key theo phiên được giải phóng khi đóng bình thường; key cũ theo máy cần hủy kích hoạt trước khi chuyển máy.
 
 ĐĂNG KÝ VÀ ĐĂNG XUẤT
 - Sau khi kích hoạt key còn hiệu lực, tài khoản mới được dùng ngay sau khi đăng ký và đăng nhập. Không cần thao tác cấp quyền trên VPS hoặc PowerShell.
@@ -42,7 +42,7 @@ QUÊN MẬT KHẨU ZALOFLOW
   https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-RECOVERY.md
 - Tài khoản/mật khẩu/mã của bản web khác bản Windows. Key hoặc mật khẩu Zalo không phải mã khôi phục.
 
-Bộ cài chỉ cần một file EXE để chia sẻ. Ẩn tệp không ngăn được sao chép hoặc trích xuất; quyền sử dụng vẫn được kiểm soát bằng key một máy.
+Bộ cài chỉ cần một file EXE để chia sẻ. Ẩn tệp không ngăn được sao chép hoặc trích xuất; quyền sử dụng vẫn được kiểm soát bằng key một phiên tool.
 
 CHUYỂN DỮ LIỆU TỪ VPS
 - Tool Windows không đồng bộ tự động với VPS.

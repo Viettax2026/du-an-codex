@@ -41,7 +41,7 @@ def sign(signer, claims):
     return 'ZF1.' + encode(payload) + '.' + encode(signer.sign(payload))
 
 
-def verify(token, public_key, device, now=None):
+def verify(token, public_key, device, now=None, session_id=None):
     now = time.time() if now is None else now
     try:
         if not isinstance(token, str) or len(token) > 8192:
@@ -54,6 +54,8 @@ def verify(token, public_key, device, now=None):
         claims = json.loads(payload)
         if claims['product'] != PRODUCT or claims['device'] != device:
             raise LicenseError('Bản quyền không dành cho máy này.')
+        if claims.get('license_mode') == 'floating' and (not session_id or claims.get('session_id') != session_id):
+            raise LicenseError('Bản quyền không dành cho phiên tool này.')
         for key in ('issued_at', 'valid_until', 'license_expires_at'):
             if type(claims[key]) is not int:
                 raise ValueError()

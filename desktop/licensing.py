@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sys
 import threading
 import time
@@ -14,6 +15,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from license_system.signatures import ActivationInvalid, LicenseError, decode, verify
 
 REFRESH_SECONDS = 300
+SESSION_REFRESH_SECONDS = 20
 CONFIG_PATH = Path(__file__).resolve().parent / 'license-config.json'
 
 
@@ -91,6 +93,7 @@ class DesktopLicense:
         self.path = self.folder / 'activation.json'
         self.config = config
         self.transport = transport; self.device = device or device_code()
+        self.session_id = 'ZFS1-' + secrets.token_hex(32).upper()
         self.clock, self.monotonic = clock, monotonic
         self.lock = threading.RLock()
         self.exchange_lock = threading.Lock()
@@ -119,7 +122,7 @@ class DesktopLicense:
             if self.config is None or self.deactivating or not self.startup_verified:
                 return None
             try:
-                return verify(self.state.get('lease', ''), self.config['public_key'], self.device, self.now())
+                return verify(self.state.get('lease', ''), self.config['public_key'], self.device, self.now(), self.session_id)
             except LicenseError:
                 return None
 
@@ -133,15 +136,19 @@ class DesktopLicense:
             json.dump(self.state, file)
         os.replace(temporary, self.path)
 
-    def accept(self, response, secret=None):
-        claims = verify(response.get('lease', ''), self.config['public_key'], self.device, self.clock())
+    def accept(self, response, secret=None, elapsed=0):
+        claims = verify(response.get('lease', ''), self.config['public_key'], self.device, self.clock(), self.session_id)
         token = secret or self.state.get('activation_token')
         if not isinstance(token, str) or not 16 <= len(token) <= 200:
             raise LicenseError('Máy chủ trả về phiên kích hoạt không hợp lệ.')
-        self.state = dict(lease=response['lease'], activation_token=token, key_hash=self.state.get('key_hash', ''))
+        self.state = dict(lease=response['lease'], activation_token=token, key_hash=self.state.get('key_hash', ''),
+                          license_mode=claims.get('license_mode', 'device'))
         self.startup_verified = True
-        self.anchor_time, self.anchor_monotonic = self.clock(), self.monotonic()
-        self.next_refresh = self.monotonic() + REFRESH_SECONDS
+        # Anchor offline expiry to the signed server clock too. A Windows clock
+        # running behind must not outlive the server's concurrency reservation.
+        # Charge the entire round trip conservatively against the lease.
+        self.anchor_time, self.anchor_monotonic = max(self.clock(), claims['issued_at'] + max(0, elapsed)), self.monotonic()
+        self.next_refresh = self.monotonic() + (SESSION_REFRESH_SECONDS if claims.get('license_mode') == 'floating' else REFRESH_SECONDS)
         self.error = ''; self.save()
         return claims
 
@@ -155,9 +162,10 @@ class DesktopLicense:
             fingerprint = hashlib.sha256(key.encode()).hexdigest()
             if self.state.get('activation_token') and self.state.get('key_hash') and self.state['key_hash'] != fingerprint:
                 raise LicenseError('Hủy kích hoạt key hiện tại trước khi nhập key khác. Nếu đã gia hạn cùng key, bấm Kiểm tra lại.')
-            response = self.transport(self.config, 'activate', dict(device=self.device, key=key))
+            began = self.monotonic()
+            response = self.transport(self.config, 'activate', dict(device=self.device, key=key, session_id=self.session_id))
             with self.lock:
-                claims = self.accept(response, response.get('activation_token'))
+                claims = self.accept(response, response.get('activation_token'), self.monotonic() - began)
                 self.state['key_hash'] = fingerprint; self.save()
                 return claims
 
@@ -167,13 +175,14 @@ class DesktopLicense:
                 return False
             if not force and self.monotonic() < self.next_refresh:
                 return self.allowed()
-            self.next_refresh = self.monotonic() + REFRESH_SECONDS
+            self.next_refresh = self.monotonic() + (SESSION_REFRESH_SECONDS if self.state.get('license_mode') == 'floating' else REFRESH_SECONDS)
             if not self.state.get('activation_token'):
                 return False
             try:
-                response = self.transport(self.config, 'refresh', dict(device=self.device, activation_token=self.state['activation_token']))
+                began = self.monotonic()
+                response = self.transport(self.config, 'refresh', dict(device=self.device, activation_token=self.state['activation_token'], session_id=self.session_id))
                 with self.lock:
-                    self.accept(response)
+                    self.accept(response, elapsed=self.monotonic() - began)
             except ActivationInvalid as error:
                 with self.lock:
                     self.error = str(error); self.state = {}; self.save()
@@ -193,7 +202,7 @@ class DesktopLicense:
             try:
                 if self.state.get('activation_token'):
                     try:
-                        self.transport(self.config, 'deactivate', dict(device=self.device, activation_token=self.state['activation_token']))
+                        self.transport(self.config, 'deactivate', dict(device=self.device, activation_token=self.state['activation_token'], session_id=self.session_id))
                     except ActivationInvalid:
                         pass  # The server has already released this session.
                 with self.lock:
@@ -202,7 +211,31 @@ class DesktopLicense:
                 with self.lock:
                     self.deactivating = False
 
+    def release_session(self):
+        """Called only after runtime has drained all work; retain saved login."""
+        with self.exchange_lock:
+            if self.state.get('license_mode') != 'floating':
+                return
+            with self.lock:
+                self.deactivating = True
+            try:
+                if self.state.get('activation_token'):
+                    try:
+                        self.transport(self.config, 'release', dict(device=self.device,
+                            activation_token=self.state['activation_token'], session_id=self.session_id))
+                    except (LicenseError, ConnectionError):
+                        # A lost release is recovered by the server reservation
+                        # timeout. Never keep the desktop alive just for this.
+                        pass
+                with self.lock:
+                    self.startup_verified = False
+                    self.state.pop('lease', None)
+                    self.save()
+            finally:
+                with self.lock:
+                    self.deactivating = False
+
     def status(self):
         claims = self.claims()
         return dict(allowed=bool(claims), device=self.device, claims=claims, error=self.error,
-                    can_deactivate=bool(self.state.get('activation_token')))
+                    can_deactivate=bool(self.state.get('activation_token')), license_mode=self.state.get('license_mode', 'unknown'))
