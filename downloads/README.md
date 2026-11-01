@@ -1,5 +1,16 @@
 # Gói mã nguồn ZaloFlow để lưu dự phòng
 
+## Tool Windows ngày 01/11/2026
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-admin-20261101/ZaloFlow-Setup-x64.exe)
+- [Tải ZIP bộ cài kèm hướng dẫn](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-admin-20261101/ZaloFlow-Tool-Windows-2026-11-01.zip)
+
+Nguồn ứng dụng `ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b`: key mới dùng trong một tool tại một thời điểm, không khóa máy; cấp key kèm quản trị tool để tạo nhiều tài khoản thường. Bộ cài đã được dựng và kiểm tra trên Windows, gồm cửa sổ WebView2, tài khoản/quyền, icon Desktop, cài đè và gỡ giữ dữ liệu. Đóng tool cũ rồi cài đè bằng cùng tài khoản Windows.
+
+Cần cập nhật máy chủ key theo `HUONG-DAN.txt` trong ZIP. Chưa có kết quả xác nhận kiểm tra VPS thật từ chủ phần mềm; bản này được đóng gói theo yêu cầu trực tiếp ngày 01/11/2026. Bộ cài không chứa tài khoản khách hàng, mật khẩu SMTP hoặc khóa ký riêng. Các gói mã nguồn bên dưới là bản lưu theo đúng ngày, không tự thêm thay đổi mới.
+
+SHA256 ZIP: `33dd8c62941a5019237e63b6ce3b323d1d7d158430d576df11a0ae7c2b65623c`.
+
 ## Bản ngày 30/10/2026
 
 [Tải mã nguồn và bộ cài VPS mới](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/ZaloFlow-toan-bo-code-va-cai-VPS-2026-10-30.zip)
