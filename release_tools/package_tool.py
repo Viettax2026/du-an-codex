@@ -7,9 +7,9 @@ import re
 import shutil
 import zipfile
 
-APP_COMMIT = '5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae'
-TAG = 'windows-tool-privacy-20261102'
-ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-02-r2.zip'
+APP_COMMIT = '16b433662e3e27939bfc3286fb18b673ef897e49'
+TAG = 'windows-tool-login-20261102'
+ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-02-r3.zip'
 ARCHIVE_ROOT = 'ZaloFlow-2026-11-02/'
 
 
@@ -47,7 +47,7 @@ def assemble(installer_dir, output, customer_guide, audit_report):
     names = ['ZaloFlow-Setup-x64.exe','ZaloFlow-Setup-x64.exe.sha256','SOURCE.txt','HUONG-DAN.txt','PRIVACY-AUDIT.json']
     manifest = dict(source_commit=APP_COMMIT, release_tag=TAG, owner_requested_packaging=True,
                     vps_live_test_confirmed=False, floating_license=True, tool_admin_accounts=True,
-                    neutral_branding=True, automatic_admin_credentials=True,
+                    neutral_branding=True, automatic_admin_credentials=True, admin_name_conflict_resolved=True,
                     installed_artifact_privacy_checked=True,
                     approved_license_endpoint_retained=bool(audit.get('accepted_exceptions')),
                     includes_customer_credentials=False, includes_private_authority=False,
@@ -66,6 +66,7 @@ def assemble(installer_dir, output, customer_guide, audit_report):
 - Tải `ZaloFlow-Setup-x64.exe` để cài trực tiếp hoặc `{ZIP_NAME}` kèm hướng dẫn.
 - Đã kiểm tra cả tệp cài ra, ZIP nội bộ và mô-đun Python trong file chạy; kết quả đi kèm trong `PRIVACY-AUDIT.json`. Loại email quản trị web cũ khỏi bản desktop và bỏ cấu hình JSON rõ.
 - Giữ địa chỉ máy chủ kiểm tra key hiện tại theo yêu cầu chủ phần mềm; chỉ URL đó ở phần bản quyền là ngoại lệ. Không tuyên bố giấu danh tính máy chủ hoặc tài khoản kênh phát hành GitHub.
+- Sửa lỗi đăng nhập khi tên quản trị được cấp đã có trong tool: vào Bản quyền > Tạo quản trị bằng tên khác, chọn tên mới và xác nhận mật khẩu khởi tạo. Đăng nhập bằng tên mới và cùng mật khẩu được cấp. Giữ nguyên tài khoản, mật khẩu và dữ liệu cũ; không chuyển dữ liệu giữa tài khoản. Dùng lại key hiện tại, không cần cấp key mới.
 - Máy chủ bản quyền mới tự cấp đủ key, tài khoản và mật khẩu quản trị; hỗ trợ bổ sung quản trị cho key chưa có. Khách cần máy chủ đã cập nhật để dùng chức năng này.
 - Key mới dùng một phiên tool tại một thời điểm, trên bất kỳ máy nào. Đóng tool cũ trước khi dùng ở tool khác; tắt đột ngột chờ tối đa 2 phút.
 - Đóng tool cũ rồi cài đè trong cùng tài khoản Windows; giữ dữ liệu, tiến độ và kích hoạt. Mở lại/gia hạn không đặt lại mật khẩu đã khôi phục.
