@@ -1,0 +1,89 @@
+name: Publish checked Windows login fix
+on:
+  push:
+    tags: ['windows-tool-login-publish-20261102']
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.ref == 'refs/tags/windows-tool-login-publish-20261102'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Run 20 passed all native/package/installer checks; only publication failed.
+      # Reuse its exact installer rather than rebuilding a different binary.
+      - uses: actions/download-artifact@v4
+        with:
+          name: ZaloFlow-Setup-Windows-x64
+          path: desktop/dist/installer
+          github-token: ${{ github.token }}
+          run-id: 41476572891
+      - name: Install archive inspection tools
+        shell: pwsh
+        run: |
+          python -m pip install PyInstaller==6.22.3
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot install archive reader.' }
+      - name: Recheck the actual installer and prepare public files
+        shell: pwsh
+        run: |
+          try {
+            ./desktop/test-installer.ps1
+            python release_tools/package_tool.py --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-tool" --customer-guide desktop/HUONG-DAN.txt --audit-report "$env:RUNNER_TEMP/zaloflow-installed-privacy.json"
+            if ($LASTEXITCODE -ne 0) { throw 'Installer source, hash or audit mismatch.' }
+          } catch {
+            $diagnostic = $_.Exception.ToString().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Checked installer recovery::$diagnostic"
+            throw
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZaloFlow-login-public-files
+          path: ${{ runner.temp }}/zaloflow-public-tool/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish checked installer with bounded diagnostics
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $releaseTag = 'windows-tool-login-20261102'
+          $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-public-tool'
+          function Invoke-CheckedGh([string[]]$arguments) {
+            $result = & gh @arguments 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+              if ($result.Length -gt 6000) { $result = $result.Substring($result.Length - 6000) }
+              $diagnostic = $result.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Output "::error title=Release publication::$diagnostic"
+              throw "GitHub release command failed with exit code $code."
+            }
+            return $result
+          }
+          $view = & gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>&1 | Out-String
+          $viewCode = $LASTEXITCODE
+          if ($viewCode -eq 0) {
+            if ($view.Trim() -ne 'true') { throw 'Do not overwrite an already published release.' }
+          } elseif ($view -match 'release not found|HTTP 404|Not Found') {
+            Invoke-CheckedGh -arguments @('release','create',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--verify-tag','--draft','--title','ZaloFlow 1.0.20 - Tool Windows','--notes-file',"$releaseFolder/RELEASE-NOTES.md")
+          } else {
+            $diagnostic = $view.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Release lookup::$diagnostic"
+            throw 'Cannot determine release status.'
+          }
+          $assets = @(Get-ChildItem $releaseFolder -File | Where-Object { $_.Name -ne 'RELEASE-NOTES.md' } | ForEach-Object { $_.FullName })
+          Invoke-CheckedGh -arguments (@('release','upload',$releaseTag) + $assets + @('--clobber','--repo',$env:GITHUB_REPOSITORY))
+          Invoke-CheckedGh -arguments @('release','edit',$releaseTag,'--draft=false','--repo',$env:GITHUB_REPOSITORY)
+          Invoke-CheckedGh -arguments @('release','view',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--json','url,assets')
