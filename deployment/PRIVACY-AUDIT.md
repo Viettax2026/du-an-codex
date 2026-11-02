@@ -1,10 +1,21 @@
-# Kiểm tra dấu vết chủ phần mềm — ZaloFlow 1.0.19
+# Kiểm tra dấu vết chủ phần mềm — ZaloFlow 1.0.20
 
 Ngày kiểm tra: 02/11/2026. Đây là kiểm tra **bộ cài đã phát hành**, không chỉ mã nguồn hoặc ảnh giao diện.
 
 ## Kết luận
 
-Bản **1.0.19 đã phát hành và được tải lại để kiểm tra độc lập**. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+Bản **1.0.20 đã phát hành và được tải lại để kiểm tra độc lập**, tiếp tục giữ sửa đổi của 1.0.19. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+
+## Kết quả bản 1.0.20 đã phát hành
+
+- [Bộ cài EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Setup-x64.exe), [ZIP kèm hướng dẫn và báo cáo](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Tool-Windows-2026-11-02-r3.zip).
+- Nguồn ứng dụng `16b433662e3e27939bfc3286fb18b673ef897e49`, phiên bản 1.0.20. Thêm xử lý tên quản trị trùng bằng tên local mới và xác nhận mật khẩu khởi tạo của key; không thay dữ liệu hoặc tài khoản cũ.
+- [Lượt dựng 20](https://github.com/Viettax2026/du-an-codex/actions/runs/41476572891) vượt kiểm tra mã, chương trình biên dịch, WebView2 và bộ cài, nhưng lỗi xuất bản. [Lượt khôi phục](https://github.com/Viettax2026/du-an-codex/actions/runs/41479183393) tải lại đúng artifact của lượt 20, kiểm tra cài đặt/nâng cấp/gỡ và quét mã nén trước khi phát hành thành công; không dựng lại một EXE khác.
+- Quét thực tế cài đặt Windows: **2060 tệp, 1036 mô-đun Python, 165 mục ZIP**, kết quả đạt. Tải lại ZIP công khai, đối chiếu từng checksum/manifest/CRC, giải nén chính bộ cài rồi quét độc lập **2058 tệp, cùng 1036 mô-đun và 165 mục ZIP**, kết quả đạt. Cảnh báo chuyển mã của innoextract và phạm vi bộ quét giống phần 1.0.19 bên dưới.
+- Không có mô-đun `legacy_web_accounts` hoặc JSON cấu hình rõ trong gói mới. Xác nhận mã nén có xử lý `local_username` và `resolve-admin-name`, biểu mẫu mới có trong tệp template. Chỉ URL key trong `desktop.license_identity` được ghi là ngoại lệ đã cho phép.
+- SHA256 chương trình chính khớp báo cáo Windows: `b3697680f5a1809806f656e65f11ba61c2e8994571848d55f0f0f9ecd3ad7f98`.
+- SHA256 bộ cài: `d078b738919ae7e33e3139d736885f12c1037dda6914e5835f982b03ecd033a7`.
+- SHA256 ZIP (42840885 byte): `412e626f40bad661e7a21da558be0a928139c5ff63ed9932624ba37496454c48`.
 
 ## Kết quả bản 1.0.19 đã phát hành
 

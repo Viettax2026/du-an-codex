@@ -2,9 +2,22 @@
 
 ## Lưu ý về thông tin chủ phần mềm
 
-Bản mới **1.0.19** đã loại email quản trị cũ khỏi mã desktop và vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
+Bản mới **1.0.20** giữ việc loại email quản trị cũ khỏi mã desktop và đã vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
 
-## Tool Windows ngày 02/11/2026 — bản mới 1.0.19
+## Tool Windows ngày 02/11/2026 — bản mới 1.0.20, xử lý trùng tên quản trị
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Setup-x64.exe)
+- [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Tool-Windows-2026-11-02-r3.zip)
+
+Nguồn ứng dụng `16b433662e3e27939bfc3286fb18b673ef897e49`. Sửa trường hợp key có quản trị `test` nhưng trong tool đã có tài khoản `test` dùng mật khẩu khác. Vào **Bản quyền → Tạo quản trị bằng tên khác**, chọn tên chưa dùng (ví dụ `test-key-6`), xác nhận bằng mật khẩu khởi tạo đã cấp cùng key. Sau đó đăng nhập bằng tên mới và cùng mật khẩu đó. Giữ nguyên key, tài khoản, mật khẩu, quyền và dữ liệu cũ; dữ liệu cũ vẫn thuộc tài khoản cũ. Chỉ tạo một quản trị cho mỗi key trong hồ sơ tool, giữ ánh xạ tên mới khi mở lại/gia hạn và không đặt lại mật khẩu đã đổi.
+
+Đã kiểm tra luồng qua trình duyệt với dữ liệu giả, chương trình biên dịch trên Windows/WebView2 và cài đặt/cài đè/gỡ giữ dữ liệu. Lượt dựng 20 vượt các kiểm tra nhưng lỗi ở bước xuất bản; [lượt khôi phục phát hành](https://github.com/Viettax2026/du-an-codex/actions/runs/41479183393) dùng lại chính bộ cài đó và kiểm tra lại trước khi phát hành. Đã tải ZIP công khai, đối chiếu CRC/checksum/manifest, giải nén EXE và quét 2058 tệp, 1036 mô-đun Python, 165 mục ZIP; không có phát hiện ngoài URL key đã cho phép và không có lỗi đọc. Hash chương trình khớp báo cáo cài đặt Windows.
+
+Đóng tool cũ rồi cài đè trong cùng tài khoản Windows. Không cần cấp key mới hoặc cập nhật VPS cho sửa lỗi trùng tên này. Chưa có kết quả kiểm tra VPS thật do chủ phần mềm cung cấp.
+
+SHA256 ZIP: `412e626f40bad661e7a21da558be0a928139c5ff63ed9932624ba37496454c48`.
+
+## Tool Windows ngày 02/11/2026 — bản 1.0.19
 
 - [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-privacy-20261102/ZaloFlow-Setup-x64.exe)
 - [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-privacy-20261102/ZaloFlow-Tool-Windows-2026-11-02-r2.zip)
