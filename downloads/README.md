@@ -2,7 +2,20 @@
 
 ## Lưu ý về thông tin chủ phần mềm
 
-Kiểm tra thực tế ngày 02/11/2026 xác nhận bản 1.0.18 vẫn có tên miền máy chủ và dấu vết quản trị cũ trong tệp/mã nén; nơi tải GitHub cũng hiển thị tài khoản chủ sở hữu. Những bản bên dưới là bản lưu chức năng, **còn email quản trị cũ trong mã nén cần loại khỏi bộ cài mới**. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền; ngoài ngoại lệ đó, bản mới phải vượt kiểm tra toàn bộ gói trước khi giao khách.
+Bản mới **1.0.19** đã loại email quản trị cũ khỏi mã desktop và vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
+
+## Tool Windows ngày 02/11/2026 — bản mới 1.0.19
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-privacy-20261102/ZaloFlow-Setup-x64.exe)
+- [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-privacy-20261102/ZaloFlow-Tool-Windows-2026-11-02-r2.zip)
+
+Nguồn ứng dụng `5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae`. Bỏ mô-đun chuyển đổi email quản trị web cũ khỏi desktop và không đóng kèm JSON cấu hình rõ. Giữ máy chủ key và khóa công khai đang dùng; tài khoản và dữ liệu cũ được giữ nguyên. Không yêu cầu đổi tên miền.
+
+Đã kiểm tra Windows/WebView2, tài khoản/quyền, cài đè, shortcut và gỡ giữ dữ liệu/kích hoạt. Quét sau cài đặt: 2060 tệp, 1036 mô-đun Python, 165 mục ZIP; không phát hiện chuỗi chủ sở hữu đã kiểm tra ngoài URL key được cho phép. Đã tải lại ZIP công khai, kiểm tra toàn bộ checksum/manifest, giải nén EXE và quét độc lập; hash chương trình khớp báo cáo Windows. `PRIVACY-AUDIT.json` đi kèm gắn kết quả với đúng bộ cài.
+
+Đóng tool cũ rồi cài đè trong cùng tài khoản Windows. Các chức năng key một phiên, tự tạo quản trị và tạo nhiều tài khoản trong cùng tool được giữ nguyên. Chưa có kết quả kiểm tra VPS thật do chủ phần mềm cung cấp.
+
+SHA256 ZIP: `83146e111e6581a1f2ea6bf1b250fc3a640961c60debe89b83b7df075cc4b7f3`.
 
 ## Tool Windows ngày 02/11/2026 — bản 1.0.18
 
