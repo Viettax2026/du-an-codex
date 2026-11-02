@@ -1,5 +1,16 @@
 # Gói mã nguồn ZaloFlow để lưu dự phòng
 
+## Tool Windows ngày 02/11/2026 — bản 1.0.18
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-neutral-20261102/ZaloFlow-Setup-x64.exe)
+- [Tải ZIP bộ cài kèm hướng dẫn](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-neutral-20261102/ZaloFlow-Tool-Windows-2026-11-02.zip)
+
+Nguồn `bcd5cb298ab438ac487c236ced8f0caaa7af78d5`: màn hình cài đặt, nhà phát hành và hướng dẫn dùng thương hiệu ZaloFlow, không hiển thị thông tin đơn vị sở hữu trong hướng dẫn khách hàng. Máy chủ mới tự tạo đủ key, tài khoản và mật khẩu quản trị, hỗ trợ xem lại bộ thông tin khởi tạo và bổ sung quản trị cho key chưa có. Khách đã đổi/khôi phục mật khẩu trong tool vẫn dùng mật khẩu mới, không bị đặt lại.
+
+Đã kiểm tra native Windows/WebView2, chức năng tài khoản, publisher/hướng dẫn sau cài đặt, icon Desktop, cài đè và gỡ giữ dữ liệu. Đóng tool cũ rồi cài đè trong cùng tài khoản Windows. Quản trị cần cập nhật máy chủ theo [hướng dẫn bản quyền](../deployment/LICENSES.md) để dùng tự tạo quản trị và xem bộ thông tin; hướng dẫn khách hàng trong ZIP không chứa địa chỉ quản trị riêng. Chưa có kết quả kiểm tra VPS thật do chủ phần mềm cung cấp; bản được đóng gói theo yêu cầu trực tiếp ngày 02/11/2026.
+
+SHA256 ZIP: `bdee7827ab582e717f57c8f7d9633827f8c33a26c91982a84178ebe01a2f2eb1`.
+
 ## Tool Windows ngày 01/11/2026
 
 - [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-admin-20261101/ZaloFlow-Setup-x64.exe)
