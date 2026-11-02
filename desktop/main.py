@@ -1,6 +1,7 @@
 """Native Windows window; no server or schedule service is installed."""
 import argparse
 import faulthandler
+import hashlib
 import json
 import logging
 import os
@@ -63,10 +64,15 @@ def run_window(runtime,smoke=False):
 
 def smoke_check(report,gui=False):
     from desktop.licensing import CONFIG_PATH, DesktopLicense, load_config
-    from license_system.signatures import PRODUCT, new_signer, public_text, sign
+    from license_system.signatures import PRODUCT, LicenseError, new_signer, public_text, sign
     from werkzeug.security import generate_password_hash
-    if CONFIG_PATH.is_file():
-        assert load_config()==json.loads(CONFIG_PATH.read_text(encoding='utf-8')),'Bundled publisher identity does not match the build configuration'
+    publisher_identity_sha256=''
+    try:
+        publisher=load_config()
+    except LicenseError:
+        pass  # Unconfigured disposable builds still exercise synthetic flows.
+    else:
+        publisher_identity_sha256=hashlib.sha256(json.dumps(publisher,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     # Persistent WebView2 profiles can retain a cache file until process exit.
     # These are disposable test profiles; the process job closes any remaining
     # browser children on exit. Normal user profiles are never removed here.
@@ -105,7 +111,7 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True,floating_license=True,tool_admin_accounts=True)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True,floating_license=True,tool_admin_accounts=True,publisher_identity_sha256=publisher_identity_sha256)),encoding='utf-8')
         finally:runtime.stop()
 
 

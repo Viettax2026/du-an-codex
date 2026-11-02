@@ -38,6 +38,15 @@ function Assert-PublicInformation {
     if ($dialog -match '(?i)Viettax') { throw 'Customer interface exposes owner information.' }
 }
 
+function Assert-InstalledPrivacy {
+    $auditPath = Join-Path $env:RUNNER_TEMP 'zaloflow-installed-privacy.json'
+    python -m desktop.privacy_audit --app-dir $appPath --report $auditPath
+    if ($LASTEXITCODE -ne 0) { throw 'Actual installed files expose owner identity or could not be inspected.' }
+    $audit = Get-Content $auditPath -Raw | ConvertFrom-Json
+    $audit | Add-Member -NotePropertyName installer_sha256 -NotePropertyValue (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -Force
+    $audit | ConvertTo-Json -Depth 10 | Set-Content $auditPath -Encoding utf8
+}
+
 function Assert-InstalledApp {
     $reportPath = Join-Path $env:RUNNER_TEMP 'zaloflow-installed-smoke.json'
     Remove-Item $reportPath -ErrorAction SilentlyContinue
@@ -56,6 +65,7 @@ try {
     Run-Installer $setup $argsInstall 'zaloflow-install.log'
     Assert-Shortcuts
     Assert-PublicInformation
+    Assert-InstalledPrivacy
     Assert-InstalledApp
     foreach ($folder in @('instance', 'license')) {
         New-Item -ItemType Directory "$dataPath/$folder" -Force | Out-Null
@@ -64,6 +74,7 @@ try {
     Run-Installer $setup $argsInstall 'zaloflow-upgrade.log'
     Assert-Shortcuts
     Assert-PublicInformation
+    Assert-InstalledPrivacy
     Assert-InstalledApp
     Run-Installer "$appPath/unins000.exe" @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'zaloflow-uninstall.log'
     if ((Test-Path "$appPath/ZaloFlow.exe") -or (Test-Path $desktopShortcut) -or (Test-Path $startShortcut)) { throw 'Uninstall left application or shortcuts behind.' }

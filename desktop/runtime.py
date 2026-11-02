@@ -44,7 +44,7 @@ class DesktopRuntime:
         self.instance=self.data_root/'instance';self.instance.mkdir(parents=True,exist_ok=True)
         self.instance_lock=RuntimeLock(self.data_root/'desktop.lock').acquire()
         self.stop_event=threading.Event();self.closed=threading.Event();self.lifecycle=threading.Lock()
-        settings=dict(DATABASE=str(self.instance/'zalo.sqlite3'),SESSION_COOKIE_SECURE=False,
+        settings=dict(DATABASE=str(self.instance/'zalo.sqlite3'),SESSION_COOKIE_SECURE=False,DESKTOP_RUNTIME=True,
             ZALO_QR_ENABLED=True,TRUSTED_HOSTS=['127.0.0.1','localhost'],DESKTOP_STOP_EVENT=self.stop_event)
         settings.update(config or {})
         try:self.app=create_app(settings,instance_path=self.instance)

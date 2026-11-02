@@ -8,6 +8,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Python dependencies failed.' }
     python -m desktop.configure_build
     if ($LASTEXITCODE -ne 0) { throw 'Invalid public license configuration.' }
+    if (Test-Path desktop/license-config.json) {
+        python -m desktop.privacy_audit --config desktop/license-config.json
+        if ($LASTEXITCODE -ne 0) { throw 'Customer configuration exposes information outside the approved license endpoint.' }
+    }
     if (-not $AllowUnconfigured -and -not (Test-Path desktop/license-config.json)) {
         throw 'Copy the PUBLIC client-config.json from the license server to desktop/license-config.json first.'
     }
@@ -19,5 +23,7 @@ try {
     python -m PyInstaller --noconfirm --clean --distpath desktop/dist --workpath desktop/build desktop/zaloflow.spec
     if ($LASTEXITCODE -ne 0) { throw 'Windows package build failed.' }
     Copy-Item desktop/HUONG-DAN.txt desktop/dist/ZaloFlow/HUONG-DAN.txt
+    python -m desktop.privacy_audit --app-dir desktop/dist/ZaloFlow --report desktop/dist/privacy-audit.json
+    if ($LASTEXITCODE -ne 0) { throw 'Customer package privacy audit failed. Do not distribute this build.' }
     Write-Host 'Ready: desktop/dist/ZaloFlow/ZaloFlow.exe'
 } finally { Pop-Location }

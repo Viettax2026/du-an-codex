@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from functools import wraps
@@ -113,13 +114,9 @@ def create_app(test_config=None,instance_path=None):
         if 'username' not in user_columns:
             db().execute('ALTER TABLE users RENAME COLUMN email TO username')
             db().commit()
-        legacy_admin = db().execute(
-            'SELECT id FROM users WHERE username=?', ('lienhe.viettaxco@gmail.com',)).fetchone()
-        if legacy_admin:
-            if db().execute('SELECT id FROM users WHERE lower(username)=?', ('admin',)).fetchone():
-                raise RuntimeError('Không thể đổi tài khoản cũ: tên admin đã được sử dụng.')
-            db().execute('UPDATE users SET username=? WHERE id=?', ('admin', legacy_admin['id']))
-            db().commit()
+        if not getattr(sys, 'frozen', False) and not app.config.get('DESKTOP_RUNTIME'):
+            from legacy_web_accounts import migrate_legacy_web_account
+            migrate_legacy_web_account(db())
         if 'account_id' not in {row['name'] for row in db().execute('PRAGMA table_info(campaigns)')}:
             db().execute('ALTER TABLE campaigns ADD COLUMN account_id INTEGER REFERENCES zalo_accounts(id)')
             db().commit()

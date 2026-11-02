@@ -16,6 +16,7 @@ def fixture_installer(tmp_path):
     exe=folder/'ZaloFlow-Setup-x64.exe';exe.write_bytes(b'MZ-synthetic-only-for-pytest')
     (folder/'ZaloFlow-Setup-x64.exe.sha256').write_text(hashlib.sha256(exe.read_bytes()).hexdigest()+'  '+exe.name+'\n')
     (folder/'SOURCE.txt').write_text('Application source: '+release.APP_COMMIT+'\nInstaller version: 1.0.99\n')
+    (folder/'audit.json').write_text(json.dumps(dict(passed=True,findings=[],errors=[],files_scanned=1,modules_scanned=1,installer_sha256=hashlib.sha256(exe.read_bytes()).hexdigest())))
     return folder
 
 
@@ -24,7 +25,7 @@ def test_tool_zip_has_checked_installer_source_guide_and_honest_provenance(tmp_p
     # Unrelated private files next to the installer must not enter the release.
     (folder/'admin-password.txt').write_text('synthetic-secret')
     output=tmp_path/'release'
-    manifest=release.assemble(folder,output,ROOT/'desktop/HUONG-DAN.txt')
+    manifest=release.assemble(folder,output,ROOT/'desktop/HUONG-DAN.txt',folder/'audit.json')
     assert manifest['source_commit']==release.APP_COMMIT
     assert manifest['floating_license'] and manifest['tool_admin_accounts']
     assert manifest['vps_live_test_confirmed'] is False
@@ -48,4 +49,14 @@ def test_tool_release_rejects_corruption_wrong_source_or_non_executable(tmp_path
     else:
         exe=folder/'ZaloFlow-Setup-x64.exe';exe.write_bytes(b'not-an-executable')
         (folder/'ZaloFlow-Setup-x64.exe.sha256').write_text(hashlib.sha256(exe.read_bytes()).hexdigest())
-    with pytest.raises(ValueError):release.assemble(folder,tmp_path/'release',ROOT/'desktop/HUONG-DAN.txt')
+    with pytest.raises(ValueError):release.assemble(folder,tmp_path/'release',ROOT/'desktop/HUONG-DAN.txt',folder/'audit.json')
+
+
+def test_customer_release_cannot_bypass_failed_or_unrelated_artifact_audit(tmp_path):
+    folder=fixture_installer(tmp_path)
+    report=folder/'audit.json'
+    original=json.loads(report.read_text())
+    for changed in (dict(passed=False),dict(findings=[{'marker':'owner'}]),dict(modules_scanned=0),dict(installer_sha256='0'*64)):
+        report.write_text(json.dumps(dict(original,**changed)))
+        with pytest.raises(ValueError,match='inspection'):
+            release.assemble(folder,tmp_path/'release',ROOT/'desktop/HUONG-DAN.txt',report)

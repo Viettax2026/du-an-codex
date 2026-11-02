@@ -18,7 +18,7 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def assemble(installer_dir, output, customer_guide):
+def assemble(installer_dir, output, customer_guide, audit_report):
     installer_dir, output = Path(installer_dir), Path(output)
     exe = installer_dir/'ZaloFlow-Setup-x64.exe'
     checksum = Path(str(exe)+'.sha256')
@@ -31,6 +31,11 @@ def assemble(installer_dir, output, customer_guide):
     source = installer_dir/'SOURCE.txt'
     if 'Application source: '+APP_COMMIT not in source.read_text(encoding='utf-8-sig'):
         raise ValueError('Installer source does not match the approved application')
+    audit = json.loads(Path(audit_report).read_text(encoding='utf-8-sig'))
+    if (audit.get('passed') is not True or audit.get('findings') or audit.get('errors')
+            or audit.get('modules_scanned',0)<1 or audit.get('files_scanned',0)<1
+            or audit.get('installer_sha256')!=digest(exe)):
+        raise ValueError('Missing or failed inspection of the actual installed customer files')
     output.mkdir(parents=True, exist_ok=True)
     for path in (exe, checksum, source):
         shutil.copyfile(path, output/path.name)
@@ -38,10 +43,13 @@ def assemble(installer_dir, output, customer_guide):
     if re.search(r'Viettax|du-an-codex|cskh\.',guide,re.IGNORECASE):
         raise ValueError('Customer guide contains owner branding')
     (output/'HUONG-DAN.txt').write_text(guide, encoding='utf-8')
-    names = ['ZaloFlow-Setup-x64.exe','ZaloFlow-Setup-x64.exe.sha256','SOURCE.txt','HUONG-DAN.txt']
+    (output/'PRIVACY-AUDIT.json').write_text(json.dumps(audit,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    names = ['ZaloFlow-Setup-x64.exe','ZaloFlow-Setup-x64.exe.sha256','SOURCE.txt','HUONG-DAN.txt','PRIVACY-AUDIT.json']
     manifest = dict(source_commit=APP_COMMIT, release_tag=TAG, owner_requested_packaging=True,
                     vps_live_test_confirmed=False, floating_license=True, tool_admin_accounts=True,
                     neutral_branding=True, automatic_admin_credentials=True,
+                    installed_artifact_privacy_checked=True,
+                    approved_license_endpoint_retained=bool(audit.get('accepted_exceptions')),
                     includes_customer_credentials=False, includes_private_authority=False,
                     files={name:digest(output/name) for name in names})
     (output/'RELEASE-MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
@@ -72,8 +80,9 @@ def main():
     parser.add_argument('--installer-dir',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--customer-guide',type=Path,required=True)
+    parser.add_argument('--audit-report',type=Path,required=True)
     args=parser.parse_args()
-    manifest=assemble(args.installer_dir,args.output,args.customer_guide)
+    manifest=assemble(args.installer_dir,args.output,args.customer_guide,args.audit_report)
     print(json.dumps(dict(source_commit=manifest['source_commit'],release_tag=TAG,zip=ZIP_NAME)))
 
 

@@ -1,5 +1,9 @@
 # Gói mã nguồn ZaloFlow để lưu dự phòng
 
+## Lưu ý về thông tin chủ phần mềm
+
+Kiểm tra thực tế ngày 02/11/2026 xác nhận bản 1.0.18 vẫn có tên miền máy chủ và dấu vết quản trị cũ trong tệp/mã nén; nơi tải GitHub cũng hiển thị tài khoản chủ sở hữu. Những bản bên dưới là bản lưu chức năng, **còn email quản trị cũ trong mã nén cần loại khỏi bộ cài mới**. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền; ngoài ngoại lệ đó, bản mới phải vượt kiểm tra toàn bộ gói trước khi giao khách.
+
 ## Tool Windows ngày 02/11/2026 — bản 1.0.18
 
 - [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-neutral-20261102/ZaloFlow-Setup-x64.exe)

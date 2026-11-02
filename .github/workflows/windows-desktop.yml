@@ -85,13 +85,16 @@ jobs:
         run: |
           python -m pip install -r desktop/requirements.txt pytest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_registration.py tests/test_desktop_runtime.py tests/test_license_system.py tests/test_license_sessions.py tests/test_desktop_admin_accounts.py tests/test_license_key_view.py tests/test_auto_tool_admin.py -q
+          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_registration.py tests/test_desktop_runtime.py tests/test_license_system.py tests/test_license_sessions.py tests/test_desktop_admin_accounts.py tests/test_license_key_view.py tests/test_auto_tool_admin.py tests/test_privacy_audit.py -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Read public license configuration
         id: license_config
         env:
           ZALOFLOW_CLIENT_CONFIG: ${{ inputs.license_config }}
         run: python -m desktop.configure_build
+      - name: Check approved customer license endpoint
+        if: steps.license_config.outputs.configured == 'true'
+        run: python -m desktop.privacy_audit --config desktop/license-config.json
       - name: Build native Windows package
         shell: pwsh
         run: ./desktop/build-windows.ps1 -AllowUnconfigured
@@ -99,9 +102,9 @@ jobs:
         if: steps.license_config.outputs.configured == 'true'
         shell: pwsh
         run: |
-          $expected = Get-Content desktop/license-config.json -Raw | ConvertFrom-Json
-          $bundled = Get-Content desktop/dist/ZaloFlow/_internal/desktop/license-config.json -Raw | ConvertFrom-Json
-          if ($bundled.version -ne $expected.version -or $bundled.server_url -ne $expected.server_url -or $bundled.public_key -ne $expected.public_key) { throw 'The packaged license authority does not match the owner configuration.' }
+          if (Test-Path desktop/dist/ZaloFlow/_internal/desktop/license-config.json) { throw 'Do not ship an editable plaintext publisher configuration.' }
+          python -m desktop.privacy_audit --app-dir desktop/dist/ZaloFlow --report desktop/dist/privacy-audit.json
+          if ($LASTEXITCODE -ne 0) { throw 'Compressed code or packaged files expose owner identity.' }
           $privateFiles = Get-ChildItem desktop/dist/ZaloFlow -Recurse -File | Where-Object { $_.Name -in @('signing-private.pem', 'admin-password.txt', 'session-secret.txt', 'licenses.sqlite3') }
           if ($privateFiles) { throw 'Private authority data must never be included in the customer package.' }
       - name: Smoke test packaged web server, scheduler and bundled Node
@@ -113,6 +116,10 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Packaged smoke test failed.' }
           $report = Get-Content $reportPath -Raw | ConvertFrom-Json
           if (-not $report.ok -or -not $report.stopped -or -not $report.node_available -or -not $report.licensed -or -not $report.password_recovery -or -not $report.self_registration -or -not $report.floating_license -or -not $report.tool_admin_accounts) { throw 'Incomplete smoke test.' }
+          if ('${{ steps.license_config.outputs.configured }}' -eq 'true') {
+            $expectedIdentity = python -c "import hashlib,json,pathlib; c=json.loads(pathlib.Path('desktop/license-config.json').read_text()); print(hashlib.sha256(json.dumps(c,sort_keys=True,separators=(',',':')).encode()).hexdigest())"
+            if ($LASTEXITCODE -ne 0 -or $report.publisher_identity_sha256 -ne $expectedIdentity) { throw 'Compiled publisher identity does not match the build configuration.' }
+          }
           Get-Content $reportPath
       - name: Smoke test native Edge WebView2 window
         shell: pwsh
@@ -189,7 +196,7 @@ jobs:
           $env:ZALOFLOW_RELEASE_PACKAGER = $packager
           python -c "import os,pathlib,subprocess; pathlib.Path(os.environ['ZALOFLOW_RELEASE_PACKAGER']).write_bytes(subprocess.check_output(['git','show',os.environ['RELEASE_WORKFLOW_REF']+':release_tools/package_tool.py']))"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot load tool packaging instructions.' }
-          python $packager --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-tool" --customer-guide desktop/HUONG-DAN.txt
+          python $packager --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-tool" --customer-guide desktop/HUONG-DAN.txt --audit-report "$env:RUNNER_TEMP/zaloflow-installed-privacy.json"
           if ($LASTEXITCODE -ne 0) { throw 'Tool archive failed integrity/source validation.' }
       - uses: actions/upload-artifact@v4
         if: steps.license_config.outputs.configured == 'true'
