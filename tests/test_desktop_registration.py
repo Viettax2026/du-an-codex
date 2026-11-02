@@ -14,6 +14,9 @@ class License:
     def allowed(self):
         return self.valid
 
+    def claims(self):
+        return None  # This fixture represents a key without a tool admin grant.
+
     def status(self):
         return dict(claims=None, error='', activated=self.valid, allowed=self.valid, device='synthetic-device', can_deactivate=False)
 

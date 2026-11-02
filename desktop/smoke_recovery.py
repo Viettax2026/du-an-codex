@@ -6,6 +6,25 @@ from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
+def verify_admin_name_conflict(url, password):
+    """Exercise the actual form with disposable accounts, preserving the old one."""
+    browser = build_opener(HTTPCookieProcessor(CookieJar()))
+    with browser.open(url+'/desktop/license',timeout=10) as response:
+        page=response.read().decode('utf-8')
+    assert 'Tạo quản trị bằng tên khác' in page
+    csrf=re.search(r'name="csrf" value="([a-f0-9]+)"',page).group(1)
+    values=dict(csrf=csrf,action='resolve-admin-name',local_username='native-owner-key-1',initial_password=password)
+    with browser.open(Request(url+'/desktop/license',data=urlencode(values).encode()),timeout=10) as response:
+        assert 'Đã tạo quản trị native-owner-key-1' in response.read().decode('utf-8')
+    with browser.open(url+'/login',timeout=10) as response:
+        page=response.read().decode('utf-8')
+    csrf=re.search(r'name="csrf" value="([a-f0-9]+)"',page).group(1)
+    values=dict(csrf=csrf,username='native-owner',password='synthetic-old-password')
+    with browser.open(Request(url+'/login',data=urlencode(values).encode()),timeout=10) as response:
+        assert response.url.rstrip('/')==url,'The old account password was changed'
+    return True
+
+
 def verify_admin_flow(url, username, password):
     """A signed synthetic key provisions the owner before this HTTP check."""
     owner = build_opener(HTTPCookieProcessor(CookieJar()))

@@ -93,17 +93,26 @@ def smoke_check(report,gui=False):
         try:
             runtime.start()
             with urlopen(runtime.url+'/register',timeout=10) as response:assert response.url.endswith('/desktop/license')
+            from account_approval import create_pending_account, set_approval
+            with runtime.app.app_context():
+                db=runtime.app.extensions['campaign_manager'].db()
+                old=create_pending_account(db,'Synthetic old user','native-owner',generate_password_hash('synthetic-old-password'))
+                set_approval(db,old.lastrowid,'approved');db.commit()
             license.activate('ZF-'+'a'*32)
             assert license.allowed(),'Signed activation was not accepted'
             assert license.claims()['license_mode']=='floating','Session license was not accepted'
             from desktop.admin_accounts import sync_license_admin
-            sync_license_admin(runtime.app,license)
+            try:sync_license_admin(runtime.app,license)
+            except LicenseError:pass
+            else:raise AssertionError('A signed key overwrote an existing local account')
+            from desktop.smoke_recovery import verify_admin_name_conflict
+            assert verify_admin_name_conflict(runtime.url,admin_password),'Packaged admin name conflict recovery failed'
             with urlopen(runtime.url+'/login',timeout=10) as response:assert response.status==200
             assert runtime.app.extensions['zalo_connector'].available(),'Missing bundled Node.js or Zalo SDK'
             from desktop.smoke_recovery import verify_recovery_flow
             assert verify_recovery_flow(runtime.url),'Packaged self-registration and password recovery did not complete'
             from desktop.smoke_recovery import verify_admin_flow
-            assert verify_admin_flow(runtime.url,'native-owner',admin_password),'Packaged admin account creation failed'
+            assert verify_admin_flow(runtime.url,'native-owner-key-1',admin_password),'Packaged admin account creation failed'
             if gui:run_window(runtime,smoke=True)
             else:
                 runtime.activate();deadline=time.monotonic()+10
@@ -111,7 +120,7 @@ def smoke_check(report,gui=False):
                 while not heartbeat.exists() and time.monotonic()<deadline:time.sleep(.05)
                 assert heartbeat.exists(),'Local scheduler did not start'
                 assert runtime.stop(timeout=10),'Local runtime did not close'
-            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True,floating_license=True,tool_admin_accounts=True,publisher_identity_sha256=publisher_identity_sha256)),encoding='utf-8')
+            Path(report).write_text(json.dumps(dict(ok=True,gui=gui,stopped=runtime.closed.is_set(),node_available=True,licensed=True,password_recovery=True,self_registration=True,floating_license=True,tool_admin_accounts=True,admin_name_conflict=True,publisher_identity_sha256=publisher_identity_sha256)),encoding='utf-8')
         finally:runtime.stop()
 
 

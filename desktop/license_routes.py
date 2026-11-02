@@ -9,7 +9,11 @@ from license_system.signatures import LicenseError
 def register_license_routes(app, license):
     @app.context_processor
     def license_context():
-        return dict(desktop_license_enabled=True)
+        setup = {}
+        if request.endpoint in ('desktop_license', 'login'):
+            from desktop.admin_accounts import license_admin_status
+            setup = license_admin_status(app, license)
+        return dict(desktop_license_enabled=True, desktop_admin_setup=setup)
 
     @app.before_request
     def enforce_desktop_license():
@@ -46,6 +50,14 @@ def register_license_routes(app, license):
                         from desktop.admin_accounts import sync_license_admin
                         sync_license_admin(app,license)
                     flash('Đã kiểm tra lại bản quyền.' if license.allowed() else license.error or 'Nhập key còn hạn để tiếp tục.', 'success' if license.allowed() else 'error')
+                elif action == 'resolve-admin-name':
+                    if not license.allowed():
+                        raise LicenseError('Cần key còn hiệu lực để tạo quản trị tool.')
+                    from desktop.admin_accounts import sync_license_admin
+                    username = sync_license_admin(app, license,
+                        local_username=request.form.get('local_username', ''),
+                        initial_password=request.form.get('initial_password', ''))
+                    flash('Đã tạo quản trị ' + username + '. Đăng nhập bằng tên mới này và mật khẩu khởi tạo được cấp. Tài khoản cũ và dữ liệu được giữ nguyên.', 'success')
                 else:
                     abort(400)
             except (LicenseError, ConnectionError) as error:

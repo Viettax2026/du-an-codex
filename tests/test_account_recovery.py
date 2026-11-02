@@ -153,7 +153,7 @@ def test_rate_limits_accept_only_the_web_local_proxy_ip(app):
 
 
 def test_recovery_remains_available_when_desktop_license_expires(tmp_path):
-    license = SimpleNamespace(allowed=lambda: False)
+    license = SimpleNamespace(allowed=lambda: False, claims=lambda: None)
     runtime = DesktopRuntime(tmp_path/'desktop', config={'TESTING':True}, license=license)
     try:
         with runtime.app.app_context():

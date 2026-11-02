@@ -166,6 +166,125 @@ def test_existing_username_is_never_silently_promoted_or_password_reset(issued_d
     assert rows(runtime,'SELECT password,role FROM users')==before
 
 
+def conflicting_admin(runtime):
+    with runtime.app.app_context():
+        db=runtime.app.extensions['campaign_manager'].db()
+        user=create_pending_account(db,'Existing','customer-admin',generate_password_hash('existing-password'))
+        set_approval(db,user.lastrowid,'approved')
+        db.execute("INSERT INTO contacts(user_id,name,phone) VALUES (?,'Keep old data','0901')",(user.lastrowid,))
+        db.commit()
+
+
+def grants(runtime):
+    if not rows(runtime,"SELECT 1 FROM sqlite_master WHERE type='table' AND name='desktop_admin_grants'"):
+        return []
+    return rows(runtime,'SELECT * FROM desktop_admin_grants')
+
+
+def test_conflicting_name_can_create_separate_admin_without_touching_old_account(issued_desktop):
+    runtime,license,issued=issued_desktop
+    conflicting_admin(runtime)
+    before=rows(runtime,'SELECT * FROM users')
+    contacts=rows(runtime,'SELECT * FROM contacts')
+    client,response=activate(runtime,issued)
+    assert 'Tạo quản trị bằng tên khác' in response.text
+    assert 'đang trùng tài khoản cũ' in client.get('/login').text
+    response=post(client,'/desktop/license',dict(action='resolve-admin-name',local_username='NEW-OWNER',
+        initial_password=issued['admin_password'],role='user',approval_status='blocked'))
+    assert 'Đã tạo quản trị new-owner' in response.text
+    assert 'Tài khoản quản trị trong tool này: <strong>new-owner</strong>' in response.text
+    assert issued['admin_password'] not in response.text
+    assert rows(runtime,'SELECT * FROM users WHERE username=?',('customer-admin',))==before
+    assert rows(runtime,'SELECT * FROM contacts')==contacts
+    assert rows(runtime,'SELECT username,role,approval_status FROM users WHERE username=?',('new-owner',))==[('new-owner','admin','approved')]
+    post(client,'/login',dict(username='new-owner',password=issued['admin_password']))
+    assert client.get('/admin/users').status_code==200
+    assert 'Keep old data' not in client.get('/contacts').text
+    assert license.refresh(force=True)
+    assert sync_license_admin(runtime.app,license)=='new-owner'
+    runtime.start()  # A restart uses the persisted mapping, not the signed name.
+    other=runtime.app.test_client()
+    assert 'Tài khoản quản trị trong tool này: <strong>new-owner</strong>' in other.get('/login').text
+    post(other,'/login',dict(username='customer-admin',password='existing-password'))
+    assert 'Keep old data' in other.get('/contacts').text
+    assert other.get('/admin/users').status_code==403
+
+
+@pytest.mark.parametrize('values',[
+    dict(initial_password='wrong-password'),dict(local_username='customer-admin'),
+    dict(local_username='bad name'),dict(local_username='x'),dict(local_username='x'*65),dict(local_username='admin'),
+])
+def test_conflict_resolution_requires_valid_unused_name_and_initial_password(issued_desktop,values):
+    runtime,license,issued=issued_desktop
+    conflicting_admin(runtime)
+    client,_=activate(runtime,issued)
+    before=rows(runtime,'SELECT * FROM users')
+    post(client,'/desktop/license',dict(action='resolve-admin-name',local_username='new-owner',initial_password=issued['admin_password']) | values)
+    assert rows(runtime,'SELECT * FROM users')==before
+    assert grants(runtime)==[]
+
+
+def test_conflict_resolution_requires_csrf_and_cannot_create_multiple_admins(issued_desktop):
+    runtime,license,issued=issued_desktop
+    conflicting_admin(runtime)
+    client,_=activate(runtime,issued)
+    values=dict(action='resolve-admin-name',local_username='new-owner',initial_password=issued['admin_password'])
+    assert client.post('/desktop/license',data=values).status_code==400
+    post(client,'/desktop/license',values)
+    post(client,'/desktop/license',dict(values,local_username='another-admin'))
+    assert rows(runtime,'SELECT count(*) FROM users')==[(2,)]
+    changed=generate_password_hash('changed-password')
+    with sqlite3.connect(runtime.app.config['DATABASE']) as db:
+        db.execute("UPDATE users SET password=?,role='user',approval_status='blocked' WHERE username='new-owner'",(changed,))
+    assert sync_license_admin(runtime.app,license)=='new-owner'
+    assert rows(runtime,"SELECT password,role,approval_status FROM users WHERE username='new-owner'")==[(changed,'user','blocked')]
+
+
+def test_conflict_resolution_rechecks_expiry_after_password_verification(issued_desktop,clock,monkeypatch):
+    import desktop.admin_accounts as admins
+    runtime,license,issued=issued_desktop
+    conflicting_admin(runtime)
+    client,_=activate(runtime,issued)
+    original=admins.check_password_hash
+    def expire(*args):
+        result=original(*args);clock.wall+=70;clock.mono+=70;return result
+    monkeypatch.setattr(admins,'check_password_hash',expire)
+    post(client,'/desktop/license',dict(action='resolve-admin-name',local_username='new-owner',initial_password=issued['admin_password']))
+    assert rows(runtime,'SELECT count(*) FROM users')==[(1,)]
+    assert grants(runtime)==[]
+
+
+def test_conflict_resolution_does_not_overwrite_another_taken_name(issued_desktop):
+    runtime,license,issued=issued_desktop
+    conflicting_admin(runtime)
+    with runtime.app.app_context():
+        db=runtime.app.extensions['campaign_manager'].db()
+        create_pending_account(db,'Other','new-owner',generate_password_hash('other-password'));db.commit()
+    client,_=activate(runtime,issued)
+    before=rows(runtime,'SELECT * FROM users')
+    response=post(client,'/desktop/license',dict(action='resolve-admin-name',local_username='new-owner',initial_password=issued['admin_password']))
+    assert 'Tên mới đã tồn tại' in response.text
+    assert rows(runtime,'SELECT * FROM users')==before
+
+
+def test_alias_requires_a_signed_admin_grant_and_an_actual_name_conflict(issued_desktop):
+    runtime,license,issued=issued_desktop
+    client=runtime.app.test_client()
+    values=dict(action='resolve-admin-name',local_username='new-owner',initial_password=issued['admin_password'])
+    post(client,'/desktop/license',values)
+    assert rows(runtime,'SELECT count(*) FROM users')==[(0,)]
+    license.activate(issued['key'])
+    response=post(client,'/desktop/license',values)
+    assert 'Tên được cấp không bị trùng' in response.text
+    assert rows(runtime,'SELECT count(*) FROM users')==[(0,)]
+    conflicting_admin(runtime)
+    prefix,payload,signature=license.state['lease'].split('.')
+    license.state['lease']='.'.join((prefix,payload,('A' if signature[0]!='A' else 'B')+signature[1:]))
+    post(client,'/desktop/license',values)
+    assert rows(runtime,'SELECT count(*) FROM users')==[(1,)]
+    assert grants(runtime)==[]
+
+
 def test_modified_unsigned_lease_cannot_create_admin(issued_desktop):
     from license_system.signatures import decode,encode
     runtime,license,issued=issued_desktop

@@ -41,7 +41,7 @@ python -m desktop.main
 
 `--data-dir` chọn thư mục dữ liệu khác khi cần. Giữ nguyên khóa theo database để không mở hai tool hoặc hai bộ lịch cùng lúc. Dữ liệu VPS cũ không tự đổi vị trí hay tự khởi chạy trên máy tính.
 
-Key có thể được chủ phần mềm cấp kèm tài khoản quản trị tool. Khi kích hoạt, runtime chỉ tạo quản trị từ `tool_admin` trong lease đã xác minh chữ ký, một lần cho mỗi license trong hồ sơ local; không nâng quyền tài khoản trùng tên hoặc reset mật khẩu sau gia hạn. Quản trị có thể tạo tài khoản thường trong `/admin/users`; endpoint tạo tài khoản chỉ mở trong desktop runtime có key hợp lệ. Bản web tiếp tục quy trình duyệt hiện có. Xem [cấp quản trị kèm key](../deployment/LICENSES.md#cấp-tài-khoản-quản-trị-tool-kèm-key).
+Key có thể được chủ phần mềm cấp kèm tài khoản quản trị tool. Khi kích hoạt, runtime chỉ tạo quản trị từ `tool_admin` trong lease đã xác minh chữ ký, một lần cho mỗi license trong hồ sơ local; không nâng quyền tài khoản trùng tên hoặc reset mật khẩu sau gia hạn. Nếu trùng tên, người dùng chọn tên local mới ở Bản quyền và xác minh mật khẩu khởi tạo của key để tạo một tài khoản riêng. `desktop_admin_grants.username` giữ tên trong lease; `user_id` trỏ tới tên local được chọn. Mở lại/gia hạn dùng ánh xạ này, không đổi mật khẩu hay tạo thêm quản trị. Quản trị có thể tạo tài khoản thường trong `/admin/users`; endpoint tạo tài khoản chỉ mở trong desktop runtime có key hợp lệ. Bản web tiếp tục quy trình duyệt hiện có. Xem [cấp quản trị kèm key](../deployment/LICENSES.md#cấp-tài-khoản-quản-trị-tool-kèm-key).
 
 ## Kiểm tra thông tin chủ phần mềm
 

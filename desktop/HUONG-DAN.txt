@@ -20,7 +20,7 @@ TÀI KHOẢN QUẢN TRỊ VÀ NGƯỜI DÙNG
 - Quản trị vào Quản lý tài khoản > Tạo tài khoản trong tool để tạo nhiều tài khoản thường. Người dùng sử dụng ngay, không cần key riêng cho mỗi tài khoản.
 - Mỗi tài khoản có dữ liệu riêng trong cùng tool. Không tự đồng bộ tài khoản hoặc dữ liệu sang máy khác.
 - Tài khoản thường không có quyền quản trị. Quản trị tool không phải quản trị máy chủ cấp key.
-- Nếu tên đã tồn tại, tool không ghi đè mật khẩu hay tự nâng quyền; liên hệ đơn vị cấp phần mềm.
+- Nếu tên quản trị được cấp đã tồn tại, vào Bản quyền > Tạo quản trị bằng tên khác. Chọn tên mới và nhập mật khẩu khởi tạo được cấp cùng key; sau đó đăng nhập bằng tên mới và cùng mật khẩu đó. Tool giữ nguyên tài khoản, mật khẩu và dữ liệu cũ, không tự chuyển dữ liệu sang quản trị mới.
 - Nếu vừa được bổ sung quản trị cho key, bấm Bản quyền > Kiểm tra lại hoặc đóng/mở tool để nhận tài khoản.
 - Mở lại/gia hạn không đặt lại mật khẩu đã khôi phục. Mật khẩu khởi tạo do đơn vị cấp phần mềm lưu không thay thế mật khẩu mới trong tool.
 - Đăng xuất nằm ở góc phải thanh trên cùng. Đăng xuất không xóa dữ liệu, đóng tool hoặc hủy key.
