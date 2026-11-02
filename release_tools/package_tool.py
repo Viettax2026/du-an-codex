@@ -7,9 +7,9 @@ import re
 import shutil
 import zipfile
 
-APP_COMMIT = 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5'
-TAG = 'windows-tool-neutral-20261102'
-ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-02.zip'
+APP_COMMIT = '5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae'
+TAG = 'windows-tool-privacy-20261102'
+ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-02-r2.zip'
 ARCHIVE_ROOT = 'ZaloFlow-2026-11-02/'
 
 
@@ -64,7 +64,8 @@ def assemble(installer_dir, output, customer_guide, audit_report):
     notes = f'''Mã nguồn ứng dụng: `{APP_COMMIT}`.
 
 - Tải `ZaloFlow-Setup-x64.exe` để cài trực tiếp hoặc `{ZIP_NAME}` kèm hướng dẫn.
-- Bộ cài, nhà phát hành và hướng dẫn hiển thị thương hiệu ZaloFlow; không đưa thông tin đơn vị sở hữu vào màn hình cài đặt.
+- Đã kiểm tra cả tệp cài ra, ZIP nội bộ và mô-đun Python trong file chạy; kết quả đi kèm trong `PRIVACY-AUDIT.json`. Loại email quản trị web cũ khỏi bản desktop và bỏ cấu hình JSON rõ.
+- Giữ địa chỉ máy chủ kiểm tra key hiện tại theo yêu cầu chủ phần mềm; chỉ URL đó ở phần bản quyền là ngoại lệ. Không tuyên bố giấu danh tính máy chủ hoặc tài khoản kênh phát hành GitHub.
 - Máy chủ bản quyền mới tự cấp đủ key, tài khoản và mật khẩu quản trị; hỗ trợ bổ sung quản trị cho key chưa có. Khách cần máy chủ đã cập nhật để dùng chức năng này.
 - Key mới dùng một phiên tool tại một thời điểm, trên bất kỳ máy nào. Đóng tool cũ trước khi dùng ở tool khác; tắt đột ngột chờ tối đa 2 phút.
 - Đóng tool cũ rồi cài đè trong cùng tài khoản Windows; giữ dữ liệu, tiến độ và kích hoạt. Mở lại/gia hạn không đặt lại mật khẩu đã khôi phục.
