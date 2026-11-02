@@ -6,7 +6,7 @@ on:
   # direct request; its manifest does not claim a confirmed VPS test.
   # Normal main pushes never build Windows.
   push:
-    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030-r2', 'windows-tool-admin-20261101']
+    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030-r2', 'windows-tool-admin-20261101', 'windows-tool-neutral-20261102']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -22,7 +22,7 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' || github.ref == 'refs/tags/windows-tool-admin-20261101')) }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' || github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102')) }}
     permissions:
       contents: write
     runs-on: windows-latest
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' && '73f38a058680535486990dfcc1a4890ae4e2726e' || github.ref == 'refs/tags/windows-tool-admin-20261101' && 'ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b' || github.sha }}
+          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' && '73f38a058680535486990dfcc1a4890ae4e2726e' || github.ref == 'refs/tags/windows-tool-admin-20261101' && 'ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b' || github.ref == 'refs/tags/windows-tool-neutral-20261102' && 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5' || github.sha }}
           persist-credentials: false
       - name: Record approved release revision
         shell: pwsh
@@ -44,6 +44,7 @@ jobs:
               'refs/tags/windows-self-registration-f419728' { $expectedSource = 'f4197288d9334438129e8cb27da45de4acc5f38c' }
               'refs/tags/windows-owner-package-20261030-r2' { $expectedSource = '73f38a058680535486990dfcc1a4890ae4e2726e' }
               'refs/tags/windows-tool-admin-20261101' { $expectedSource = 'ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b' }
+              'refs/tags/windows-tool-neutral-20261102' { $expectedSource = 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5' }
               default { throw 'Not an owner-approved Windows release.' }
             }
             if ($source -ne $expectedSource) { throw 'Release source does not match the approved revision.' }
@@ -156,7 +157,12 @@ jobs:
           "ZaloFlow Windows x64`nApplication source: $source`nInstaller version: 1.0.${{ github.run_number }}`n" | Set-Content desktop/dist/installer/SOURCE.txt -Encoding utf8
       - name: Test installer, shortcuts, upgrade and uninstall on Windows
         shell: pwsh
-        run: ./desktop/test-installer.ps1
+        run: |
+          try { ./desktop/test-installer.ps1 } catch {
+            $diagnostic = $_.Exception.ToString().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Installer verification::$diagnostic"
+            throw
+          }
       - name: Prepare owner-requested complete public download
         if: github.ref == 'refs/tags/windows-owner-package-20261030-r2'
         shell: pwsh
@@ -172,7 +178,7 @@ jobs:
           python $packager --workflow-ref "$env:RELEASE_WORKFLOW_REF" --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-release"
           if ($LASTEXITCODE -ne 0) { throw 'Release archive failed integrity/source validation.' }
       - name: Prepare single-session tool and administrator release
-        if: github.ref == 'refs/tags/windows-tool-admin-20261101'
+        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102'
         shell: pwsh
         env:
           RELEASE_WORKFLOW_REF: ${{ github.sha }}
@@ -183,7 +189,7 @@ jobs:
           $env:ZALOFLOW_RELEASE_PACKAGER = $packager
           python -c "import os,pathlib,subprocess; pathlib.Path(os.environ['ZALOFLOW_RELEASE_PACKAGER']).write_bytes(subprocess.check_output(['git','show',os.environ['RELEASE_WORKFLOW_REF']+':release_tools/package_tool.py']))"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot load tool packaging instructions.' }
-          python $packager --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-tool"
+          python $packager --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-tool" --customer-guide desktop/HUONG-DAN.txt
           if ($LASTEXITCODE -ne 0) { throw 'Tool archive failed integrity/source validation.' }
       - uses: actions/upload-artifact@v4
         if: steps.license_config.outputs.configured == 'true'
@@ -215,19 +221,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Cannot publish the checked release.' }
           gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json url,assets
       - name: Publish checked tool installer for direct download
-        if: github.ref == 'refs/tags/windows-tool-admin-20261101'
+        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $releaseTag = 'windows-tool-admin-20261101'
+          $releaseTag = if ('${{ github.ref }}' -eq 'refs/tags/windows-tool-neutral-20261102') { 'windows-tool-neutral-20261102' } else { 'windows-tool-admin-20261101' }
           $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-public-tool'
           $draft = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>$null
           $exists = $LASTEXITCODE -eq 0
           if ($exists) {
             if ($draft -ne 'true') { throw 'Published installers must not be overwritten.' }
           } else {
-            gh release create $releaseTag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title 'ZaloFlow 01/11/2026 - Tool Windows va quan tri tai khoan' --notes-file "$releaseFolder/RELEASE-NOTES.md"
+            gh release create $releaseTag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title 'ZaloFlow - Tool Windows'  --notes-file "$releaseFolder/RELEASE-NOTES.md"
             if ($LASTEXITCODE -ne 0) { throw 'Cannot create tool release draft.' }
           }
           $assets = @(Get-ChildItem $releaseFolder -File | Where-Object { $_.Name -ne 'RELEASE-NOTES.md' } | ForEach-Object { $_.FullName })
