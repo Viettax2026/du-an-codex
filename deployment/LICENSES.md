@@ -57,7 +57,7 @@ Khi lượt dựng có dấu xanh và artifact, tải `ZaloFlow-Setup-Windows-x6
 
 ## Cấp, gia hạn và chuyển máy
 
-1. Trang quản trị → nhập tên khách hàng và số ngày → **Tạo key — 1 tool**. Hạn tính từ lúc cấp key. Sao chép key ngay và gửi riêng cho khách: hệ thống chỉ lưu hash của key, không thể xem lại key gốc ở danh sách.
+1. Trang quản trị → nhập tên khách hàng và số ngày → **Tạo key — 1 tool**. Hạn tính từ lúc cấp key. Sao chép key và gửi riêng cho khách. Với key cấp từ bản có chức năng xem key, chủ phần mềm bấm **Xem key** trong danh sách để xem lại. Key gốc được lưu mã hóa; mã kiểm tra vẫn dùng để xác thực.
 2. Khách cập nhật tool Windows hỗ trợ key theo phiên → **Bản quyền** → nhập key → kích hoạt. Sau đó tạo/đăng nhập tài khoản ZaloFlow và quét QR Zalo như trước. Key mới bị từ chối ở tool cũ; cần dùng bộ cài mới được dựng từ phiên bản này.
 3. Gia hạn: chọn key trong trang quản trị → nhập số ngày → **Gia hạn / mở lại key**. Thêm ngày từ hạn hiện tại nếu còn hạn, hoặc từ hiện tại nếu đã hết hạn. Khách bấm **Kiểm tra lại / cập nhật gia hạn**, hoặc chờ lần kiểm tra định kỳ.
 4. Chuyển tool/máy: đóng tool cũ hoàn toàn rồi nhập cùng key ở tool mới. Không cần quản trị viên hủy máy. Nếu mở đồng thời, tool mới báo đang có tool khác sử dụng. Sau khi đóng bình thường, có thể dùng ngay; sau mất mạng/tắt đột ngột, chờ tối đa 2 phút. Key cũ theo máy vẫn dùng **Bản quyền → Hủy kích hoạt máy này** trước khi chuyển.
@@ -86,7 +86,7 @@ Giới hạn: cơ chế áp dụng cho bản Windows mới có tích hợp kiể
 
 ## Cấp tài khoản quản trị tool kèm key
 
-Trên trang `/licenses/admin`, nhập **Khách hàng**, **Tài khoản quản trị tool (tùy chọn)** và số ngày, rồi bấm **Tạo key — 1 tool**. Hệ thống tạo key và mật khẩu khởi tạo ngẫu nhiên, hiển thị một lần. Gửi riêng cả ba thông tin: tên đăng nhập, mật khẩu và key. Bỏ trống tên quản trị thì chỉ cấp key như trước. Có thể cấp nhiều bộ cho các khách hàng khác nhau; kho key chỉ lưu hash mật khẩu, không có chức năng xem lại mật khẩu gốc.
+Trên trang `/licenses/admin`, nhập **Khách hàng**, **Tài khoản quản trị tool (tùy chọn)** và số ngày, rồi bấm **Tạo key — 1 tool**. Hệ thống tạo key và mật khẩu khởi tạo ngẫu nhiên. Key có thể xem lại bằng **Xem key**; mật khẩu khởi tạo chỉ hiển thị một lần. Gửi riêng cả ba thông tin: tên đăng nhập, mật khẩu và key. Bỏ trống tên quản trị thì chỉ cấp key như trước. Có thể cấp nhiều bộ cho các khách hàng khác nhau; kho key chỉ lưu hash mật khẩu, không có chức năng xem lại mật khẩu gốc.
 
 Khách cần bản Windows mới hỗ trợ cấp tài khoản từ key. Trong tool: **Bản quyền → nhập key → Kích hoạt**, sau đó đăng nhập bằng tên/mật khẩu đã được cấp. Tài khoản quản trị được tạo từ thông tin có chữ ký của máy chủ. Trang **Quản lý tài khoản → Tạo tài khoản trong tool** cho phép tạo nhiều tài khoản thường, mật khẩu 8–256 ký tự, có thể dùng ngay; email tùy chọn và chưa tự xác minh. Người dùng tự đăng ký với key hợp lệ vẫn dùng ngay như trước, không được tự cấp quyền quản trị.
 
@@ -95,3 +95,13 @@ Quản trị tool chỉ quản lý tài khoản trong hồ sơ tool đó, không
 Nếu tên quản trị được cấp đã trùng tài khoản có sẵn, tool không ghi đè mật khẩu hoặc tự nâng quyền. Liên hệ chủ phần mềm để xử lý tên trùng. Sau khi tạo thành công, việc kiểm tra/gia hạn/mở lại key không đặt lại mật khẩu, không tự khôi phục quyền đã bị thay đổi. Giữ nguyên `instance`, gồm bảng ghi nhận cấp quản trị, khi nâng cấp/chuyển dữ liệu. Để khôi phục mật khẩu cục bộ dùng quy trình khôi phục tài khoản hiện có. Tên `admin` vẫn không được tự đăng ký qua biểu mẫu công khai.
 
 CLI tương ứng: `issue --customer TEN --days 30 --admin-username quantri-tencongty`. Lệnh in mật khẩu khởi tạo một lần; không đưa đầu ra vào log, Git hoặc ảnh chia sẻ công khai. Bộ cài chỉ mang khóa công khai, không đóng gói sẵn tài khoản/mật khẩu của khách. Cần cập nhật và kiểm tra VPS trước khi dựng Windows; lệnh `python -m license_system.smoke_sessions` kiểm tra thêm cấp quản trị và tạo tài khoản bằng dữ liệu tạm, kết quả có `"tool_admin_accounts": true`.
+
+## Xem lại key trong trang quản trị
+
+Tại từng dòng trong **Danh sách key**, bấm **Xem key**. Trang đưa tới khung key được chọn, có ô chỉ đọc để sao chép và **Đóng phần xem key** để ẩn. Chỉ phiên chủ phần mềm đăng nhập mới được xem; thao tác dùng POST và CSRF, không đặt key trong URL hoặc cookie/flash. Trang trả `Cache-Control: no-store`; GET danh sách thông thường không chứa key gốc trong HTML. Không có API xem key cho tool hoặc tài khoản khách hàng.
+
+Key mới được lưu thêm bản mã hóa Fernet; khóa mã hóa được dẫn xuất HKDF-SHA256 với miền riêng từ khóa ký riêng hiện có, không dùng khóa công khai hoặc mật khẩu quản trị. Bản mã được kiểm tra khớp hash key khi đọc. Sao lưu/khôi phục **toàn bộ** `/var/lib/zaloflow-licenses`, gồm database và đúng `signing-private.pem`; không tạo lại khóa ký. Không đưa kho này vào Git hoặc bộ cài. Đổi mật khẩu quản trị không làm mất khả năng xem key.
+
+Key đã cấp trước thay đổi chỉ có hash, không thể khôi phục chuỗi gốc bằng cách nâng cấp. Bấm **Xem key** sẽ hiện thông báo và biểu mẫu **Key gốc đã cấp**. Nếu còn bản đã sao chép, chủ phần mềm nhập lại rồi bấm **Lưu key gốc**; chỉ bản khớp hash của đúng dòng được lưu mã hóa. Không đổi key, hạn dùng, tài khoản quản trị hay kích hoạt. Không nhập key gốc trong chat, dòng lệnh hoặc ảnh công khai. Nếu không còn bản gốc, cần cấp key khác theo nhu cầu; nâng cấp không tự thu hồi hoặc thay key đang dùng.
+
+Đây là thay đổi máy chủ quản trị, không cần cài lại tool Windows. Cập nhật bằng ba lệnh trong phần **Cài máy chủ trên VPS hiện tại**; script sao lưu authority trước khi khởi động schema mới.

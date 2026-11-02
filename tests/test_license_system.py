@@ -42,7 +42,7 @@ def make_client(tmp_path, authority, clock, device=DEVICE_A):
     return DesktopLicense(tmp_path / device[-10:], config, transport, device, lambda: clock.wall, lambda: clock.mono)
 
 
-def test_one_seat_is_atomic_and_only_key_hash_is_stored(authority, clock):
+def test_one_seat_is_atomic_and_key_is_never_stored_in_plaintext(authority, clock):
     issued = authority.issue('Viettax', now=clock.wall)
     def activate(device):
         try:

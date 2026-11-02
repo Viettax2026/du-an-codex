@@ -1,5 +1,6 @@
 """License authority; administration is restricted to the owner web UI and CLI."""
 import hashlib
+import base64
 import json
 import os
 import re
@@ -10,7 +11,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from cryptography.hazmat.primitives import serialization
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from werkzeug.security import generate_password_hash
 
 from license_system.signatures import PRODUCT, ActivationInvalid, LicenseError, new_signer, public_text, sign
@@ -47,7 +50,7 @@ class Authority:
             columns = {row['name'] for row in db.execute('PRAGMA table_info(licenses)')}
             if 'mode' not in columns:
                 db.execute("ALTER TABLE licenses ADD COLUMN mode TEXT NOT NULL DEFAULT 'device'")
-            for name in ('admin_username', 'admin_password_hash'):
+            for name in ('admin_username', 'admin_password_hash', 'key_ciphertext'):
                 if name not in columns:
                     db.execute(f"ALTER TABLE licenses ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
             db.execute('''CREATE TABLE IF NOT EXISTS license_sessions (
@@ -108,6 +111,45 @@ class Authority:
     def signer(self):
         return serialization.load_pem_private_key(self.key_path.read_bytes(), password=None)
 
+    def key_cipher(self):
+        # Separate the vault encryption key from signing with a domain-specific
+        # HKDF. Existing complete authority backups already contain its root;
+        # never derive this key from the public key or the admin password.
+        root = self.signer().private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                                          serialization.NoEncryption())
+        derived = HKDF(algorithm=hashes.SHA256(),length=32,salt=None,
+                       info=b'ZaloFlow/license-key-vault/v1').derive(root)
+        return Fernet(base64.urlsafe_b64encode(derived))
+
+    def key_for_owner(self, license_id):
+        with self.connection() as db:
+            row = db.execute('SELECT id,customer,key_hash,key_ciphertext FROM licenses WHERE id=?',(license_id,)).fetchone()
+        if row is None:
+            raise LicenseError('Không tìm thấy bản quyền.')
+        key = ''
+        if row['key_ciphertext']:
+            try:
+                key = self.key_cipher().decrypt(row['key_ciphertext'].encode('ascii')).decode('utf-8')
+                if not re.fullmatch(r'ZF-[A-Za-z0-9_-]{32}',key) or not secrets.compare_digest(secret_hash(key),row['key_hash']):
+                    raise ValueError()
+            except (InvalidToken, ValueError, UnicodeError):
+                raise LicenseError('Không đọc được bản key đã lưu. Kiểm tra bản sao lưu đầy đủ kho bản quyền; không tạo lại khóa ký.') from None
+        return dict(id=row['id'],customer=row['customer'],key=key)
+
+    def save_original_key(self, license_id, key):
+        key = key.strip()
+        if not re.fullmatch(r'ZF-[A-Za-z0-9_-]{32}',key):
+            raise LicenseError('Nhập đầy đủ key gốc đã cấp, bắt đầu bằng ZF-.')
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT key_hash FROM licenses WHERE id=?',(license_id,)).fetchone()
+            if row is None:
+                raise LicenseError('Không tìm thấy bản quyền.')
+            if not secrets.compare_digest(secret_hash(key),row['key_hash']):
+                raise LicenseError('Key không khớp bản quyền đã chọn. Chưa thay đổi key hoặc kích hoạt nào.')
+            encrypted = self.key_cipher().encrypt(key.encode()).decode('ascii')
+            db.execute('UPDATE licenses SET key_ciphertext=? WHERE id=?',(encrypted,license_id))
+
     def setting(self, name):
         with self.connection() as db:
             row = db.execute('SELECT value FROM settings WHERE name=?', (name,)).fetchone()
@@ -133,6 +175,7 @@ class Authority:
         admin_password = secrets.token_urlsafe(12) if admin_username else ''
         password_hash = generate_password_hash(admin_password) if admin_password else ''
         key = 'ZF-' + secrets.token_urlsafe(24)
+        encrypted_key = self.key_cipher().encrypt(key.encode()).decode('ascii')
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
             # Signed leases carry license IDs. Never reuse one after deletion,
@@ -140,8 +183,8 @@ class Authority:
             highest = db.execute('SELECT coalesce(max(id),0) FROM licenses').fetchone()[0]
             retired = db.execute("SELECT value FROM settings WHERE name='license_id_high_water'").fetchone()
             license_id = max(highest, int(retired['value']) if retired else 0) + 1
-            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash) VALUES(?,?,?,?,?,?,?,?,?)',
-                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash))
+            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash,key_ciphertext) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash, encrypted_key))
         return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats, mode=mode,
                     admin_username=admin_username, admin_password=admin_password)
 
@@ -176,6 +219,7 @@ class Authority:
     def list_licenses(self):
         with self.connection() as db:
             return [dict(row, expired=row['expires_at'] <= time.time()) for row in db.execute('''SELECT l.id,l.customer,l.expires_at,l.seats,l.revoked,l.mode,l.admin_username,
+                (l.key_ciphertext<>'') AS has_saved_key,
                 CASE WHEN l.mode='floating' THEN
                     (SELECT count(*) FROM license_sessions s WHERE s.license_id=l.id AND s.reserved_until>?)
                 ELSE (SELECT count(*) FROM activations a WHERE a.license_id=l.id AND a.active=1) END AS machines

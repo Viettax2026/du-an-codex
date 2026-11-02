@@ -21,6 +21,24 @@
     <div class="stat stat-amber"><div><p class="stat-label">Đã hết hạn</p><p class="stat-value">{{ licenses|rejectattr('revoked')|selectattr('expired')|list|length }}</p></div><span class="stat-icon">{{ icon('clock') }}</span></div>
     <div class="stat stat-red"><div><p class="stat-label">Đã thu hồi</p><p class="stat-value">{{ licenses|selectattr('revoked')|list|length }}</p></div><span class="stat-icon">{{ icon('ban') }}</span></div>
   </section>
+  {% if key_view %}
+  <section class="card issued" aria-label="Xem key" id="key-view">
+    <h2>Key #{{ key_view.id }} · {{ key_view.customer }}</h2>
+    {% if key_view.key %}
+    <input readonly aria-label="Key bản quyền" value="{{ key_view.key }}" autocomplete="off" spellcheck="false">
+    <p>Chọn chuỗi key rồi nhấn Ctrl+C để sao chép. Chỉ gửi riêng cho khách hàng được cấp.</p>
+    {% else %}
+    <p>Key này được cấp trước khi có chức năng lưu key gốc. Hệ thống chỉ còn mã kiểm tra nên không thể khôi phục chuỗi key đã cấp.</p>
+    <p>Nếu bạn còn bản đã sao chép, nhập lại bên dưới để lưu cho lần xem sau. Key, hạn dùng và kích hoạt hiện tại được giữ nguyên.</p>
+    <form method="post" action="{{ url_for('admin_panel') }}#key-view" style="margin-top:14px">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ key_view.id }}"><input type="hidden" name="action" value="save-key-copy">
+      <label class="field"><span>Key gốc đã cấp</span><input type="password" name="original_key" required maxlength="35" minlength="35" autocomplete="off" spellcheck="false" placeholder="ZF-…"></label>
+      <button class="button button-small" style="margin-top:10px">Lưu key gốc</button>
+    </form>
+    {% endif %}
+    <p><a class="button button-secondary button-small" href="{{ url_for('admin_panel') }}">Đóng phần xem key</a></p>
+  </section>
+  {% endif %}
   {% if issued %}
   <section class="card issued" aria-label="Key vừa tạo">
     <h2>Key vừa tạo — #{{ issued.id }}</h2>
@@ -30,7 +48,7 @@
     <label>Mật khẩu khởi tạo<input readonly aria-label="Mật khẩu khởi tạo quản trị tool" autocomplete="off" value="{{ issued.admin_password }}"></label>
     <p>Gửi riêng cả tài khoản, mật khẩu và key cho khách. Mật khẩu chỉ hiện lần này; đây là quản trị trong tool của khách, không phải quản trị kho key trên VPS.</p>
     {% endif %}
-    <p>Sao chép key và gửi riêng cho khách hàng ngay bây giờ. Hệ thống không lưu lại key gốc để xem lần sau.</p>
+    <p>Sao chép key và gửi riêng cho khách hàng. Có thể xem lại key bằng nút Xem key trong danh sách.</p>
   </section>
   {% endif %}
   <div class="create-layout">
@@ -68,6 +86,10 @@
           <td data-label="Hạn sử dụng"><span class="expiry">{{ expiry[1] }}<span class="expiry-time">{{ expiry[0] }} · UTC+7</span></span></td>
           <td data-label="Đang dùng"><span class="machines">{{ icon('device') }} {{ license.machines }}<small>/ {{ license.seats }} {{ 'phiên' if license.mode == 'floating' else 'máy' }}</small></span></td>
           <td data-label="Thao tác">
+            <form method="post" action="{{ url_for('admin_panel') }}#key-view" style="margin-bottom:12px">
+              <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
+              <button class="button button-secondary button-small" name="action" value="show-key">{{ icon('key') }} Xem key</button>
+            </form>
             <form method="post" class="extend-form">
               <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ license.id }}">
               <label for="days-{{ license.id }}">Gia hạn thêm (ngày)</label>
