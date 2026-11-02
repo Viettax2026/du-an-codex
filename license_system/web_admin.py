@@ -58,7 +58,7 @@ def register_admin(app, authority):
                 if action == 'issue':
                     issued = authority.issue(request.form.get('customer', ''), int(request.form.get('days', '30')), seats=1, mode='floating',
                                              admin_username=request.form.get('admin_username', ''))
-                    flash('Đã tạo key. Có thể bấm Xem key để xem lại; mật khẩu quản trị khởi tạo chỉ hiển thị lần này.')
+                    flash('Đã tạo key kèm tài khoản và mật khẩu quản trị tool. Bấm Xem key để xem lại bộ thông tin đã cấp.')
                 elif action == 'show-key':
                     key_view = authority.key_for_owner(int(request.form.get('license_id','0')))
                 elif action == 'save-key-copy':
@@ -67,6 +67,12 @@ def register_admin(app, authority):
                     authority.save_original_key(license_id,request.form.get('original_key',''))
                     key_view = authority.key_for_owner(license_id)
                     flash('Đã lưu bản key gốc để xem lại. Giữ nguyên hạn dùng, quyền và các kích hoạt.')
+                elif action == 'create-tool-admin':
+                    license_id = int(request.form.get('license_id','0'))
+                    key_view = authority.key_for_owner(license_id)
+                    authority.create_tool_admin(license_id,request.form.get('admin_username',''))
+                    key_view = authority.key_for_owner(license_id)
+                    flash('Đã tạo quản trị cho key hiện tại. Đóng/mở tool hoặc bấm Kiểm tra lại bản quyền để nhận tài khoản; key và hạn dùng giữ nguyên.')
                 else:
                     if action == 'delete' and request.form.get('confirm_delete') != '1':
                         raise LicenseError('Vui lòng xác nhận xóa vĩnh viễn key đã thu hồi.')

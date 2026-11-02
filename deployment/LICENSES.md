@@ -86,7 +86,7 @@ Giới hạn: cơ chế áp dụng cho bản Windows mới có tích hợp kiể
 
 ## Cấp tài khoản quản trị tool kèm key
 
-Trên trang `/licenses/admin`, nhập **Khách hàng**, **Tài khoản quản trị tool (tùy chọn)** và số ngày, rồi bấm **Tạo key — 1 tool**. Hệ thống tạo key và mật khẩu khởi tạo ngẫu nhiên. Key có thể xem lại bằng **Xem key**; mật khẩu khởi tạo chỉ hiển thị một lần. Gửi riêng cả ba thông tin: tên đăng nhập, mật khẩu và key. Bỏ trống tên quản trị thì chỉ cấp key như trước. Có thể cấp nhiều bộ cho các khách hàng khác nhau; kho key chỉ lưu hash mật khẩu, không có chức năng xem lại mật khẩu gốc.
+Trên trang `/licenses/admin`, nhập **Khách hàng**, **Tên quản trị (để trống sẽ tự tạo)** và số ngày, rồi bấm **Tạo key — 1 tool**. Hệ thống tự tạo đủ key, tên quản trị và mật khẩu khởi tạo; có thể nhập tên quản trị riêng thay cho tên tự sinh. Xem lại cả bộ tại **Xem key**. Gửi riêng cả ba thông tin: tên đăng nhập, mật khẩu và key. Bỏ trống tên quản trị thì hệ thống tự sinh tên và mật khẩu, không còn tạo key trống quản trị từ biểu mẫu này. Có thể cấp nhiều bộ cho các khách hàng khác nhau; kho key lưu hash xác thực và bản mật khẩu khởi tạo mã hóa để chủ phần mềm xem lại. Đây không phải mật khẩu hiện tại nếu khách đã đổi/khôi phục trong tool; việc xem lại không đặt lại mật khẩu local.
 
 Khách cần bản Windows mới hỗ trợ cấp tài khoản từ key. Trong tool: **Bản quyền → nhập key → Kích hoạt**, sau đó đăng nhập bằng tên/mật khẩu đã được cấp. Tài khoản quản trị được tạo từ thông tin có chữ ký của máy chủ. Trang **Quản lý tài khoản → Tạo tài khoản trong tool** cho phép tạo nhiều tài khoản thường, mật khẩu 8–256 ký tự, có thể dùng ngay; email tùy chọn và chưa tự xác minh. Người dùng tự đăng ký với key hợp lệ vẫn dùng ngay như trước, không được tự cấp quyền quản trị.
 
@@ -94,7 +94,7 @@ Quản trị tool chỉ quản lý tài khoản trong hồ sơ tool đó, không
 
 Nếu tên quản trị được cấp đã trùng tài khoản có sẵn, tool không ghi đè mật khẩu hoặc tự nâng quyền. Liên hệ chủ phần mềm để xử lý tên trùng. Sau khi tạo thành công, việc kiểm tra/gia hạn/mở lại key không đặt lại mật khẩu, không tự khôi phục quyền đã bị thay đổi. Giữ nguyên `instance`, gồm bảng ghi nhận cấp quản trị, khi nâng cấp/chuyển dữ liệu. Để khôi phục mật khẩu cục bộ dùng quy trình khôi phục tài khoản hiện có. Tên `admin` vẫn không được tự đăng ký qua biểu mẫu công khai.
 
-CLI tương ứng: `issue --customer TEN --days 30 --admin-username quantri-tencongty`. Lệnh in mật khẩu khởi tạo một lần; không đưa đầu ra vào log, Git hoặc ảnh chia sẻ công khai. Bộ cài chỉ mang khóa công khai, không đóng gói sẵn tài khoản/mật khẩu của khách. Cần cập nhật và kiểm tra VPS trước khi dựng Windows; lệnh `python -m license_system.smoke_sessions` kiểm tra thêm cấp quản trị và tạo tài khoản bằng dữ liệu tạm, kết quả có `"tool_admin_accounts": true`.
+CLI tương ứng: `issue --customer TEN --days 30 --admin-username quantri-tencongty`. Lệnh in bộ thông tin khởi tạo và lưu bản mật khẩu khởi tạo mã hóa; không đưa đầu ra vào log, Git hoặc ảnh chia sẻ công khai. Bộ cài chỉ mang khóa công khai, không đóng gói sẵn tài khoản/mật khẩu của khách. Cần cập nhật và kiểm tra VPS trước khi dựng Windows; lệnh `python -m license_system.smoke_sessions` kiểm tra thêm cấp quản trị và tạo tài khoản bằng dữ liệu tạm, kết quả có `"tool_admin_accounts": true`.
 
 ## Xem lại key trong trang quản trị
 
@@ -105,3 +105,11 @@ Key mới được lưu thêm bản mã hóa Fernet; khóa mã hóa được d�
 Key đã cấp trước thay đổi chỉ có hash, không thể khôi phục chuỗi gốc bằng cách nâng cấp. Bấm **Xem key** sẽ hiện thông báo và biểu mẫu **Key gốc đã cấp**. Nếu còn bản đã sao chép, chủ phần mềm nhập lại rồi bấm **Lưu key gốc**; chỉ bản khớp hash của đúng dòng được lưu mã hóa. Không đổi key, hạn dùng, tài khoản quản trị hay kích hoạt. Không nhập key gốc trong chat, dòng lệnh hoặc ảnh công khai. Nếu không còn bản gốc, cần cấp key khác theo nhu cầu; nâng cấp không tự thu hồi hoặc thay key đang dùng.
 
 Đây là thay đổi máy chủ quản trị, không cần cài lại tool Windows. Cập nhật bằng ba lệnh trong phần **Cài máy chủ trên VPS hiện tại**; script sao lưu authority trước khi khởi động schema mới.
+
+## Tự tạo đủ bộ key và quản trị
+
+Biểu mẫu cấp key mặc định tự sinh tên quản trị (dạng `qt-ID-xxxx`) và mật khẩu ngẫu nhiên khi bỏ trống tên. Chủ phần mềm xem lại key, tên quản trị và **mật khẩu khởi tạo** trong **Xem key**. Bản mật khẩu khởi tạo được mã hóa bằng vault của authority, kiểm tra khớp hash khi đọc; không gửi chuỗi mật khẩu hoặc bản mã trong lease cho tool. Tool chỉ nhận username/hash có chữ ký như giao thức trước. Mật khẩu đã đổi/khôi phục trong tool giữ nguyên.
+
+Với key theo phiên đã cấp nhưng chưa có quản trị, bấm **Xem key → Tạo tài khoản và mật khẩu quản trị**. Thao tác chỉ bổ sung lần đầu cho key còn hiệu lực; không đổi key, hạn dùng, lượt kích hoạt hoặc tài khoản cũ. Bấm lại không tạo lại hoặc đặt lại mật khẩu. Key đã có quản trị nhưng chỉ còn hash mật khẩu từ bản cũ không thể tự khôi phục mật khẩu; dùng mật khẩu đã giao hoặc quy trình khôi phục local. Khách đóng/mở tool để nhận tài khoản được bổ sung; bản mới cũng đồng bộ khi bấm **Kiểm tra lại**.
+
+Bản Windows dùng nhận diện hiển thị ZaloFlow: nhà phát hành, màn hình cài đặt và hướng dẫn khách hàng không hiển thị tên công ty, tên miền quản trị hoặc đường dẫn kho mã của chủ phần mềm. Cấu hình máy chủ kiểm tra key và khóa công khai vẫn được giữ để kiểm tra bản quyền; thay đổi nhận diện không vô hiệu hóa cấp phép.

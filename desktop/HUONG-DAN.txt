@@ -1,65 +1,43 @@
 ZALOFLOW CHO WINDOWS 10/11 x64
 
-1. Lấy ZaloFlow-Setup-x64.exe trong ZIP tải về, chạy để cài. Giữ tùy chọn tạo shortcut Desktop được chọn. Không cần quyền quản trị.
-2. Mở biểu tượng ZaloFlow ngoài Desktop hoặc trong Start menu. Vào Bản quyền, nhập key do chủ phần mềm cấp để kích hoạt tool này. Sau đó tự đăng ký tài khoản ZaloFlow, mật khẩu tối thiểu 8 ký tự, rồi đăng nhập sử dụng ngay và kết nối Zalo bằng QR. Bản Windows không cần duyệt đăng ký.
-3. Khi cửa sổ tool mở, bộ lịch xử lý chiến dịch trong giờ/hạn mức đã đặt.
-4. Bấm X để đóng. Tool dừng nhận lượt mới ngay và chờ lượt đang xử lý kết thúc (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy.
-5. Mở lại tool để tiếp tục các bước chưa thực hiện. Không tự thực hiện lại bước đã có lượt gửi.
-
-Cần có Internet để kết nối Zalo. Máy ngủ/tắt hoặc tool đóng thì không chạy lịch. Không cài dịch vụ chạy nền hoặc tự khởi động Windows.
+CÀI ĐẶT VÀ SỬ DỤNG
+1. Đóng phiên bản cũ hoàn toàn rồi chạy ZaloFlow-Setup-x64.exe để cài. Giữ tùy chọn tạo biểu tượng Desktop. Không cần quyền quản trị Windows.
+2. Mở ZaloFlow từ Desktop hoặc Start. Vào Bản quyền và nhập key do đơn vị cung cấp phần mềm cấp.
+3. Nếu được cấp tài khoản quản trị kèm key, đăng nhập bằng tài khoản và mật khẩu đã nhận. Nếu chưa có tài khoản, có thể đăng ký sau khi kích hoạt key; mật khẩu ít nhất 8 ký tự.
+4. Kết nối tài khoản Zalo bằng mã QR. Mở tool để chạy chiến dịch theo lịch và hạn mức đã cài.
+5. Bấm X để đóng. Tool dừng nhận lượt mới, chờ lượt đang xử lý hoàn tất (thường tối đa khoảng 45 giây). Thu nhỏ cửa sổ vẫn chạy. Mở lại để tiếp tục những bước chưa thực hiện.
 
 BẢN QUYỀN
-- Key sử dụng khác với mật khẩu đăng nhập ZaloFlow. Key mới dùng trong một tool tại một thời điểm, trên bất kỳ máy nào. Tool khác bị chặn khi key đang dùng, kể cả trên cùng máy.
-- Key theo phiên cần bản Windows mới và máy chủ đã cập nhật. Cần mạng khi mở và kiểm tra mỗi 20 giây; phiên hiệu lực tối đa 60 giây, không vượt hạn key. Quá thời gian này dừng lượt mới, giữ tiến độ.
-- Khi key hết hiệu lực, tool ngừng nhận lượt mới; giữ nguyên dữ liệu và tiến độ. Gia hạn rồi bấm Bản quyền > Kiểm tra lại để chạy tiếp.
-- Chuyển tool/máy: đóng tool cũ hoàn toàn rồi nhập key ở tool mới. Đóng bình thường giải phóng phiên sau khi lượt hiện tại kết thúc. Nếu tắt đột ngột hoặc mất kết nối lúc đóng, chờ tối đa 2 phút. Key cũ theo máy vẫn cần hủy kích hoạt trước khi chuyển, kiểm tra 5 phút và phiên ngoại tuyến tối đa 1 giờ.
-- Nếu máy cũ bị mất/hỏng hoặc quên key, liên hệ người cấp key; không xóa dữ liệu để thử kích hoạt lại.
+- Key mới dùng trong một tool tại một thời điểm, không khóa theo máy. Khi tool A đang dùng key, tool B bị chặn, kể cả trên cùng máy.
+- Đóng tool A hoàn toàn trước khi dùng key ở B. Đóng bình thường giải phóng phiên sau khi xử lý xong. Nếu tắt đột ngột hoặc mất kết nối lúc đóng, chờ tối đa 2 phút rồi thử lại.
+- Cần mạng khi mở và kiểm tra mỗi 20 giây. Nếu mất kết nối quá 1 phút, dừng nhận lượt mới và giữ tiến độ. Máy ngủ/tắt hoặc tool đóng thì không chạy lịch.
+- Key cũ theo máy vẫn giữ chế độ cũ: hủy kích hoạt trước khi chuyển máy, kiểm tra 5 phút, phiên ngoại tuyến tối đa 1 giờ.
+- Key khác mật khẩu tài khoản. Gia hạn không tạo chiến dịch mới hoặc gửi lại bước đã làm.
+- Để đổi key, hủy kích hoạt key hiện tại trong Bản quyền trước. Khi cần hỗ trợ key, liên hệ đơn vị cung cấp phần mềm.
 
-Dữ liệu riêng của máy tính lưu ở:
-%LOCALAPPDATA%\ZaloFlow\instance
-Nhật ký chẩn đoán:
-%LOCALAPPDATA%\ZaloFlow\desktop.log
+TÀI KHOẢN QUẢN TRỊ VÀ NGƯỜI DÙNG
+- Đơn vị cấp phần mềm có thể cấp bộ key, tài khoản quản trị và mật khẩu khởi tạo. Kích hoạt key trước rồi đăng nhập tài khoản được cấp.
+- Quản trị vào Quản lý tài khoản > Tạo tài khoản trong tool để tạo nhiều tài khoản thường. Người dùng sử dụng ngay, không cần key riêng cho mỗi tài khoản.
+- Mỗi tài khoản có dữ liệu riêng trong cùng tool. Không tự đồng bộ tài khoản hoặc dữ liệu sang máy khác.
+- Tài khoản thường không có quyền quản trị. Quản trị tool không phải quản trị máy chủ cấp key.
+- Nếu tên đã tồn tại, tool không ghi đè mật khẩu hay tự nâng quyền; liên hệ đơn vị cấp phần mềm.
+- Nếu vừa được bổ sung quản trị cho key, bấm Bản quyền > Kiểm tra lại hoặc đóng/mở tool để nhận tài khoản.
+- Mở lại/gia hạn không đặt lại mật khẩu đã khôi phục. Mật khẩu khởi tạo do đơn vị cấp phần mềm lưu không thay thế mật khẩu mới trong tool.
+- Đăng xuất nằm ở góc phải thanh trên cùng. Đăng xuất không xóa dữ liệu, đóng tool hoặc hủy key.
 
-Chương trình cài ở %LOCALAPPDATA%\Programs\ZaloFlow. Thư mục hỗ trợ _internal được ẩn mặc định; không xóa hoặc di chuyển riêng các tệp này.
+QUÊN MẬT KHẨU
+- Khi còn đăng nhập: Bảo mật tài khoản > xác nhận mật khẩu hiện tại > Tạo mã khôi phục > Tải mã khôi phục. Cất mã ở nơi riêng tư.
+- Khi quên: chọn Quên mật khẩu?, dùng email đã xác minh nếu đã cấu hình gửi email, hoặc chọn mã khôi phục dự phòng. Đặt mật khẩu mới từ 8 đến 256 ký tự và nhập lại trùng khớp.
+- Mã dùng một lần. Phiên đăng nhập cũ hết hiệu lực; dữ liệu, tiến độ và key được giữ nguyên.
+- Chưa có mã hoặc mất quyền truy cập email: liên hệ đơn vị cung cấp phần mềm để được hướng dẫn khôi phục trên máy đang dùng. Không xóa dữ liệu hoặc đăng ký lại để thay thế tài khoản cũ.
 
-Nâng cấp: đóng tool hoàn toàn rồi chạy bộ cài mới trong cùng tài khoản Windows. Dữ liệu nằm ngoài thư mục chương trình nên được giữ lại, cả khi gỡ cài đặt. Không xóa thư mục dữ liệu. Nếu đang dùng bản ZIP cũ, đóng bản đó trước khi cài; cùng tài khoản Windows sẽ dùng tiếp dữ liệu ở vị trí mặc định.
-
-Đóng tool trước khi gỡ cài đặt. Key theo phiên được giải phóng khi đóng bình thường; key cũ theo máy cần hủy kích hoạt trước khi chuyển máy.
-
-ĐĂNG KÝ VÀ ĐĂNG XUẤT
-- Sau khi kích hoạt key còn hiệu lực, tài khoản mới được dùng ngay sau khi đăng ký và đăng nhập. Không cần thao tác cấp quyền trên VPS hoặc PowerShell.
-- Tài khoản đã đăng ký ở bản cũ nhưng còn chờ duyệt: đăng nhập lại bằng mật khẩu của chính tài khoản đó với key hợp lệ. Giữ nguyên dữ liệu; không cần đăng ký lại.
-- Key chưa kích hoạt/hết hiệu lực không cho tạo tài khoản mới. Tài khoản bị khóa/từ chối rõ ràng không được tự mở khóa bằng đăng nhập.
-- Tài khoản tự tạo có vai trò thường. Nếu chủ máy có nhu cầu quản lý/khóa các tài khoản cục bộ, vẫn có thể cấp quyền quản trị bằng chức năng hỗ trợ riêng. Hướng dẫn:
-  https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-APPROVAL.md
-- Nút Đăng xuất luôn nằm ở góc phải thanh trên cùng. Đăng xuất không xóa dữ liệu hoặc hủy key.
-
-QUÊN MẬT KHẨU ZALOFLOW
-- Khi còn đăng nhập: Bảo mật tài khoản > xác nhận mật khẩu hiện tại > Tạo mã khôi phục > Tải mã khôi phục. Cất tệp riêng tư, không cùng mật khẩu.
-- Khi quên: chọn Quên mật khẩu?, nhập tài khoản, mã và mật khẩu mới hai lần (8–256 ký tự).
-- Mã dùng một lần; đăng nhập rồi tạo mã mới. Phiên cũ hết hiệu lực; dữ liệu, tiến độ và key giữ nguyên.
-- Tài khoản cũ chưa có mã: nhờ quản trị viên Windows trên chính máy này cấp mã hỗ trợ 15 phút sau khi xác minh. Không xóa dữ liệu hoặc đăng ký lại. Hướng dẫn:
-  https://github.com/Viettax2026/du-an-codex/blob/main/deployment/ACCOUNT-RECOVERY.md
-- Tài khoản/mật khẩu/mã của bản web khác bản Windows. Key hoặc mật khẩu Zalo không phải mã khôi phục.
-
-Bộ cài chỉ cần một file EXE để chia sẻ. Ẩn tệp không ngăn được sao chép hoặc trích xuất; quyền sử dụng vẫn được kiểm soát bằng key một phiên tool.
-
-CHUYỂN DỮ LIỆU TỪ VPS
-- Tool Windows không đồng bộ tự động với VPS.
-- Dừng bộ lịch VPS trước để không có hai nơi gửi cùng một chiến dịch:
-  sudo systemctl stop zaloflow-scheduler
-- Lấy bản sao lưu đầy đủ, nhất quán của thư mục instance khi web và bộ lịch VPS đã dừng; gồm database, media, zalo/auth.key và các phiên QR.
-- Đóng tool Windows; sao lưu thư mục instance hiện tại nếu có, rồi chép bản instance từ VPS vào vị trí dữ liệu trên.
-- Mở lại, kiểm tra tài khoản/nội dung/lịch và đăng nhập Zalo lại nếu phiên không còn hiệu lực.
-- Chỉ chạy chiến dịch ở một nơi. Không bật đồng thời bộ lịch VPS và tool Windows khi dùng bản sao cùng chiến dịch.
-
-Nếu cửa sổ không mở: cài Microsoft Edge WebView2 Runtime từ trang Microsoft:
-https://developer.microsoft.com/microsoft-edge/webview2/
-Ứng dụng chưa được ký chứng thư nhà phát hành. Chỉ dùng gói được tạo từ kho GitHub Viettax2026/du-an-codex của bạn.
-
-TÀI KHOẢN QUẢN TRỊ ĐƯỢC CẤP KÈM KEY
-- Nếu chủ phần mềm cấp tên quản trị + mật khẩu khởi tạo + key: vào Bản quyền để kích hoạt key trước, sau đó đăng nhập bằng tài khoản đã được cấp.
-- Quản trị vào Quản lý tài khoản > Tạo tài khoản trong tool để tạo nhiều tài khoản thường. Mật khẩu ít nhất 8 ký tự; người dùng đăng nhập dùng ngay, không cần key riêng.
-- Mỗi tài khoản có dữ liệu riêng trên máy này, không tự đồng bộ sang máy khác. Nhiều tài khoản vẫn cùng sử dụng một phiên tool theo key; mở tool thứ hai với cùng key vẫn bị chặn.
-- Tài khoản thường không có quyền quản lý tài khoản. Quản trị tool không phải quản trị kho key trên VPS.
-- Nếu đã có tên tài khoản trùng trong tool, không ghi đè mật khẩu hoặc tự nâng quyền; liên hệ người cấp key. Mở lại/gia hạn không đặt lại mật khẩu đã đổi/khôi phục.
+DỮ LIỆU VÀ NÂNG CẤP
+- Dữ liệu: %LOCALAPPDATA%\ZaloFlow\instance
+- Nhật ký hỗ trợ: %LOCALAPPDATA%\ZaloFlow\desktop.log
+- Chương trình: %LOCALAPPDATA%\Programs\ZaloFlow. Không xóa riêng thư mục hỗ trợ _internal.
+- Đóng tool rồi cài đè bằng cùng tài khoản Windows. Nâng cấp/gỡ cài đặt giữ dữ liệu và kích hoạt nằm ngoài thư mục chương trình. Không xóa thư mục dữ liệu.
+- Bản web và Windows có tài khoản/dữ liệu riêng. Cấu hình gửi email trên web không tự áp dụng cho Windows.
+- Khi chuyển dữ liệu từ nơi khác, dùng bản sao lưu đầy đủ và nhất quán. Chỉ chạy một bản của cùng chiến dịch để tránh xử lý trùng.
+- Nếu cửa sổ không mở, cài Microsoft Edge WebView2 Runtime từ trang Microsoft:
+  https://developer.microsoft.com/microsoft-edge/webview2/
+- Chỉ cài bộ cài nhận từ đơn vị cung cấp phần mềm. Khi cần hỗ trợ, cung cấp thông tin lỗi và phiên bản; không gửi mật khẩu hoặc key lên nơi công khai.

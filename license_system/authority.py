@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from license_system.signatures import PRODUCT, ActivationInvalid, LicenseError, new_signer, public_text, sign
 
@@ -50,7 +50,7 @@ class Authority:
             columns = {row['name'] for row in db.execute('PRAGMA table_info(licenses)')}
             if 'mode' not in columns:
                 db.execute("ALTER TABLE licenses ADD COLUMN mode TEXT NOT NULL DEFAULT 'device'")
-            for name in ('admin_username', 'admin_password_hash', 'key_ciphertext'):
+            for name in ('admin_username', 'admin_password_hash', 'key_ciphertext', 'admin_password_ciphertext'):
                 if name not in columns:
                     db.execute(f"ALTER TABLE licenses ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
             db.execute('''CREATE TABLE IF NOT EXISTS license_sessions (
@@ -123,7 +123,7 @@ class Authority:
 
     def key_for_owner(self, license_id):
         with self.connection() as db:
-            row = db.execute('SELECT id,customer,key_hash,key_ciphertext FROM licenses WHERE id=?',(license_id,)).fetchone()
+            row = db.execute('SELECT * FROM licenses WHERE id=?',(license_id,)).fetchone()
         if row is None:
             raise LicenseError('Không tìm thấy bản quyền.')
         key = ''
@@ -134,7 +134,36 @@ class Authority:
                     raise ValueError()
             except (InvalidToken, ValueError, UnicodeError):
                 raise LicenseError('Không đọc được bản key đã lưu. Kiểm tra bản sao lưu đầy đủ kho bản quyền; không tạo lại khóa ký.') from None
-        return dict(id=row['id'],customer=row['customer'],key=key)
+        admin_password = ''
+        if row['admin_password_ciphertext']:
+            try:
+                admin_password = self.key_cipher().decrypt(row['admin_password_ciphertext'].encode('ascii')).decode('utf-8')
+                if not row['admin_username'] or not check_password_hash(row['admin_password_hash'],admin_password):
+                    raise ValueError()
+            except (InvalidToken, ValueError, UnicodeError):
+                raise LicenseError('Không đọc được mật khẩu khởi tạo đã lưu. Không thay đổi mật khẩu trong tool.') from None
+        return dict(id=row['id'],customer=row['customer'],key=key,admin_username=row['admin_username'],
+                    admin_password=admin_password,can_create_admin=row['mode']=='floating' and not row['admin_username'] and not row['admin_password_hash'])
+
+    def create_tool_admin(self, license_id, username=''):
+        username = username.strip().lower()
+        if username and not re.fullmatch(r'[a-z0-9_.-]{3,64}',username):
+            raise LicenseError('Tài khoản quản trị cần 3–64 ký tự hợp lệ.')
+        password = secrets.token_urlsafe(12)
+        password_hash = generate_password_hash(password)
+        encrypted = self.key_cipher().encrypt(password.encode()).decode('ascii')
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM licenses WHERE id=?',(license_id,)).fetchone()
+            if row is None:
+                raise LicenseError('Không tìm thấy bản quyền.')
+            if row['mode']!='floating' or row['revoked'] or row['expires_at']<=time.time():
+                raise LicenseError('Cần key theo phiên đang có hiệu lực để tạo quản trị tool.')
+            if row['admin_username'] or row['admin_password_hash']:
+                raise LicenseError('Key đã có quản trị tool. Không tạo lại hoặc đổi mật khẩu đã cấp.')
+            username = username or 'qt-'+str(license_id)+'-'+secrets.token_hex(2)
+            db.execute('UPDATE licenses SET admin_username=?,admin_password_hash=?,admin_password_ciphertext=? WHERE id=?',
+                       (username,password_hash,encrypted,license_id))
 
     def save_original_key(self, license_id, key):
         key = key.strip()
@@ -163,17 +192,19 @@ class Authority:
             db.execute('UPDATE settings SET value=? WHERE name=?', (secrets.token_hex(16), 'admin_epoch'))
         self.folder.joinpath('admin-password.txt').unlink(missing_ok=True)
 
-    def issue(self, customer, days=30, seats=1, now=None, mode='device', admin_username=''):
+    def issue(self, customer, days=30, seats=1, now=None, mode='device', admin_username=None):
         now = int(time.time() if now is None else now)
         if not customer.strip() or len(customer) > 150 or not 1 <= days <= 36500 or not 1 <= seats <= 100:
             raise LicenseError('Nhập tên khách hàng, hạn dùng 1–36500 ngày và số máy 1–100.')
         if mode not in ('device', 'floating') or (mode == 'floating' and seats != 1):
             raise LicenseError('Key theo phiên chỉ cho phép một tool sử dụng tại một thời điểm.')
-        admin_username = admin_username.strip().lower()
+        create_admin = admin_username is not None and mode=='floating'
+        admin_username = (admin_username or '').strip().lower()
         if admin_username and (mode != 'floating' or not re.fullmatch(r'[a-z0-9_.-]{3,64}', admin_username)):
             raise LicenseError('Tài khoản quản trị tool cần 3–64 ký tự không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang và key theo phiên.')
-        admin_password = secrets.token_urlsafe(12) if admin_username else ''
+        admin_password = secrets.token_urlsafe(12) if create_admin or admin_username else ''
         password_hash = generate_password_hash(admin_password) if admin_password else ''
+        password_ciphertext = self.key_cipher().encrypt(admin_password.encode()).decode('ascii') if admin_password else ''
         key = 'ZF-' + secrets.token_urlsafe(24)
         encrypted_key = self.key_cipher().encrypt(key.encode()).decode('ascii')
         with self.connection() as db:
@@ -183,8 +214,10 @@ class Authority:
             highest = db.execute('SELECT coalesce(max(id),0) FROM licenses').fetchone()[0]
             retired = db.execute("SELECT value FROM settings WHERE name='license_id_high_water'").fetchone()
             license_id = max(highest, int(retired['value']) if retired else 0) + 1
-            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash,key_ciphertext) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash, encrypted_key))
+            if create_admin and not admin_username:
+                admin_username = 'qt-'+str(license_id)+'-'+secrets.token_hex(2)
+            cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash,key_ciphertext,admin_password_ciphertext) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                             (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash, encrypted_key,password_ciphertext))
         return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats, mode=mode,
                     admin_username=admin_username, admin_password=admin_password)
 

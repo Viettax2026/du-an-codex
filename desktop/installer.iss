@@ -7,7 +7,7 @@
 AppId={{C38DF867-D7E9-47C2-8353-C4FA3851D152}
 AppName=ZaloFlow
 AppVersion={#AppVersion}
-AppPublisher=Viettax
+AppPublisher=ZaloFlow
 DefaultDirName={localappdata}\Programs\ZaloFlow
 DefaultGroupName=ZaloFlow
 PrivilegesRequired=lowest

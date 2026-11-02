@@ -42,6 +42,9 @@ def register_license_routes(app, license):
                     flash('Đã hủy kích hoạt trong tool này. Với key theo phiên, có thể cần chờ tối đa 2 phút để dùng lại ở tool khác.', 'success')
                 elif action == 'refresh':
                     license.refresh(force=True)
+                    if license.allowed():
+                        from desktop.admin_accounts import sync_license_admin
+                        sync_license_admin(app,license)
                     flash('Đã kiểm tra lại bản quyền.' if license.allowed() else license.error or 'Nhập key còn hạn để tiếp tục.', 'success' if license.allowed() else 'error')
                 else:
                     abort(400)

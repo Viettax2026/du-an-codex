@@ -29,6 +29,15 @@ function Assert-Shortcuts {
     if (-not ((Get-Item "$appPath/_internal" -Force).Attributes -band [IO.FileAttributes]::Hidden)) { throw 'Support directory is not hidden.' }
 }
 
+function Assert-PublicInformation {
+    $entry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C38DF867-D7E9-47C2-8353-C4FA3851D152}_is1'
+    if ($entry.Publisher -ne 'ZaloFlow') { throw 'Unexpected installer publisher.' }
+    $guide = Get-Content "$appPath/HUONG-DAN.txt" -Raw -Encoding utf8
+    if ($guide -match '(?i)Viettax|du-an-codex|cskh\.') { throw 'Customer guide exposes owner information.' }
+    $dialog = Get-Content "$appPath/_internal/templates/_message_composer_dialogs.html" -Raw -Encoding utf8
+    if ($dialog -match '(?i)Viettax') { throw 'Customer interface exposes owner information.' }
+}
+
 function Assert-InstalledApp {
     $reportPath = Join-Path $env:RUNNER_TEMP 'zaloflow-installed-smoke.json'
     Remove-Item $reportPath -ErrorAction SilentlyContinue
@@ -46,6 +55,7 @@ $argsInstall = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$appP
 try {
     Run-Installer $setup $argsInstall 'zaloflow-install.log'
     Assert-Shortcuts
+    Assert-PublicInformation
     Assert-InstalledApp
     foreach ($folder in @('instance', 'license')) {
         New-Item -ItemType Directory "$dataPath/$folder" -Force | Out-Null
@@ -53,6 +63,7 @@ try {
     }
     Run-Installer $setup $argsInstall 'zaloflow-upgrade.log'
     Assert-Shortcuts
+    Assert-PublicInformation
     Assert-InstalledApp
     Run-Installer "$appPath/unins000.exe" @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 'zaloflow-uninstall.log'
     if ((Test-Path "$appPath/ZaloFlow.exe") -or (Test-Path $desktopShortcut) -or (Test-Path $startShortcut)) { throw 'Uninstall left application or shortcuts behind.' }
