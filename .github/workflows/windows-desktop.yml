@@ -6,7 +6,7 @@ on:
   # direct request; its manifest does not claim a confirmed VPS test.
   # Normal main pushes never build Windows.
   push:
-    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030-r2', 'windows-tool-admin-20261101', 'windows-tool-neutral-20261102', 'windows-tool-privacy-20261102', 'windows-tool-login-20261102']
+    tags: ['windows-vps-tested-0a81960', 'windows-self-registration-f419728', 'windows-owner-package-20261030-r2', 'windows-tool-admin-20261101', 'windows-tool-neutral-20261102', 'windows-tool-privacy-20261102', 'windows-tool-login-20261102', 'windows-tool-customer-admin-20261103']
   workflow_dispatch:
     inputs:
       vps_tested:
@@ -22,7 +22,7 @@ permissions:
   contents: read
 jobs:
   windows:
-    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' || github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102')) }}
+    if: ${{ inputs.vps_tested == true || (github.event_name == 'push' && (github.ref == 'refs/tags/windows-vps-tested-0a81960' || github.ref == 'refs/tags/windows-self-registration-f419728' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' || github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102' || github.ref == 'refs/tags/windows-tool-customer-admin-20261103')) }}
     permissions:
       contents: write
     runs-on: windows-latest
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' && '73f38a058680535486990dfcc1a4890ae4e2726e' || github.ref == 'refs/tags/windows-tool-admin-20261101' && 'ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b' || github.ref == 'refs/tags/windows-tool-neutral-20261102' && 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5' || github.ref == 'refs/tags/windows-tool-privacy-20261102' && '5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae' || github.ref == 'refs/tags/windows-tool-login-20261102' && '16b433662e3e27939bfc3286fb18b673ef897e49' || github.sha }}
+          ref: ${{ github.ref == 'refs/tags/windows-vps-tested-0a81960' && '0a819608efffecd3dd4efaaf1a4d41448e2cef36' || github.ref == 'refs/tags/windows-self-registration-f419728' && 'f4197288d9334438129e8cb27da45de4acc5f38c' || github.ref == 'refs/tags/windows-owner-package-20261030-r2' && '73f38a058680535486990dfcc1a4890ae4e2726e' || github.ref == 'refs/tags/windows-tool-admin-20261101' && 'ac4e5fb3c177dc46df5ea4d33a21131a43fdb98b' || github.ref == 'refs/tags/windows-tool-neutral-20261102' && 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5' || github.ref == 'refs/tags/windows-tool-privacy-20261102' && '5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae' || github.ref == 'refs/tags/windows-tool-login-20261102' && '16b433662e3e27939bfc3286fb18b673ef897e49' || github.ref == 'refs/tags/windows-tool-customer-admin-20261103' && '889383fa0f780fefe3884d904bb06a2bc044183b' || github.sha }}
           persist-credentials: false
       - name: Record approved release revision
         shell: pwsh
@@ -47,6 +47,7 @@ jobs:
               'refs/tags/windows-tool-neutral-20261102' { $expectedSource = 'bcd5cb298ab438ac487c236ced8f0caaa7af78d5' }
               'refs/tags/windows-tool-privacy-20261102' { $expectedSource = '5ab04a23d8fa5fd0e954d94d32b7e0c1c4231aae' }
               'refs/tags/windows-tool-login-20261102' { $expectedSource = '16b433662e3e27939bfc3286fb18b673ef897e49' }
+              'refs/tags/windows-tool-customer-admin-20261103' { $expectedSource = '889383fa0f780fefe3884d904bb06a2bc044183b' }
               default { throw 'Not an owner-approved Windows release.' }
             }
             if ($source -ne $expectedSource) { throw 'Release source does not match the approved revision.' }
@@ -187,7 +188,7 @@ jobs:
           python $packager --workflow-ref "$env:RELEASE_WORKFLOW_REF" --installer-dir desktop/dist/installer --output "$env:RUNNER_TEMP/zaloflow-public-release"
           if ($LASTEXITCODE -ne 0) { throw 'Release archive failed integrity/source validation.' }
       - name: Prepare single-session tool and administrator release
-        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102'
+        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102' || github.ref == 'refs/tags/windows-tool-customer-admin-20261103'
         shell: pwsh
         env:
           RELEASE_WORKFLOW_REF: ${{ github.sha }}
@@ -230,24 +231,38 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Cannot publish the checked release.' }
           gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json url,assets
       - name: Publish checked tool installer for direct download
-        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102'
+        if: github.ref == 'refs/tags/windows-tool-admin-20261101' || github.ref == 'refs/tags/windows-tool-neutral-20261102' || github.ref == 'refs/tags/windows-tool-privacy-20261102' || github.ref == 'refs/tags/windows-tool-login-20261102' || github.ref == 'refs/tags/windows-tool-customer-admin-20261103'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $releaseTag = if ('${{ github.ref }}' -eq 'refs/tags/windows-tool-login-20261102') { 'windows-tool-login-20261102' } elseif ('${{ github.ref }}' -eq 'refs/tags/windows-tool-privacy-20261102') { 'windows-tool-privacy-20261102' } elseif ('${{ github.ref }}' -eq 'refs/tags/windows-tool-neutral-20261102') { 'windows-tool-neutral-20261102' } else { 'windows-tool-admin-20261101' }
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $releaseTag = if ('${{ github.ref }}' -eq 'refs/tags/windows-tool-customer-admin-20261103') { 'windows-tool-customer-admin-20261103' } elseif ('${{ github.ref }}' -eq 'refs/tags/windows-tool-login-20261102') { 'windows-tool-login-20261102' } elseif ('${{ github.ref }}' -eq 'refs/tags/windows-tool-privacy-20261102') { 'windows-tool-privacy-20261102' } elseif ('${{ github.ref }}' -eq 'refs/tags/windows-tool-neutral-20261102') { 'windows-tool-neutral-20261102' } else { 'windows-tool-admin-20261101' }
           $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-public-tool'
-          $draft = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>$null
-          $exists = $LASTEXITCODE -eq 0
-          if ($exists) {
-            if ($draft -ne 'true') { throw 'Published installers must not be overwritten.' }
+          function Invoke-CheckedGh([string[]]$arguments) {
+            $result = & gh @arguments 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+              if ($result.Length -gt 6000) { $result = $result.Substring($result.Length - 6000) }
+              $diagnostic = $result.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Output "::error title=Release publication::$diagnostic"
+              throw "GitHub release command failed with exit code $code."
+            }
+            return $result
+          }
+          $view = & gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>&1 | Out-String
+          $viewCode = $LASTEXITCODE
+          if ($viewCode -eq 0) {
+            if ($view.Trim() -ne 'true') { throw 'Do not overwrite an already published release.' }
+          } elseif ($view -match 'release not found|HTTP 404|Not Found') {
+            Invoke-CheckedGh -arguments @('release','create',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--verify-tag','--draft','--title','ZaloFlow - Tool Windows','--notes-file',"$releaseFolder/RELEASE-NOTES.md")
           } else {
-            gh release create $releaseTag --repo $env:GITHUB_REPOSITORY --verify-tag --draft --title 'ZaloFlow - Tool Windows'  --notes-file "$releaseFolder/RELEASE-NOTES.md"
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot create tool release draft.' }
+            $diagnostic = $view.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Release lookup::$diagnostic"
+            throw 'Cannot determine release status.'
           }
           $assets = @(Get-ChildItem $releaseFolder -File | Where-Object { $_.Name -ne 'RELEASE-NOTES.md' } | ForEach-Object { $_.FullName })
-          gh release upload $releaseTag @assets --clobber --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot upload checked tool files.' }
-          gh release edit $releaseTag --draft=false --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot publish tool release.' }
-          gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json url,assets
+          Invoke-CheckedGh -arguments (@('release','upload',$releaseTag) + $assets + @('--clobber','--repo',$env:GITHUB_REPOSITORY))
+          Invoke-CheckedGh -arguments @('release','edit',$releaseTag,'--draft=false','--repo',$env:GITHUB_REPOSITORY)
+          Invoke-CheckedGh -arguments @('release','view',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--json','url,assets')

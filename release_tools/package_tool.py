@@ -1,4 +1,4 @@
-"""Publish a checked native installer for the owner's 2 November neutral-brand tool release."""
+"""Publish a checked native installer for the owner's 3 November tool release."""
 import argparse
 import hashlib
 import json
@@ -7,10 +7,10 @@ import re
 import shutil
 import zipfile
 
-APP_COMMIT = '16b433662e3e27939bfc3286fb18b673ef897e49'
-TAG = 'windows-tool-login-20261102'
-ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-02-r3.zip'
-ARCHIVE_ROOT = 'ZaloFlow-2026-11-02/'
+APP_COMMIT = '889383fa0f780fefe3884d904bb06a2bc044183b'
+TAG = 'windows-tool-customer-admin-20261103'
+ZIP_NAME = 'ZaloFlow-Tool-Windows-2026-11-03.zip'
+ARCHIVE_ROOT = 'ZaloFlow-2026-11-03/'
 
 
 def digest(path):
@@ -49,6 +49,7 @@ def assemble(installer_dir, output, customer_guide, audit_report):
                     vps_live_test_confirmed=False, floating_license=True, tool_admin_accounts=True,
                     neutral_branding=True, automatic_admin_credentials=True, admin_name_conflict_resolved=True,
                     installed_artifact_privacy_checked=True,
+                    customer_admin_naming_requires_server_update=True,
                     approved_license_endpoint_retained=bool(audit.get('accepted_exceptions')),
                     includes_customer_credentials=False, includes_private_authority=False,
                     files={name:digest(output/name) for name in names})
@@ -67,10 +68,11 @@ def assemble(installer_dir, output, customer_guide, audit_report):
 - Đã kiểm tra cả tệp cài ra, ZIP nội bộ và mô-đun Python trong file chạy; kết quả đi kèm trong `PRIVACY-AUDIT.json`. Loại email quản trị web cũ khỏi bản desktop và bỏ cấu hình JSON rõ.
 - Giữ địa chỉ máy chủ kiểm tra key hiện tại theo yêu cầu chủ phần mềm; chỉ URL đó ở phần bản quyền là ngoại lệ. Không tuyên bố giấu danh tính máy chủ hoặc tài khoản kênh phát hành GitHub.
 - Sửa lỗi đăng nhập khi tên quản trị được cấp đã có trong tool: vào Bản quyền > Tạo quản trị bằng tên khác, chọn tên mới và xác nhận mật khẩu khởi tạo. Đăng nhập bằng tên mới và cùng mật khẩu được cấp. Giữ nguyên tài khoản, mật khẩu và dữ liệu cũ; không chuyển dữ liệu giữa tài khoản. Dùng lại key hiện tại, không cần cấp key mới.
+- Máy chủ mới gợi ý tên quản trị theo khách hàng: “Thảo Như” → `quantri-thaonhu`, cho phép sửa trước khi cấp key. Tên tự tạo bị trùng thêm -2, -3; tên nhập riêng trùng báo lỗi. Cần cập nhật VPS để trang quản trị có thay đổi này; cài tool Windows không tự cập nhật VPS.
 - Máy chủ bản quyền mới tự cấp đủ key, tài khoản và mật khẩu quản trị; hỗ trợ bổ sung quản trị cho key chưa có. Khách cần máy chủ đã cập nhật để dùng chức năng này.
 - Key mới dùng một phiên tool tại một thời điểm, trên bất kỳ máy nào. Đóng tool cũ trước khi dùng ở tool khác; tắt đột ngột chờ tối đa 2 phút.
 - Đóng tool cũ rồi cài đè trong cùng tài khoản Windows; giữ dữ liệu, tiến độ và kích hoạt. Mở lại/gia hạn không đặt lại mật khẩu đã khôi phục.
-- Chưa có kết quả xác nhận kiểm tra VPS thật từ chủ phần mềm; đóng gói theo yêu cầu trực tiếp ngày 02/11/2026, có kiểm thử Windows và bộ cài.
+- Chưa có kết quả xác nhận kiểm tra VPS thật từ chủ phần mềm; đóng gói theo yêu cầu trực tiếp ngày 03/11/2026, có kiểm thử Windows và bộ cài.
 - Không chứa dữ liệu hoặc mật khẩu khách hàng, phiên Zalo, mật khẩu SMTP hay khóa ký riêng. SHA256/SOURCE/manifest dùng để đối chiếu bản tải.
 '''
     (output/'RELEASE-NOTES.md').write_text(notes,encoding='utf-8')
