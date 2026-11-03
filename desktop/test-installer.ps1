@@ -58,10 +58,18 @@ function Assert-PublicInformation {
 function Assert-InstalledPrivacy {
     $reportName = if ($Local) { 'zaloflow-local-installed-privacy.json' } else { 'zaloflow-installed-privacy.json' }
     $auditPath = Join-Path $env:RUNNER_TEMP $reportName
-    $extra = if ($Local) { @('--strict') } else { @() }
-    python -m desktop.privacy_audit @extra --app-dir $appPath --report $auditPath
-    if ($LASTEXITCODE -ne 0) {
-        $detail = if (Test-Path $auditPath) { Get-Content $auditPath -Raw } else { 'Audit report was not written.' }
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    if ($Local) {
+        $inspection = & python -m desktop.privacy_audit --strict --app-dir "$appPath" --report "$auditPath" 2>&1 | Out-String
+    } else {
+        $inspection = & python -m desktop.privacy_audit --app-dir "$appPath" --report "$auditPath" 2>&1 | Out-String
+    }
+    $inspectionExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    Write-Output $inspection
+    if ($inspectionExit -ne 0) {
+        $detail = if (Test-Path $auditPath) { Get-Content $auditPath -Raw } else { "Audit report was not written. $inspection" }
         if ($detail.Length -gt 12000) { $detail = $detail.Substring(0,12000) }
         throw "Actual installed files failed inspection: $detail"
     }
