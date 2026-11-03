@@ -14,6 +14,15 @@ $oppositeData = Join-Path $env:LOCALAPPDATA 'ZaloFlow'
 if (-not $env:CI -or -not $env:RUNNER_TEMP) { throw 'Use a disposable Windows CI runner.' }
 if (Test-Path $dataPath) { throw 'Do not run installer tests with existing user data.' }
 if ($Local -and (Test-Path $oppositeData)) { throw 'Do not run local isolation checks with existing licensed data.' }
+if ($Local) {
+    # The uninstall journal records where setup ran. Use a neutral download
+    # directory, not the CI repository path, when auditing installed metadata.
+    $stagedFolder = Join-Path $env:RUNNER_TEMP 'local-installer-input'
+    New-Item -ItemType Directory $stagedFolder -Force | Out-Null
+    $stagedSetup = Join-Path $stagedFolder 'ZaloFlow-Local-Setup-x64.exe'
+    Copy-Item $setup $stagedSetup -Force
+    $setup = $stagedSetup
+}
 
 function Run-Installer([string]$exe, [string[]]$installerArgs, [string]$logName) {
     $logPath = Join-Path $env:RUNNER_TEMP $logName
@@ -51,7 +60,11 @@ function Assert-InstalledPrivacy {
     $auditPath = Join-Path $env:RUNNER_TEMP $reportName
     $extra = if ($Local) { @('--strict') } else { @() }
     python -m desktop.privacy_audit @extra --app-dir $appPath --report $auditPath
-    if ($LASTEXITCODE -ne 0) { throw 'Actual installed files expose owner identity or could not be inspected.' }
+    if ($LASTEXITCODE -ne 0) {
+        $detail = if (Test-Path $auditPath) { Get-Content $auditPath -Raw } else { 'Audit report was not written.' }
+        if ($detail.Length -gt 12000) { $detail = $detail.Substring(0,12000) }
+        throw "Actual installed files failed inspection: $detail"
+    }
     $audit = Get-Content $auditPath -Raw | ConvertFrom-Json
     $audit | Add-Member -NotePropertyName installer_sha256 -NotePropertyValue (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant() -Force
     $audit | ConvertTo-Json -Depth 10 | Set-Content $auditPath -Encoding utf8

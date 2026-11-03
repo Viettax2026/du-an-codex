@@ -7,7 +7,7 @@ import re
 import shutil
 import zipfile
 
-TAG='windows-local-20261103'
+TAG='windows-local-20261103-r2'
 ZIP_NAME='ZaloFlow-Local-Windows-2026-11-03.zip'
 ARCHIVE_ROOT='ZaloFlow-Local/'
 
