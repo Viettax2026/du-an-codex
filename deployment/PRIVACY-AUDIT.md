@@ -1,10 +1,25 @@
-# Kiểm tra dấu vết chủ phần mềm — ZaloFlow 1.0.21
+# Kiểm tra dấu vết chủ phần mềm — ZaloFlow và ZaloFlow Local
 
 Ngày kiểm tra cập nhật: 03/11/2026; các kết quả ngày 02/11 được giữ bên dưới. Đây là kiểm tra **bộ cài đã phát hành**, không chỉ mã nguồn hoặc ảnh giao diện.
 
 ## Kết luận
 
-Bản **1.0.21 đã phát hành và được tải lại để kiểm tra độc lập**, tiếp tục giữ sửa đổi của 1.0.19 và 1.0.20. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+**Bản riêng ZaloFlow Local 1.0.2** không cần key và không đóng kèm các mô-đun bản quyền. Đã tải lại EXE/ZIP và quét nghiêm ngặt: không có phát hiện/lỗi hoặc ngoại lệ URL máy chủ. Đây là bản độc lập theo yêu cầu chủ phần mềm ngày 03/11/2026; không thay cơ chế kiểm tra key của bản chuẩn.
+
+Bản **có key 1.0.21 đã phát hành và được tải lại để kiểm tra độc lập**, tiếp tục giữ sửa đổi của 1.0.19 và 1.0.20. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại cho bản có key**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa của bản có key là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+
+## Kết quả ZaloFlow Local 1.0.2
+
+- [EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-local-20261103-r2/ZaloFlow-Local-Setup-x64.exe), [ZIP và báo cáo](https://github.com/Viettax2026/du-an-codex/releases/download/windows-local-20261103-r2/ZaloFlow-Local-Windows-2026-11-03.zip), nguồn chương trình `c685aca701158842013464369dcca7376108f85b`, `Edition: local`, phiên bản 1.0.2.
+- [Lượt dựng 2](https://github.com/Viettax2026/du-an-codex/actions/runs/41583163759) vượt kiểm tra mã, quét EXE nghiêm ngặt và chạy WebView2; dừng ở cách gọi công cụ quét sau cài đặt không tạo được báo cáo. Sau khi thay lời gọi bằng tham số tường minh và giữ stdout/stderr, [lượt xác minh/phát hành](https://github.com/Viettax2026/du-an-codex/actions/runs/41584207008) dùng lại đúng artifact, vượt toàn bộ cài đặt/cài đè/gỡ, kiểm tra dữ liệu hai hồ sơ và quét tệp cài ra trước khi xuất bản. Không bỏ qua hoặc miễn trừ phát hiện để phát hành.
+- Quét thực tế sau cài đặt Windows: **2060 tệp, 1033 mô-đun Python, 165 mục ZIP**, `passed: true`, `strict: true`, `findings: []`, `errors: []`, `accepted_exceptions: []`, `licensing_modules: []`.
+- Tải riêng EXE và ZIP công khai; hash EXE trực tiếp khớp EXE trong ZIP và báo cáo cài đặt Windows. Đối chiếu từng tệp manifest, CRC và SOURCE; giải nén **chính EXE tải trực tiếp** rồi quét độc lập **2058 tệp, cùng 1033 mô-đun và 165 mục ZIP**, đạt cùng kết quả nghiêm ngặt. Cảnh báo chuyển mã innoextract và phạm vi bộ quét được ghi ở phần 1.0.19 bên dưới.
+- Xác nhận có `desktop.local_runtime`, `desktop.local_smoke`, `desktop.window`; không có `license_system` và các mô-đun con, `desktop.licensing`, `desktop.license_identity`, `desktop.license_routes`, `desktop.main` hoặc `legacy_web_accounts`. Không có JSON cấu hình máy chủ. Bản Local không dựng license client, không có luồng kiểm tra key hoặc trang kích hoạt; đã kiểm tra trong EXE bằng dữ liệu giả.
+- SHA256 chương trình chính: `0f183216450b6a5f5a54cc93f2930a9dbf6f8e482b3d4cf4e93fa3a5447d4c47`.
+- SHA256 bộ cài: `7cd10f2f3a9fadcecd1768eb52d8e08a706d23c40c9352d2901b3a44f5ed0c15`.
+- SHA256 ZIP (42827483 byte): `1cbb77f81f2d899ab2b3ed73ead2827313e173dd60b378c2ce23fb2478c2501f`.
+
+Giới hạn: đây là kiểm tra các chuỗi nhận diện đã biết, cấu trúc gói và các mô-đun sau giải nén, không phải lời hứa không thể liên hệ nguồn gốc phần mềm. Tài khoản GitHub trên kênh tải vẫn hiển thị tên chủ sở hữu; có thể gửi khách trực tiếp file EXE đã tải. Hồ sơ Local mới độc lập, không đọc hoặc đổi tên dữ liệu riêng của người dùng trên bản khác. Không kiểm tra gửi Zalo thật trong lượt đóng gói này.
 
 ## Kết quả bản 1.0.21 đã phát hành
 

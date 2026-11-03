@@ -2,7 +2,24 @@
 
 ## Lưu ý về thông tin chủ phần mềm
 
+Có thêm **ZaloFlow Local 1.0.2** dùng không cần key, cài và lưu dữ liệu riêng; xem liên kết ngay bên dưới. Bản này đã được quét nghiêm ngặt, không miễn trừ địa chỉ máy chủ và không chứa các mô-đun bản quyền.
+
 Bản mới **1.0.21** giữ việc loại email quản trị cũ khỏi mã desktop và đã vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
+
+## Bản riêng ZaloFlow Local 1.0.2 — không cần key
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-local-20261103-r2/ZaloFlow-Local-Setup-x64.exe)
+- [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-local-20261103-r2/ZaloFlow-Local-Windows-2026-11-03.zip)
+
+Bản riêng theo yêu cầu ngày 03/11/2026, nguồn `c685aca701158842013464369dcca7376108f85b`. Cài **ZaloFlow Local**, chọn **Đăng ký** để tự tạo tài khoản; tài khoản đầu tiên trong hồ sơ mới là quản trị, các tài khoản sau là người dùng thường được dùng ngay. Email tùy chọn. Không cần nhập key, không có trang kích hoạt hoặc bộ kiểm tra key; đăng nhập/gửi tin Zalo vẫn cần Internet.
+
+Chương trình ở `%LOCALAPPDATA%\Programs\ZaloFlowLocal`, dữ liệu `%LOCALAPPDATA%\ZaloFlowLocal`, shortcut và AppId riêng. Không tự nhập tài khoản, chiến dịch hoặc phiên Zalo từ bản có key. Cài/gỡ giữ dữ liệu của cả hai hồ sơ đã được kiểm tra. Khi cập nhật Local, đóng chương trình rồi cài đè bằng cùng tài khoản Windows.
+
+Đã kiểm tra EXE biên dịch, WebView2, tài khoản/quyền, khôi phục mật khẩu và bộ lịch. [Lượt xác minh cài đặt và phát hành](https://github.com/Viettax2026/du-an-codex/actions/runs/41584207008) dùng đúng bộ cài từ lượt dựng 2, chạy lại cài đặt/cài đè/gỡ và quét nghiêm ngặt sau khi sửa cách gọi công cụ audit. Đã tải trực tiếp cả EXE và ZIP công khai, đối chiếu checksum/manifest/CRC, giải nén EXE và quét độc lập 2058 tệp, 1033 mô-đun Python, 165 mục ZIP; không có phát hiện/lỗi, không có mô-đun bản quyền và **không có ngoại lệ URL**. Hash chương trình khớp báo cáo Windows. Không tuyên bố đã thử gửi Zalo thật.
+
+SHA256 EXE: `7cd10f2f3a9fadcecd1768eb52d8e08a706d23c40c9352d2901b3a44f5ed0c15`.
+
+SHA256 ZIP: `1cbb77f81f2d899ab2b3ed73ead2827313e173dd60b378c2ce23fb2478c2501f`.
 
 ## Tool Windows ngày 03/11/2026 — bản mới 1.0.21
 
