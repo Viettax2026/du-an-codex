@@ -29,8 +29,17 @@ bash web_deploy/install-web.sh --domain crm.example.com --email owner@example.co
 
 Script cài Python, Node 22 riêng cho bản web, thư viện đã khóa phiên bản, Nginx, HTTPS tự gia hạn và dịch vụ chạy nền. Nginx chỉ chuyển yêu cầu của domain đã nhập đến cổng loopback. Script không thay Node của website khác và từ chối ghi đè bản cài/domain/cổng đã tồn tại.
 
-4. Mở `https://crm.example.com/register`, tự tạo tài khoản; không có mật khẩu mẫu. Thêm tài khoản Zalo và quét QR.
-5. Khi sẵn sàng chạy lịch:
+4. Mở `https://crm.example.com/register`, tự tạo tài khoản chủ; không có mật khẩu mẫu. Tài khoản vừa đăng ký đang chờ duyệt.
+5. Trong SSH root của VPS mới, cấp quyền quản trị cho đúng tên vừa đăng ký (thay `TEN_TAI_KHOAN` bằng tên thật):
+
+```bash
+cd /opt/zaloflow-web
+runuser -u zaloflow-web -- .venv/bin/flask --app app:create_app grant-admin --username TEN_TAI_KHOAN
+```
+
+Nếu cài bằng `--name` khác, thay cả thư mục và tên user hệ thống tương ứng. Đăng nhập lại bằng tài khoản và mật khẩu vừa tạo; vào **Quản lý tài khoản** để duyệt những người dùng tiếp theo. Sau đó kết nối Zalo và quét QR. Bản web không tự biến người đăng ký đầu tiên thành quản trị.
+
+6. Khi sẵn sàng chạy lịch:
 
 ```bash
 systemctl enable --now zaloflow-web-scheduler.service
