@@ -8,6 +8,12 @@ Mã khôi phục dự phòng vẫn dùng khi mất email. Với tài khoản đ�
 
 Gói `zaloflow-web.zip` chứa mã nguồn web, giao diện, bộ kết nối Zalo và script cài đặt. Mã không gắn với domain/IP cũ. Dùng Ubuntu 24.04 LTS x64 hoặc ARM64; cần Internet để tải Python/Node/thư viện và kết nối Zalo. Bản web có tài khoản, database và bộ chạy lịch riêng; không yêu cầu key Windows.
 
+## Nhập data khách hàng
+
+Khi tải Excel/CSV lên, cột Số điện thoại được chọn theo tiêu đề như SĐT, Điện thoại hoặc Phone; nếu không có tiêu đề phù hợp thì nhận diện theo dữ liệu số điện thoại. Khi chưa nhận diện được, mặc định cột G nếu tệp có ít nhất 7 cột, hoặc cột A với tệp ít cột hơn. Đổi sheet sẽ nhận diện lại; bạn vẫn có thể chọn cột khác trước khi xem trước và lưu.
+
+Chỉ tự đánh dấu bỏ dòng đầu khi nhận diện được dòng tiêu đề, để giữ số điện thoại ở dòng đầu của tệp không có tiêu đề. Kiểm tra các cột, tùy chọn bỏ dòng đầu và bản xem trước trước khi nhập. Cách chọn này áp dụng cho cả nhóm data và data của chiến dịch.
+
 ## Cài nhanh trên VPS mới
 
 1. Trỏ bản ghi DNS **A** của domain mới vào IP VPS. Nếu có AAAA, bản ghi đó cũng phải trỏ đúng VPS. Mở cổng 22 cho SSH và 80/443 cho website trong firewall của nhà cung cấp; không mở cổng nội bộ 8040.

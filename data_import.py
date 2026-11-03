@@ -1,6 +1,7 @@
 """Bounded, validated contact imports shared by campaigns and data groups."""
 import csv
 import io
+import re
 import unicodedata
 from pathlib import Path
 from zipfile import BadZipFile
@@ -177,7 +178,71 @@ def read_mapped_contacts(upload, parse_phones, mapping, skip_header, report=Fals
 
 def canonical_header(value):
     normalized = ''.join(char for char in unicodedata.normalize('NFD', str(value or '').strip().lower()) if unicodedata.category(char) != 'Mn').replace('đ', 'd')
-    aliases = {'ten': 'name', 'ho ten': 'name', 'sdt': 'phone', 'so dien thoai': 'phone', 'phone number': 'phone', 'uid': 'zalo_id'}
+    normalized = re.sub(r'[\s_./:-]+', ' ', normalized).strip(' *')
+    aliases = {'ten': 'name', 'ho ten': 'name', 'ho va ten': 'name', 'full name': 'name', 'fullname': 'name',
+               'sdt': 'phone', 'so dt': 'phone', 'so dien thoai': 'phone', 'sodienthoai': 'phone',
+               'dien thoai': 'phone', 'di dong': 'phone', 'mobile': 'phone', 'mobile phone': 'phone',
+               'phone number': 'phone', 'phonenumber': 'phone', 'tel': 'phone', 'telephone': 'phone',
+               'uid': 'zalo_id', 'zalo id': 'zalo_id', 'e mail': 'email'}
     if normalized.startswith('info '):
         normalized = normalized.replace(' ', '')
     return aliases.get(normalized, normalized)
+
+
+def suggest_contact_columns(rows, parse_phones, fields):
+    """Suggest only: explicit mappings are still validated and used at import."""
+    width = max(map(len, rows))
+    headers = [canonical_header(cell) for cell in rows[0]]
+    mapping = {key: str(headers.index(key)) if key in headers else '' for key in fields}
+    non_phone_headers = {'mst', 'ma so thue', 'tax id', 'tax code', 'taxcode', 'uid', 'zalo_id',
+                         'id', 'stt', 'ma khach hang', 'customer id', 'cccd', 'cmnd',
+                         'so tai khoan', 'account number', 'stk', 'ngay', 'date', 'ngay sinh'}
+    known_header = any(value in set(fields) | non_phone_headers for value in headers)
+
+    def phone_cell(value):
+        raw = str(value).strip()
+        if not raw or len(raw) > 200:
+            return False
+        values = [part.strip() for part in re.split(r'[,;\r\n]+', raw) if part.strip()]
+        if not values:
+            return False
+        try:
+            for part in values:
+                if part.isdigit() and len(part) == 9:
+                    part = '0' + part
+                phones = parse_phones(part)
+                if len(phones) != 1 or not re.fullmatch(r'0[235789][0-9]{8}', phones[0]):
+                    return False
+            return True
+        except ValueError:
+            return False
+
+    phone_headers = [index for index, value in enumerate(headers) if value == 'phone']
+    if phone_headers:
+        phone_index = 6 if 6 in phone_headers else phone_headers[0]
+        source = 'header'
+    else:
+        candidates = []
+        for index in range(width):
+            header = headers[index] if index < len(headers) else ''
+            if known_header and header in non_phone_headers:
+                continue
+            first = rows[0][index] if index < len(rows[0]) else ''
+            sample = rows[1:51] if known_header and not phone_cell(first) else rows[:50]
+            values = [row[index] for row in sample if index < len(row) and str(row[index]).strip()]
+            valid = sum(phone_cell(value) for value in values)
+            if valid and valid / len(values) >= 0.6:
+                candidates.append((valid / len(values), index == 6, valid, -index, index))
+        if candidates:
+            phone_index = max(candidates)[-1]
+            source = 'values'
+        else:
+            phone_index = 6 if width > 6 else 0
+            source = 'default'
+    phone_value = str(phone_index)
+    # The chosen phone column must not also be assigned to a name/info field.
+    mapping = {key: value if value != phone_value else '' for key, value in mapping.items()}
+    mapping['phone'] = phone_value
+    first_phone = rows[0][phone_index] if phone_index < len(rows[0]) else ''
+    skip_header = bool(phone_headers) or (known_header and not phone_cell(first_phone))
+    return dict(mapping=mapping, skip_header=skip_header, phone_mapping_source=source)

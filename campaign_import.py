@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from werkzeug.datastructures import FileStorage
-from data_import import canonical_header,read_sheet_rows,read_contacts
+from data_import import read_sheet_rows,read_contacts,suggest_contact_columns
 
 FIELDS=('name','phone','info1','info2','info3','info4','info5','email','zalo_id')
 
@@ -70,11 +70,10 @@ def preview(form,upload,parse_phones):
                 if len(table)>501:raise ValueError('Tối đa 500 dòng data và một dòng tiêu đề.')
     if not table:raise ValueError('Nhập số điện thoại hoặc chọn tệp dữ liệu.')
     if len(table)>501 or max(map(len,table))>100:raise ValueError('Tối đa 500 dòng data và 100 cột.')
-    width=max(map(len,table));headers=[canonical_header(cell) for cell in table[0]]
-    mapping={key:str(headers.index(key)) if key in headers else '' for key in FIELDS}
-    if not mapping['phone']:mapping['phone']='0'
-    skip_header='phone' in headers
-    inspection=dict(mapping=mapping,skip_header=skip_header,sheets=sheets,sheet=sheet,source_rows=len(table),
+    width=max(map(len,table))
+    suggested=suggest_contact_columns(table,parse_phones,FIELDS)
+    mapping,skip_header=suggested['mapping'],suggested['skip_header']
+    inspection=dict(**suggested,sheets=sheets,sheet=sheet,source_rows=len(table),
         columns=[dict(value=str(i),label=column_letter(i)) for i in range(width)],sample=table[:5])
     if form.get('phase')=='inspect':return inspection
     if 'mapping' in form:

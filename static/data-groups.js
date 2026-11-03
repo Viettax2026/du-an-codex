@@ -213,7 +213,9 @@ if (fileImportForm) {
       fillColumns(data.mapping);
       fileImportForm.querySelector('[data-customer-mapping]').hidden = false;
       renderRawPreview();
-      status.textContent = 'Đã đọc tệp và chọn cột Số điện thoại. Kiểm tra dữ liệu nguồn, rồi bấm Format chuẩn dữ liệu.';
+      const phoneColumn = columnLetter(Number(data.mapping.phone));
+      const method = {header: 'Nhận diện theo tiêu đề', values: 'Nhận diện theo dữ liệu', default: 'Chọn mặc định'}[data.phone_mapping_source] || 'Đã chọn';
+      status.textContent = `${method}: Số điện thoại ở cột ${phoneColumn}. Kiểm tra dữ liệu nguồn, rồi bấm Format chuẩn dữ liệu.`;
     } catch (error) { if (inspection === inspectionRevision && spreadsheet.files[0] === file && !fileImportForm.elements.import_mode.disabled) status.textContent = error instanceof SyntaxError ? 'Không đọc được phản hồi. Tải lại trang rồi thử lại.' : error.message; }
     finally { if (inspection === inspectionRevision) format.disabled = false; }
   }
