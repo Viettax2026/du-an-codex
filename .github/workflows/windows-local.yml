@@ -1,0 +1,139 @@
+name: Build ZaloFlow Local
+on:
+  push:
+    tags: ['windows-local-20261103']
+permissions:
+  contents: read
+jobs:
+  local:
+    if: github.ref == 'refs/tags/windows-local-20261103'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: '1'
+      EXPECTED_SOURCE: '8f5606f9521c11288bd686ff029ab742cb010940'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '8f5606f9521c11288bd686ff029ab742cb010940'
+          persist-credentials: false
+      - name: Record the owner-requested local source
+        shell: pwsh
+        run: |
+          $source = git rev-parse HEAD
+          if ($source -ne $env:EXPECTED_SOURCE) { throw 'Local source does not match the approved revision.' }
+          "Local application source: $source" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: connector/package-lock.json
+      - name: Test pinned text and document SDK without real sends
+        shell: pwsh
+        working-directory: connector
+        run: |
+          npm.cmd ci --omit=dev --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm.cmd test -- --test-reporter=tap
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test local accounts and regular edition regressions
+        shell: pwsh
+        run: |
+          python -m pip install -r desktop/requirements.txt pytest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests/test_auth.py tests/test_account_approval.py tests/test_account_recovery.py tests/test_desktop_registration.py tests/test_desktop_runtime.py tests/test_desktop_admin_accounts.py tests/test_desktop_local.py tests/test_license_sessions.py tests/test_auto_tool_admin.py tests/test_privacy_audit.py tests/test_local_release_package.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build the separate local executable and strict audit
+        shell: pwsh
+        run: ./desktop/build-local-windows.ps1
+      - name: Verify packaged accounts scheduler and native WebView2
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path desktop/dist/ZaloFlowLocal/ZaloFlow.exe
+          foreach ($gui in @($false,$true)) {
+            $reportPath = Join-Path $env:RUNNER_TEMP "zaloflow-local-$gui.json"
+            $extra = if ($gui) { @('--smoke-gui') } else { @() }
+            $process = Start-Process $exe -ArgumentList (@('--smoke-test','--smoke-report',"`"$reportPath`"") + $extra) -PassThru
+            if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Local packaged app timed out.' }
+            if ($process.ExitCode -ne 0) {
+              if (Test-Path "$reportPath.log") {
+                $diagnostic = Get-Content "$reportPath.log" -Raw
+                if ($diagnostic.Length -gt 20000) { $diagnostic = $diagnostic.Substring($diagnostic.Length - 20000) }
+                $diagnostic = $diagnostic.Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+                Write-Output "::error title=Local native diagnostics::$diagnostic"
+              }
+              throw 'Local packaged smoke test failed.'
+            }
+            $report = Get-Content $reportPath -Raw | ConvertFrom-Json
+            if (-not $report.ok -or -not $report.stopped -or -not $report.no_key -or -not $report.local_accounts -or -not $report.password_recovery -or -not $report.activation_route_absent -or -not $report.license_worker_absent -or ($gui -and -not $report.gui)) { throw 'Incomplete local smoke report.' }
+            Get-Content $reportPath
+          }
+      - name: Build the independent Local installer
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot install Inno Setup.' }
+          }
+          ./desktop/build-installer.ps1 -Local -AppVersion "1.0.${{ github.run_number }}"
+          "ZaloFlow Local Windows x64`nApplication source: $env:EXPECTED_SOURCE`nEdition: local`nInstaller version: 1.0.${{ github.run_number }}`n" | Set-Content desktop/dist/local-installer/SOURCE.txt -Encoding utf8
+      - name: Test install upgrade uninstall and separation from licensed data
+        shell: pwsh
+        run: |
+          try { ./desktop/test-installer.ps1 -Local } catch {
+            $diagnostic = $_.Exception.ToString().Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Local installer diagnostics::$diagnostic"
+            throw
+          }
+      - name: Package only the audited local installer
+        shell: pwsh
+        run: |
+          python release_tools/package_local.py --source-commit "$env:EXPECTED_SOURCE" --installer-dir desktop/dist/local-installer --output "$env:RUNNER_TEMP/zaloflow-local-public" --customer-guide desktop/HUONG-DAN-LOCAL.txt --audit-report "$env:RUNNER_TEMP/zaloflow-local-installed-privacy.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Local release source, hash or strict audit failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZaloFlow-Local-Public
+          path: ${{ runner.temp }}/zaloflow-local-public/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish the checked Local installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $releaseTag = 'windows-local-20261103'
+          $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-local-public'
+          function Invoke-CheckedGh([string[]]$arguments) {
+            $result = & gh @arguments 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            if ($code -ne 0) {
+              if ($result.Length -gt 6000) { $result = $result.Substring($result.Length - 6000) }
+              $diagnostic = $result.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Output "::error title=Release publication::$diagnostic"
+              throw "GitHub release command failed with exit code $code."
+            }
+            return $result
+          }
+          $view = & gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft --jq '.isDraft' 2>&1 | Out-String
+          $viewCode = $LASTEXITCODE
+          if ($viewCode -eq 0) {
+            if ($view.Trim() -ne 'true') { throw 'Do not overwrite an already published release.' }
+          } elseif ($view -match 'release not found|HTTP 404|Not Found') {
+            Invoke-CheckedGh -arguments @('release','create',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--verify-tag','--draft','--title','ZaloFlow Local - Windows','--notes-file',"$releaseFolder/RELEASE-NOTES.md")
+          } else {
+            $diagnostic = $view.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Release lookup::$diagnostic"
+            throw 'Cannot determine release status.'
+          }
+          $assets = @(Get-ChildItem $releaseFolder -File | Where-Object { $_.Name -ne 'RELEASE-NOTES.md' } | ForEach-Object { $_.FullName })
+          Invoke-CheckedGh -arguments (@('release','upload',$releaseTag) + $assets + @('--clobber','--repo',$env:GITHUB_REPOSITORY))
+          Invoke-CheckedGh -arguments @('release','edit',$releaseTag,'--draft=false','--repo',$env:GITHUB_REPOSITORY)
+          Invoke-CheckedGh -arguments @('release','view',$releaseTag,'--repo',$env:GITHUB_REPOSITORY,'--json','url,assets')
