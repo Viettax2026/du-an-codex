@@ -1,5 +1,18 @@
 # Gói mã nguồn ZaloFlow để lưu dự phòng
 
+## ZaloFlow Web và bộ cài VPS — 03/11/2026
+
+- [Tải ZIP bản web mới nhất](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/zaloflow-web.zip)
+- [Bản lưu theo ngày](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/ZaloFlow-Web-VPS-2026-11-03.zip)
+
+Nguồn `cde37bafe753f5aa5fb4a87d2c47060a832a3616`, 168 tệp mã/hướng dẫn và manifest kiểm tra từng tệp. Hai ZIP trên có cùng nội dung; tên `zaloflow-web.zip` khớp các lệnh SCP trong hướng dẫn. Giải nén rồi đọc **`zaloflow-web/web_deploy/README.md`** để cài trên VPS Ubuntu 24.04 với domain riêng, HTTPS, Node 22, Nginx/Gunicorn và dịch vụ bộ lịch. Bản web dùng qua trình duyệt, không cần key Windows. Người đăng ký cần được duyệt; hướng dẫn có bước cấp quản trị đầu tiên qua SSH, không tự cấp quyền quản trị cho người đăng ký đầu tiên trên website công khai.
+
+Gói chỉ chứa mã web, giao diện, bộ kết nối và bộ cài VPS mới; không có EXE Windows, máy chủ cấp key, thư viện đã cài, database, ảnh khách hàng, phiên Zalo, mật khẩu SMTP hay khóa ký riêng. Script từ chối ghi đè thư mục/domain/dịch vụ đã tồn tại. Để chuyển công việc cũ cần sao lưu toàn bộ `instance` riêng; quy trình nằm trong hướng dẫn. Không dùng script cài mới để ghi đè website đang vận hành.
+
+Đã kiểm tra CRC, SHA256 và từng tệp trong `WEB-RELEASE.json`; các tệp đóng gói đều thuộc mã đã theo dõi bằng Git. Đã vượt 36 kiểm tra gói web/tài khoản và thử **chính ZIP** trong container Ubuntu 24.04: tải Node/Python/npm, cấu hình Nginx và HTTPS với chứng thư thử riêng, đăng ký chờ duyệt, đăng nhập sau duyệt, bộ lịch một lượt và sao lưu/khôi phục cả database, ảnh và khóa phiên. Không kiểm tra cấp HTTPS công khai qua Let's Encrypt trên VPS thật hoặc gửi tin Zalo thật; không đánh dấu là đã triển khai/cập nhật VPS của chủ phần mềm.
+
+SHA256 ZIP: `a79b631d79a91f6981741ea6161f624e08b0bec9b1856ab3179926311d70e0b8` (398379 byte).
+
 ## Lưu ý về thông tin chủ phần mềm
 
 Có thêm **ZaloFlow Local 1.0.2** dùng không cần key, cài và lưu dữ liệu riêng; xem liên kết ngay bên dưới. Bản này đã được quét nghiêm ngặt, không miễn trừ địa chỉ máy chủ và không chứa các mô-đun bản quyền.
