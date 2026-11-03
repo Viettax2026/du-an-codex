@@ -1,23 +1,23 @@
 name: Build ZaloFlow Local
 on:
   push:
-    tags: ['windows-local-20261103']
+    tags: ['windows-local-20261103-r2']
 permissions:
   contents: read
 jobs:
   local:
-    if: github.ref == 'refs/tags/windows-local-20261103'
+    if: github.ref == 'refs/tags/windows-local-20261103-r2'
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
       contents: write
     env:
       PYTHONUTF8: '1'
-      EXPECTED_SOURCE: '8f5606f9521c11288bd686ff029ab742cb010940'
+      EXPECTED_SOURCE: 'c685aca701158842013464369dcca7376108f85b'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: '8f5606f9521c11288bd686ff029ab742cb010940'
+          ref: 'c685aca701158842013464369dcca7376108f85b'
           persist-credentials: false
       - name: Record the owner-requested local source
         shell: pwsh
@@ -83,6 +83,14 @@ jobs:
           }
           ./desktop/build-installer.ps1 -Local -AppVersion "1.0.${{ github.run_number }}"
           "ZaloFlow Local Windows x64`nApplication source: $env:EXPECTED_SOURCE`nEdition: local`nInstaller version: 1.0.${{ github.run_number }}`n" | Set-Content desktop/dist/local-installer/SOURCE.txt -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZaloFlow-Local-Installer
+          path: |
+            desktop/dist/local-installer/
+            desktop/dist/local-privacy-audit.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Test install upgrade uninstall and separation from licensed data
         shell: pwsh
         run: |
@@ -91,6 +99,16 @@ jobs:
             Write-Output "::error title=Local installer diagnostics::$diagnostic"
             throw
           }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ZaloFlow-Local-Installed-Diagnostics
+          path: |
+            ${{ runner.temp }}/zaloflow-local-installed-privacy.json
+            ${{ runner.temp }}/ZaloFlowLocal installed smoke test/unins000.dat
+            ${{ runner.temp }}/ZaloFlowLocal installed smoke test/unins000.exe
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Package only the audited local installer
         shell: pwsh
         run: |
@@ -109,7 +127,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           $PSNativeCommandUseErrorActionPreference = $false
-          $releaseTag = 'windows-local-20261103'
+          $releaseTag = 'windows-local-20261103-r2'
           $releaseFolder = Join-Path $env:RUNNER_TEMP 'zaloflow-local-public'
           function Invoke-CheckedGh([string[]]$arguments) {
             $result = & gh @arguments 2>&1 | Out-String
