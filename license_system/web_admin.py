@@ -57,7 +57,7 @@ def register_admin(app, authority):
                 action = request.form.get('action')
                 if action == 'issue':
                     issued = authority.issue(request.form.get('customer', ''), int(request.form.get('days', '30')), seats=1, mode='floating',
-                                             admin_username=request.form.get('admin_username', ''))
+                                             admin_username='' if request.form.get('admin_username_auto') == '1' else request.form.get('admin_username', ''))
                     flash('Đã tạo key kèm tài khoản và mật khẩu quản trị tool. Bấm Xem key để xem lại bộ thông tin đã cấp.')
                 elif action == 'show-key':
                     key_view = authority.key_for_owner(int(request.form.get('license_id','0')))
@@ -70,7 +70,7 @@ def register_admin(app, authority):
                 elif action == 'create-tool-admin':
                     license_id = int(request.form.get('license_id','0'))
                     key_view = authority.key_for_owner(license_id)
-                    authority.create_tool_admin(license_id,request.form.get('admin_username',''))
+                    authority.create_tool_admin(license_id,'' if request.form.get('admin_username_auto') == '1' else request.form.get('admin_username',''))
                     key_view = authority.key_for_owner(license_id)
                     flash('Đã tạo quản trị cho key hiện tại. Đóng/mở tool hoặc bấm Kiểm tra lại bản quyền để nhận tài khoản; key và hạn dùng giữ nguyên.')
                 else:

@@ -43,9 +43,11 @@
     <p>Đây là mật khẩu khởi tạo đã cấp. Nếu đã đổi hoặc khôi phục mật khẩu trong tool, dùng mật khẩu mới trong tool.</p>
     {% else %}<p>Mật khẩu quản trị này được cấp trước khi có bản lưu mã hóa, không thể xem lại. Dùng mật khẩu đã giao hoặc khôi phục trong tool; hệ thống không tự đặt lại.</p>{% endif %}
     {% elif key_view.can_create_admin %}
-    <form method="post" action="{{ url_for('admin_panel') }}#key-view" style="margin-top:16px">
+    <form method="post" action="{{ url_for('admin_panel') }}#key-view" style="margin-top:16px" data-admin-naming data-customer="{{ key_view.customer }}">
       <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="license_id" value="{{ key_view.id }}"><input type="hidden" name="action" value="create-tool-admin">
-      <label class="field"><span>Tài khoản quản trị tool</span><input name="admin_username" maxlength="64" minlength="3" placeholder="Để trống để hệ thống tự tạo" autocomplete="off"></label>
+      <input type="hidden" name="admin_username_auto" value="0">
+      <label class="field"><span>Tài khoản quản trị tool</span><input name="admin_username" maxlength="64" minlength="3" pattern="[A-Za-z0-9_.\-]{3,64}" placeholder="quantri-tenkhachhang" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+      <p>Tên gợi ý theo khách hàng, bạn có thể sửa. Để trống sẽ tạo theo mẫu quantri-tenkhachhang; tên tự tạo bị trùng sẽ thêm -2, -3.</p>
       <button class="button button-small" style="margin-top:12px">Tạo tài khoản và mật khẩu quản trị</button>
       <p>Tạo bổ sung cho key này. Giữ nguyên key, hạn dùng và các tài khoản hiện có trong tool.</p>
     </form>
@@ -69,10 +71,11 @@
     <section class="card create-card" aria-labelledby="create-title">
       <div class="card-heading"><span class="heading-icon">{{ icon('plus') }}</span><h2 id="create-title">Cấp key mới</h2></div>
       <p class="card-description">Tự tạo key, tài khoản và mật khẩu quản trị tool. Mỗi key dùng trong 1 tool tại một thời điểm.</p>
-      <form method="post" class="create-form">
+      <form method="post" class="create-form" data-admin-naming>
         <input type="hidden" name="csrf" value="{{ session.csrf }}"><input type="hidden" name="action" value="issue">
         <label class="field" style="grid-column:1/-1"><span>Khách hàng <span class="required">*</span></span><input name="customer" required maxlength="150" placeholder="Nhập tên khách hàng" autocomplete="off"></label>
-        <label class="field"><span>Tên quản trị (để trống sẽ tự tạo)</span><input name="admin_username" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.\-]{3,64}" placeholder="Hệ thống tự tạo nếu để trống" autocomplete="off"></label>
+        <input type="hidden" name="admin_username_auto" value="0">
+        <label class="field"><span>Tên quản trị tool</span><input name="admin_username" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.\-]{3,64}" placeholder="quantri-tenkhachhang" autocomplete="off" autocapitalize="none" spellcheck="false"><small>Tự gợi ý theo tên khách hàng, có thể sửa. Tên tự tạo bị trùng sẽ thêm -2, -3.</small></label>
         <label class="field"><span>Số ngày từ lúc cấp</span><input name="days" type="number" min="1" max="36500" value="30" required></label>
         <button class="button">{{ icon('plus') }} Tạo key — 1 tool</button>
       </form>
@@ -136,4 +139,5 @@
   </section>
   <footer class="footer"><span>ZaloFlow · Quản trị bản quyền</span><span>{{ icon('clock') }} Thời gian hiển thị theo giờ Việt Nam (UTC+7)</span></footer>
 </main>
+<script src="{{ url_for('static', filename='admin-names.js') }}" defer></script>
 {% endblock %}

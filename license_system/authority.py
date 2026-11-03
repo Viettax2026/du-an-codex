@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from license_system.admin_names import choose_admin_name
 from license_system.signatures import PRODUCT, ActivationInvalid, LicenseError, new_signer, public_text, sign
 
 LEASE_SECONDS = 3600
@@ -161,7 +162,7 @@ class Authority:
                 raise LicenseError('Cần key theo phiên đang có hiệu lực để tạo quản trị tool.')
             if row['admin_username'] or row['admin_password_hash']:
                 raise LicenseError('Key đã có quản trị tool. Không tạo lại hoặc đổi mật khẩu đã cấp.')
-            username = username or 'qt-'+str(license_id)+'-'+secrets.token_hex(2)
+            username = choose_admin_name(db, row['customer'], username)
             db.execute('UPDATE licenses SET admin_username=?,admin_password_hash=?,admin_password_ciphertext=? WHERE id=?',
                        (username,password_hash,encrypted,license_id))
 
@@ -214,8 +215,8 @@ class Authority:
             highest = db.execute('SELECT coalesce(max(id),0) FROM licenses').fetchone()[0]
             retired = db.execute("SELECT value FROM settings WHERE name='license_id_high_water'").fetchone()
             license_id = max(highest, int(retired['value']) if retired else 0) + 1
-            if create_admin and not admin_username:
-                admin_username = 'qt-'+str(license_id)+'-'+secrets.token_hex(2)
+            if create_admin:
+                admin_username = choose_admin_name(db, customer, admin_username)
             cur = db.execute('INSERT INTO licenses(id,key_hash,customer,expires_at,seats,created_at,mode,admin_username,admin_password_hash,key_ciphertext,admin_password_ciphertext) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                              (license_id, secret_hash(key), customer.strip(), now + days * 86400, seats, now, mode, admin_username, password_hash, encrypted_key,password_ciphertext))
         return dict(id=cur.lastrowid, key=key, expires_at=now + days * 86400, seats=seats, mode=mode,

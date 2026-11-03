@@ -25,7 +25,7 @@ def test_web_creates_admin_automatically_and_owner_can_reveal_initial_credential
     assert response.status_code==200
     row=authority.list_licenses()[0]
     revealed=authority.key_for_owner(row['id'])
-    assert revealed['admin_username'].startswith('qt-') and len(revealed['admin_password'])>=8
+    assert revealed['admin_username']=='quantri-company' and len(revealed['admin_password'])>=8
     assert revealed['key'] and not revealed['can_create_admin']
     with authority.connection() as db:
         saved=db.execute('SELECT * FROM licenses').fetchone()
@@ -38,6 +38,73 @@ def test_web_creates_admin_automatically_and_owner_can_reveal_initial_credential
     with client.session_transaction() as session:assert revealed['admin_password'] not in json.dumps(dict(session))
 
 
+@pytest.mark.parametrize(('customer','expected'),[
+    ('Trần Thảo Như','quantri-tranthaonhu'),
+    ('ĐẶNG ĐỨC AN','quantri-dangducan'),
+    ('  Công ty A & B .  ','quantri-congtyab'),
+    ('A'*150,'quantri-'+'a'*56),
+    ('東京','quantri-khachhang'),
+])
+def test_generated_name_normalizes_customer_and_is_valid_for_tool(authority,customer,expected):
+    issued=authority.issue(customer,mode='floating',admin_username='')
+    assert issued['admin_username']==expected
+    revealed=authority.key_for_owner(issued['id'])
+    assert revealed['admin_username']==expected
+    assert revealed['admin_password']==issued['admin_password']
+
+
+def test_automatic_names_are_unique_even_when_created_concurrently(authority):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        issued=list(pool.map(lambda _:authority.issue('Thảo Như',mode='floating',admin_username=''),range(2)))
+    assert {row['admin_username'] for row in issued}=={'quantri-thaonhu','quantri-thaonhu-2'}
+    third=authority.issue('Thao Nhu',mode='floating',admin_username='')
+    assert third['admin_username']=='quantri-thaonhu-3'
+
+
+def test_duplicate_long_customer_names_stay_within_tool_username_limit(authority):
+    first=authority.issue('A'*150,mode='floating',admin_username='')
+    second=authority.issue('A'*150,mode='floating',admin_username='')
+    assert len(first['admin_username'])==len(second['admin_username'])==64
+    assert second['admin_username'].endswith('-2')
+    assert second['admin_username']!=first['admin_username']
+
+
+def test_manual_name_is_kept_and_duplicate_is_rejected_without_changing_old_key(authority):
+    old=authority.issue('Old',mode='floating',admin_username='own-admin')
+    before=authority.key_for_owner(old['id'])
+    with pytest.raises(LicenseError,match='đã được cấp'):
+        authority.issue('Other',mode='floating',admin_username='OWN-ADMIN')
+    assert authority.key_for_owner(old['id'])==before
+    assert len(authority.list_licenses())==1
+    supplemental=authority.issue('Other',mode='floating')
+    with pytest.raises(LicenseError,match='đã được cấp'):
+        authority.create_tool_admin(supplemental['id'],'own-admin')
+    assert not authority.key_for_owner(supplemental['id'])['admin_username']
+
+
+def test_web_autofill_uses_customer_and_manual_edits_are_preserved(authority):
+    client=owner(authority)
+    def issue(customer,username,automatic):
+        return client.post('/admin',data=dict(csrf=admin_csrf(client,'/admin'),action='issue',
+            customer=customer,days=30,admin_username=username,admin_username_auto=automatic))
+    # A stale browser suggestion is not trusted when the customer name changes.
+    assert issue('Thảo Như','quantri-old-customer','1').status_code==200
+    assert authority.list_licenses()[0]['admin_username']=='quantri-thaonhu'
+    assert issue('Other customer','QUANTRI-RIENG','0').status_code==200
+    assert authority.list_licenses()[0]['admin_username']=='quantri-rieng'
+    assert issue('Thảo Như','quantri-thaonhu','1').status_code==200
+    assert authority.list_licenses()[0]['admin_username']=='quantri-thaonhu-2'
+
+
+def test_admin_script_works_below_license_proxy_prefix(authority):
+    client=owner(authority)
+    response=client.get('/admin',environ_overrides={'SCRIPT_NAME':'/licenses'})
+    assert 'src="/licenses/static/admin-names.js"' in response.text
+    assert "script-src 'self'" in response.headers['Content-Security-Policy']
+    assert client.get('/static/admin-names.js').status_code==200
+
+
 def test_supplement_existing_key_preserves_key_expiry_and_activations(authority):
     issued=authority.issue('Existing',mode='floating')
     authority.exchange('activate',DEVICE_A,issued['key'],session_id='ZFS1-'+'A'*64)
@@ -47,6 +114,7 @@ def test_supplement_existing_key_preserves_key_expiry_and_activations(authority)
     authority.create_tool_admin(issued['id'])
     after=authority.key_for_owner(issued['id'])
     assert after['key']==issued['key'] and after['admin_username'] and after['admin_password']
+    assert after['admin_username']=='quantri-existing'
     with authority.connection() as db:
         row=dict(db.execute('SELECT * FROM licenses').fetchone())
         for name in ('key_hash','key_ciphertext','expires_at','mode','revoked','seats'):
