@@ -2,9 +2,22 @@
 
 ## Lưu ý về thông tin chủ phần mềm
 
-Bản mới **1.0.20** giữ việc loại email quản trị cũ khỏi mã desktop và đã vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
+Bản mới **1.0.21** giữ việc loại email quản trị cũ khỏi mã desktop và đã vượt kiểm tra cả tệp cài ra lẫn mã nén. Chủ phần mềm đã cho phép giữ URL máy chủ bản quyền hiện tại. Xem [báo cáo kiểm tra thực tế](../deployment/PRIVACY-AUDIT.md). Các bản 1.0.18 trở về trước bên dưới là bản lưu lịch sử, còn dấu vết cũ trong mã nén. Link phát hành GitHub vẫn hiển thị tài khoản chủ sở hữu; có thể gửi trực tiếp file EXE cho khách.
 
-## Tool Windows ngày 02/11/2026 — bản mới 1.0.20, xử lý trùng tên quản trị
+## Tool Windows ngày 03/11/2026 — bản mới 1.0.21
+
+- [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-customer-admin-20261103/ZaloFlow-Setup-x64.exe)
+- [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-customer-admin-20261103/ZaloFlow-Tool-Windows-2026-11-03.zip)
+
+Nguồn ứng dụng `889383fa0f780fefe3884d904bb06a2bc044183b`. Dựng lại từ mã mới nhất theo yêu cầu trực tiếp của chủ phần mềm. Máy chủ mới gợi ý tên quản trị theo khách hàng, ví dụ “Thảo Như” → `quantri-thaonhu`, cho phép sửa trước khi cấp key. Tên tự tạo bị trùng sẽ thêm `-2`, `-3`; tên nhập riêng bị trùng sẽ báo chọn lại. **Cần cập nhật VPS** theo [hướng dẫn bản quyền](../deployment/LICENSES.md) để trang cấp key có chức năng này; cài lại Windows không tự cập nhật VPS. Các key/tài khoản đã cấp không tự đổi tên hoặc mật khẩu.
+
+[Lượt dựng Windows 21](https://github.com/Viettax2026/du-an-codex/actions/runs/41576000929) hoàn tất thành công: kiểm tra tài khoản, bản quyền, xử lý trùng tên, WebView2, bộ lịch, cài đặt/cài đè/gỡ giữ dữ liệu và quét tệp cài ra. Đã tải lại ZIP công khai không cần đăng nhập, kiểm tra CRC/checksum/manifest và phiên bản 1.0.21 trong SOURCE. Giải nén chính EXE tải về và quét độc lập 2058 tệp, 1036 mô-đun Python, 165 mục ZIP; hash chương trình khớp báo cáo Windows. Không phát hiện các dấu vết chủ sở hữu được kiểm tra ngoài URL key đã cho phép; báo cáo đi kèm ZIP.
+
+Đóng tool cũ rồi cài đè trong cùng tài khoản Windows để giữ dữ liệu và kích hoạt. Chưa có kết quả kiểm tra VPS thật do chủ phần mềm cung cấp; trạng thái đó được ghi rõ trong manifest.
+
+SHA256 ZIP: `eee6ca4ca55bc0add6b058b9b24a2526a0a3493b752acb86df3a58d7856fb8d5`.
+
+## Tool Windows ngày 02/11/2026 — bản 1.0.20, xử lý trùng tên quản trị
 
 - [Tải bộ cài Windows EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Setup-x64.exe)
 - [Tải ZIP kèm hướng dẫn và báo cáo kiểm tra](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-login-20261102/ZaloFlow-Tool-Windows-2026-11-02-r3.zip)

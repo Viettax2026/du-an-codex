@@ -1,10 +1,21 @@
-# Kiểm tra dấu vết chủ phần mềm — ZaloFlow 1.0.20
+# Kiểm tra dấu vết chủ phần mềm — ZaloFlow 1.0.21
 
-Ngày kiểm tra: 02/11/2026. Đây là kiểm tra **bộ cài đã phát hành**, không chỉ mã nguồn hoặc ảnh giao diện.
+Ngày kiểm tra cập nhật: 03/11/2026; các kết quả ngày 02/11 được giữ bên dưới. Đây là kiểm tra **bộ cài đã phát hành**, không chỉ mã nguồn hoặc ảnh giao diện.
 
 ## Kết luận
 
-Bản **1.0.20 đã phát hành và được tải lại để kiểm tra độc lập**, tiếp tục giữ sửa đổi của 1.0.19. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+Bản **1.0.21 đã phát hành và được tải lại để kiểm tra độc lập**, tiếp tục giữ sửa đổi của 1.0.19 và 1.0.20. Không phát hiện các chuỗi nhận diện đã kiểm tra ngoài URL máy chủ key được phép giữ. Email quản trị cũ đã được loại khỏi mã nén desktop. **Chủ phần mềm đã xác nhận giữ địa chỉ máy chủ kiểm tra key hiện tại**: địa chỉ này là ngoại lệ được phép trong cấu hình và mô-đun nhận diện bản quyền, không phải trong hướng dẫn hoặc giao diện thông thường. Phạm vi sửa là loại các dấu vết khác, không phải ẩn toàn bộ nguồn gốc máy chủ.
+
+## Kết quả bản 1.0.21 đã phát hành
+
+- [Bộ cài EXE](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-customer-admin-20261103/ZaloFlow-Setup-x64.exe), [ZIP kèm hướng dẫn và báo cáo](https://github.com/Viettax2026/du-an-codex/releases/download/windows-tool-customer-admin-20261103/ZaloFlow-Tool-Windows-2026-11-03.zip).
+- Nguồn ứng dụng `889383fa0f780fefe3884d904bb06a2bc044183b`, phiên bản 1.0.21. Mã máy chủ mới có gợi ý tên quản trị theo khách hàng; cần cập nhật VPS để dùng chức năng đó trên trang cấp key.
+- [Lượt dựng Windows 21](https://github.com/Viettax2026/du-an-codex/actions/runs/41576000929) đạt toàn bộ kiểm tra và xuất bản thành công. Quét thực tế sau cài đặt/nâng cấp: **2060 tệp, 1036 mô-đun Python, 165 mục ZIP**, không có phát hiện ngoài ngoại lệ URL key và không có lỗi đọc. Có kiểm tra Windows/WebView2, xử lý trùng tên quản trị, cài đè và gỡ giữ dữ liệu/kích hoạt.
+- Tải lại ZIP công khai, đối chiếu từng checksum/manifest/CRC và phiên bản trong SOURCE. Giải nén EXE tải về bằng innoextract, quét độc lập **2058 tệp, cùng 1036 mô-đun và 165 mục ZIP**, kết quả đạt. Cảnh báo chuyển mã và phạm vi bộ quét giống phần 1.0.19 bên dưới.
+- Xác nhận `legacy_web_accounts` không có trong PYZ và không có JSON cấu hình rõ trong gói mới. Xử lý `local_username`, `resolve-admin-name` và biểu mẫu tạo quản trị bằng tên khác vẫn có trong bản tải về. Hash chương trình trích xuất khớp báo cáo cài đặt Windows.
+- SHA256 chương trình chính: `bdbc75765e170490e104d0cc6c07693f81f43b6df696de0cfa71cf97eb8d1c68`.
+- SHA256 bộ cài: `757c3bf219b3a2bc2cc99dddfcafcda64585129e00266f34dcfdd4edac0839ce`.
+- SHA256 ZIP (42849438 byte): `eee6ca4ca55bc0add6b058b9b24a2526a0a3493b752acb86df3a58d7856fb8d5`.
 
 ## Kết quả bản 1.0.20 đã phát hành
 
