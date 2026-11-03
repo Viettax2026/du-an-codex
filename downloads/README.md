@@ -1,17 +1,21 @@
 # Gói mã nguồn ZaloFlow để lưu dự phòng
 
-## ZaloFlow Web và bộ cài VPS — 03/11/2026
+## ZaloFlow Web và bộ cài VPS — 03/11/2026, lượt 2
 
 - [Tải ZIP bản web mới nhất](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/zaloflow-web.zip)
-- [Bản lưu theo ngày](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/ZaloFlow-Web-VPS-2026-11-03.zip)
+- [Bản lưu theo ngày, lượt 2](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/ZaloFlow-Web-VPS-2026-11-03-r2.zip)
 
-Nguồn `cde37bafe753f5aa5fb4a87d2c47060a832a3616`, 168 tệp mã/hướng dẫn và manifest kiểm tra từng tệp. Hai ZIP trên có cùng nội dung; tên `zaloflow-web.zip` khớp các lệnh SCP trong hướng dẫn. Giải nén rồi đọc **`zaloflow-web/web_deploy/README.md`** để cài trên VPS Ubuntu 24.04 với domain riêng, HTTPS, Node 22, Nginx/Gunicorn và dịch vụ bộ lịch. Bản web dùng qua trình duyệt, không cần key Windows. Người đăng ký cần được duyệt; hướng dẫn có bước cấp quản trị đầu tiên qua SSH, không tự cấp quyền quản trị cho người đăng ký đầu tiên trên website công khai.
+Nguồn `1e8074484860fd2653577c1c16ddd9cb3948f89a`, 168 tệp mã/hướng dẫn và manifest kiểm tra từng tệp. Hai ZIP trên có cùng nội dung; tên `zaloflow-web.zip` khớp các lệnh SCP trong hướng dẫn. Giải nén rồi đọc **`zaloflow-web/web_deploy/README.md`** để cài trên VPS Ubuntu 24.04 với domain riêng, HTTPS, Node 22, Nginx/Gunicorn và dịch vụ bộ lịch. Bản web dùng qua trình duyệt, không cần key Windows. Người đăng ký cần được duyệt; hướng dẫn có bước cấp quản trị đầu tiên qua SSH, không tự cấp quyền quản trị cho người đăng ký đầu tiên trên website công khai.
+
+Nhập Excel/CSV nay ưu tiên cột có tiêu đề số điện thoại, tiếp đến nhận diện dữ liệu, rồi mặc định G nếu có (A nếu tệp ít hơn 7 cột). Chọn thủ công được giữ khi xem trước và lưu; đổi sheet nhận diện lại. Không tự bỏ dòng dữ liệu đầu khi không phải tiêu đề. Áp dụng cho nhóm data và chiến dịch. Đã qua 549 kiểm thử, 6 kiểm thử tùy chọn bỏ qua, cùng kiểm tra biểu mẫu thật bằng Chromium: chọn G, giữ dòng đầu, đổi thủ công sang A và chuyển sheet có tiêu đề.
 
 Gói chỉ chứa mã web, giao diện, bộ kết nối và bộ cài VPS mới; không có EXE Windows, máy chủ cấp key, thư viện đã cài, database, ảnh khách hàng, phiên Zalo, mật khẩu SMTP hay khóa ký riêng. Script từ chối ghi đè thư mục/domain/dịch vụ đã tồn tại. Để chuyển công việc cũ cần sao lưu toàn bộ `instance` riêng; quy trình nằm trong hướng dẫn. Không dùng script cài mới để ghi đè website đang vận hành.
 
-Đã kiểm tra CRC, SHA256 và từng tệp trong `WEB-RELEASE.json`; các tệp đóng gói đều thuộc mã đã theo dõi bằng Git. Đã vượt 36 kiểm tra gói web/tài khoản và thử **chính ZIP** trong container Ubuntu 24.04: tải Node/Python/npm, cấu hình Nginx và HTTPS với chứng thư thử riêng, đăng ký chờ duyệt, đăng nhập sau duyệt, bộ lịch một lượt và sao lưu/khôi phục cả database, ảnh và khóa phiên. Không kiểm tra cấp HTTPS công khai qua Let's Encrypt trên VPS thật hoặc gửi tin Zalo thật; không đánh dấu là đã triển khai/cập nhật VPS của chủ phần mềm.
+Đã kiểm tra CRC, SHA256 và từng tệp trong `WEB-RELEASE.json`; các tệp đóng gói khớp chính xác nguồn Git đã ghi. Đã thử **chính ZIP** trong container Ubuntu 24.04: tải Node/Python/npm, cấu hình Nginx và HTTPS với chứng thư thử riêng, đăng ký chờ duyệt, đăng nhập sau duyệt, bộ lịch một lượt và sao lưu/khôi phục cả database, ảnh và khóa phiên. Không kiểm tra cấp HTTPS công khai qua Let's Encrypt trên VPS thật hoặc gửi tin Zalo thật; không đánh dấu là đã triển khai/cập nhật VPS của chủ phần mềm.
 
-SHA256 ZIP: `a79b631d79a91f6981741ea6161f624e08b0bec9b1856ab3179926311d70e0b8` (398379 byte).
+SHA256 ZIP: `1802bad3175b179f56ebd1285a38114b8298c921f12f9ab6fc45431a04132e8d` (399478 byte).
+
+[Bản lưu lượt 1](https://github.com/Viettax2026/du-an-codex/raw/refs/heads/main/downloads/ZaloFlow-Web-VPS-2026-11-03.zip) vẫn giữ nguyên nguồn `cde37bafe753f5aa5fb4a87d2c47060a832a3616`, SHA256 `a79b631d79a91f6981741ea6161f624e08b0bec9b1856ab3179926311d70e0b8`.
 
 ## Lưu ý về thông tin chủ phần mềm
 
