@@ -11,7 +11,7 @@ datas=[(str(root/'templates'),'templates'),(str(root/'static'),'static'),
 a=Analysis([str(root/'desktop'/'main.py')],pathex=[str(root)],
     binaries=[(node,'runtime')],datas=datas,
     hiddenimports=['webview.platforms.winforms','webview.platforms.edgechromium','webview.platforms.mshtml']+collect_submodules('waitress'),
-    excludes=['PyQt5','PyQt6','PySide2','PySide6','gi','cefpython3','license_system.admin','license_system.authority','license_system.server','license_system.web_admin','legacy_web_accounts'],noarchive=False)
+    excludes=['PyQt5','PyQt6','PySide2','PySide6','gi','cefpython3','license_system.admin','license_system.authority','license_system.server','license_system.web_admin','legacy_web_accounts','desktop.local_runtime','desktop.local_main','desktop.local_smoke'],noarchive=False)
 pyz=PYZ(a.pure)
 exe=EXE(pyz,a.scripts,[],exclude_binaries=True,name='ZaloFlow',console=False,debug=False,disable_windowed_traceback=True,
         icon=str(root/'desktop'/'assets'/'zaloflow.ico'))

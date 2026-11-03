@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="page-heading"><div><span class="eyebrow">QUẢN TRỊ</span><h1>Quản lý tài khoản</h1><p class="muted">Duyệt đăng ký mới và quản lý quyền truy cập ZaloFlow.</p></div></div>
-{% if desktop_license_enabled %}
+{% if desktop_license_enabled or desktop_local_enabled %}
 <section class="panel" aria-labelledby="create-user-title">
   <div class="approval-create-heading">
   <h2 id="create-user-title">Tạo tài khoản trong tool</h2>
-  <p class="muted">Tài khoản thường được sử dụng ngay, dùng chung key của tool. Mỗi tài khoản có dữ liệu riêng trên máy này.</p>
+  <p class="muted">Tài khoản thường được sử dụng ngay{% if not desktop_local_enabled %}, dùng chung key của tool{% endif %}. Mỗi tài khoản có dữ liệu riêng trên máy này.</p>
   </div>
   <form method="post" action="{{ url_for('admin_create_user') }}" class="approval-create-form">
     <input type="hidden" name="csrf" value="{{ session.csrf }}">

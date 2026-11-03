@@ -116,3 +116,22 @@ def test_compiled_license_url_exception_does_not_allow_other_owner_information(t
     root=program(other,"HOST = 'https://cskh.viettaxco.com/licenses'\nEMAIL='owner@viettaxco.com'\n",module_name='desktop.license_identity')
     result=audit_tree(root)
     assert not result['passed'] and result['findings'][0]['marker']=='viettax'
+
+
+def test_local_edition_has_no_endpoint_exception_or_license_modules(tmp_path):
+    root=program(tmp_path,"HOST = 'https://cskh.viettaxco.com/licenses'\n",module_name='desktop.license_identity')
+    result=audit_tree(root,strict=True)
+    assert not result['passed'] and result['strict'] and not result['accepted_exceptions']
+    assert result['licensing_modules']==['desktop.license_identity']
+    assert result['findings']
+    other=tmp_path/'neutral';other.mkdir()
+    root=program(other,"VALUE = 1\n",module_name='desktop.licensing')
+    assert not audit_tree(root,strict=True)['passed']
+
+
+def test_local_edition_rejects_even_neutral_plaintext_license_config(tmp_path):
+    root=program(tmp_path,"VALUE = 1\n")
+    folder=root/'_internal'/'desktop';folder.mkdir(parents=True)
+    config(folder/'license-config.json','https://license.example.net/licenses')
+    result=audit_tree(root,strict=True)
+    assert not result['passed'] and result['errors']

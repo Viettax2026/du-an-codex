@@ -1,0 +1,27 @@
+ZALOFLOW LOCAL CHO WINDOWS 10/11 x64
+
+CÀI ĐẶT
+1. Chạy ZaloFlow-Local-Setup-x64.exe, sau đó mở ZaloFlow Local từ Desktop hoặc Start.
+2. Bản này dùng độc lập, không yêu cầu key hoặc kết nối máy chủ bản quyền.
+3. Chọn Đăng ký để tự tạo tài khoản. Tài khoản đầu tiên là quản trị; mật khẩu từ 8 đến 256 ký tự. Email tùy chọn.
+4. Đăng nhập rồi vào Quản lý tài khoản để tạo thêm người dùng. Các tài khoản đăng ký sau là tài khoản thường, dùng ngay.
+5. Kết nối Zalo bằng mã QR. Gửi tin và đăng nhập Zalo vẫn cần Internet.
+
+DỮ LIỆU VÀ NÂNG CẤP
+- Dữ liệu: %LOCALAPPDATA%\ZaloFlowLocal\instance
+- Nhật ký hỗ trợ: %LOCALAPPDATA%\ZaloFlowLocal\desktop.log
+- Chương trình: %LOCALAPPDATA%\Programs\ZaloFlowLocal
+- Dữ liệu riêng với các bản ZaloFlow khác. Không tự sao chép tài khoản, chiến dịch hoặc phiên Zalo từ bản khác.
+- Đóng chương trình rồi cài đè bằng cùng tài khoản Windows. Gỡ cài đặt giữ dữ liệu.
+- Mỗi tài khoản có dữ liệu riêng. Tài khoản thường không có quyền quản trị.
+- Thu nhỏ cửa sổ vẫn chạy lịch. Đóng bằng X dừng nhận lượt mới và chờ lượt đang xử lý kết thúc. Đóng chương trình hoặc tắt máy thì không chạy lịch.
+
+QUÊN MẬT KHẨU
+- Khi còn đăng nhập: Bảo mật tài khoản > xác nhận mật khẩu > Tạo mã khôi phục > Tải mã khôi phục.
+- Khi quên: Quên mật khẩu? > Dùng mã khôi phục dự phòng để đặt mật khẩu mới. Dữ liệu được giữ nguyên.
+- Nếu chưa có mã, quản trị Windows có thể cấp mã hỗ trợ tại chính máy đó bằng chức năng --support-recovery của ZaloFlow.exe. Đóng chương trình trước, dùng đúng thư mục dữ liệu ZaloFlowLocal.
+- Không xóa dữ liệu để xử lý lỗi đăng nhập.
+
+NẾU CỬA SỔ KHÔNG MỞ
+Cài Microsoft Edge WebView2 Runtime từ trang Microsoft:
+https://developer.microsoft.com/microsoft-edge/webview2/

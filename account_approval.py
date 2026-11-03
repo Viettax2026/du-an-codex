@@ -165,7 +165,7 @@ def register_approval(app, db, login_required):
 
     @app.get('/registration-pending')
     def registration_pending():
-        if 'desktop_license' in app.extensions:
+        if 'desktop_license' in app.extensions or app.extensions.get('desktop_local') is True:
             return redirect(url_for('login'))
         return render_template('registration_pending.html')
 
@@ -222,11 +222,11 @@ def register_approval(app, db, login_required):
     @admin_required
     def admin_create_user():
         license = app.extensions.get('desktop_license')
-        if license is None:
+        if license is None and app.extensions.get('desktop_local') is not True:
             abort(404)
         connection = db()
         try:
-            if not license.allowed():
+            if license is not None and not license.allowed():
                 raise ValueError('Kích hoạt key còn hiệu lực trước khi tạo tài khoản.')
             name = request.form.get('name','').strip()
             username = request.form.get('username','').strip().lower()
@@ -242,14 +242,14 @@ def register_approval(app, db, login_required):
             actor = connection.execute('SELECT role,approval_status,auth_version FROM users WHERE id=?',(g.user['id'],)).fetchone()
             if not actor or actor['role']!='admin' or actor['approval_status']!='approved' or actor['auth_version']!=g.user['auth_version']:
                 abort(403)
-            if not license.allowed():
+            if license is not None and not license.allowed():
                 raise ValueError('Key không còn hiệu lực. Chưa tạo tài khoản.')
             created = create_pending_account(connection,name,username,password_hash)
             connection.execute('UPDATE users SET email=? WHERE id=?',(email,created.lastrowid))
             set_approval(connection,created.lastrowid,'approved',actor_id=g.user['id'])
             connection.execute("INSERT INTO account_approval_events(user_id,actor_id,action) VALUES (?,?,'admin_create')",
                                (created.lastrowid,g.user['id']))
-            if not license.allowed():
+            if license is not None and not license.allowed():
                 raise ValueError('Key không còn hiệu lực. Chưa tạo tài khoản.')
             connection.commit()
             flash('Đã tạo tài khoản thường. Người dùng có thể đăng nhập trong tool này ngay.','success')

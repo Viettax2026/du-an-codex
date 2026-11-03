@@ -293,21 +293,29 @@ def create_app(test_config=None,instance_path=None):
                 flash('Tên admin dành cho tài khoản quản trị. Vui lòng chọn tên khác.', 'error')
             else:
                 try:
-                    email = normalize_email(request.form.get('email', ''))
+                    desktop_local = app.extensions.get('desktop_local') is True
+                    raw_email = request.form.get('email', '')
+                    email = '' if desktop_local and not raw_email.strip() else normalize_email(raw_email)
                     password_hash = generate_password_hash(password)
                     desktop_license = app.extensions.get('desktop_license')
                     if desktop_license is not None and not desktop_license.allowed():
                         raise ValueError('Kích hoạt key còn hiệu lực trên máy này trước khi tạo tài khoản.')
+                    first_local = False
+                    if desktop_local:
+                        db().execute('BEGIN IMMEDIATE')
+                        first_local = db().execute('SELECT 1 FROM users UNION SELECT 1 FROM retired_user_ids LIMIT 1').fetchone() is None
                     created = create_pending_account(db(), name, username, password_hash)
                     db().execute('UPDATE users SET email=? WHERE id=?', (email, created.lastrowid))
-                    if desktop_license is not None:
+                    if desktop_license is not None or desktop_local:
                         set_approval(db(), created.lastrowid, 'approved')
-                        if not desktop_license.allowed():
+                        if desktop_license is not None and not desktop_license.allowed():
                             raise ValueError('Key không còn hiệu lực. Kích hoạt lại trước khi tạo tài khoản.')
+                    if first_local:
+                        grant_admin(db(), username)
                     db().commit()
                     session.clear()
-                    if desktop_license is not None:
-                        flash('Đăng ký thành công. Bạn có thể đăng nhập và sử dụng ZaloFlow trên máy này ngay.', 'success')
+                    if desktop_license is not None or desktop_local:
+                        flash('Đã tạo tài khoản quản trị đầu tiên. Đăng nhập để sử dụng và quản lý tài khoản.' if first_local else 'Đăng ký thành công. Bạn có thể đăng nhập và sử dụng ZaloFlow trên máy này ngay.', 'success')
                         return redirect(url_for('login'))
                     flash('Đăng ký thành công. Tài khoản đang chờ quản trị viên duyệt; bạn chưa thể đăng nhập.', 'success')
                     return redirect(url_for('registration_pending'))

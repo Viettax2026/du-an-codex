@@ -39,6 +39,8 @@ def default_data_root():
 
 
 class DesktopRuntime:
+    requires_license = True
+
     def __init__(self,data_root=None,config=None,tick=None,license=None):
         self.data_root=Path(data_root or default_data_root()).resolve()
         self.instance=self.data_root/'instance';self.instance.mkdir(parents=True,exist_ok=True)
@@ -51,7 +53,7 @@ class DesktopRuntime:
         except BaseException:self.instance_lock.release();raise
         self.license=license
         try:
-            if self.license is None and not self.app.config.get('TESTING'):
+            if self.license is None and self.requires_license and not self.app.config.get('TESTING'):
                 from desktop.licensing import DesktopLicense
                 self.license=DesktopLicense(self.data_root/'license')
         except BaseException:

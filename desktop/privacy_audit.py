@@ -31,7 +31,7 @@ def file_matches(path):
     return found
 
 
-def audit_config(path):
+def audit_config(path, *, strict=False):
     result=dict(passed=False,findings=[],errors=[],accepted_exceptions=[])
     try:
         data=json.loads(Path(path).read_text(encoding='utf-8'))
@@ -43,7 +43,7 @@ def audit_config(path):
         if len(base64.urlsafe_b64decode(data['public_key']+'='*(-len(data['public_key'])%4)))!=32:
             raise ValueError()
         inspected=dict(data)
-        if data['server_url'].rstrip('/')==APPROVED_LICENSE_URL:
+        if not strict and data['server_url'].rstrip('/')==APPROVED_LICENSE_URL:
             inspected['server_url']='approved-license-endpoint'
             result['accepted_exceptions'].append(dict(location='server configuration',exception='owner-approved license endpoint'))
         for marker in matches(json.dumps(inspected).encode()):
@@ -54,9 +54,9 @@ def audit_config(path):
     return result
 
 
-def audit_tree(root):
+def audit_tree(root, *, strict=False):
     root=Path(root)
-    result=dict(passed=False,files_scanned=0,modules_scanned=0,zip_members_scanned=0,findings=[],errors=[],accepted_exceptions=[])
+    result=dict(passed=False,strict=strict,files_scanned=0,modules_scanned=0,zip_members_scanned=0,findings=[],errors=[],accepted_exceptions=[],licensing_modules=[])
     seen=set()
     def record(scope,location,markers):
         for marker in markers:
@@ -72,7 +72,9 @@ def audit_tree(root):
         record('path',location,matches(location.encode()))
         if path.is_file():
             try:
-                if location=='_internal/desktop/license-config.json':
+                if strict and path.name in ('license-config.json','signing-private.pem','admin-password.txt','session-secret.txt','licenses.sqlite3'):
+                    result['errors'].append('File not allowed in local edition: '+location)
+                if not strict and location=='_internal/desktop/license-config.json':
                     checked=audit_config(path)
                     record('file',location,{item['marker'] for item in checked['findings']})
                     result['errors'].extend(checked['errors'])
@@ -113,8 +115,12 @@ def audit_tree(root):
                     for module in pyz.toc:
                         blob=pyz.extract(module,raw=True)
                         result['modules_scanned']+=1
+                        if (module=='license_system' or module.startswith('license_system.') or module in
+                                ('desktop.licensing','desktop.license_routes','desktop.license_identity','desktop.admin_accounts','desktop.main','legacy_web_accounts')):
+                            result['licensing_modules'].append(module)
+                            if strict:result['errors'].append('Module not allowed in local edition: '+module)
                         if blob:
-                            if module=='desktop.license_identity':
+                            if not strict and module=='desktop.license_identity':
                                 cleaned=blob.lower()
                                 for encoding in ('utf-8','utf-16le','utf-16be'):
                                     cleaned=cleaned.replace(APPROVED_LICENSE_URL.encode(encoding),b'')
@@ -140,8 +146,9 @@ def main():
     source.add_argument('--config',type=Path)
     source.add_argument('--app-dir',type=Path)
     parser.add_argument('--report',type=Path)
+    parser.add_argument('--strict',action='store_true',help='Local edition: no owner endpoint exceptions or licensing modules')
     args=parser.parse_args()
-    result=audit_config(args.config) if args.config else audit_tree(args.app_dir)
+    result=audit_config(args.config,strict=args.strict) if args.config else audit_tree(args.app_dir,strict=args.strict)
     text=json.dumps(result,ensure_ascii=False,indent=2)+'\n'
     if args.report:
         args.report.parent.mkdir(parents=True,exist_ok=True)

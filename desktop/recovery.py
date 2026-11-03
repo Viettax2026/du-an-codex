@@ -65,7 +65,7 @@ def account_admin_dialog(data_root, username):
         return
     grant_local_admin(data_root, username)
     ctypes.windll.user32.MessageBoxW(None,
-        'Đã duyệt và cấp quyền quản trị. Mật khẩu, dữ liệu và key được giữ nguyên. '
+        'Đã duyệt và cấp quyền quản trị. Mật khẩu và dữ liệu được giữ nguyên. '
         'Mở ZaloFlow bình thường, đăng nhập lại rồi vào Quản lý tài khoản.', 'ZaloFlow', 0x40)
 
 

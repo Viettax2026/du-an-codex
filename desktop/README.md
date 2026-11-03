@@ -46,3 +46,17 @@ Key có thể được chủ phần mềm cấp kèm tài khoản quản trị t
 ## Kiểm tra thông tin chủ phần mềm
 
 Bản 1.0.18 vẫn có dấu vết trong cấu hình và bytecode, dù giao diện đã đổi. Xem [báo cáo](../deployment/PRIVACY-AUDIT.md). Build mới mặc định chạy `desktop.privacy_audit` trước/sau đóng gói và kiểm tra tệp cài ra; URL máy chủ bản quyền hiện tại là ngoại lệ đã được chủ phần mềm cho phép. URL chỉ được miễn trừ đúng phần bản quyền; dấu vết khác trong cùng mô-đun vẫn bị chặn. Bỏ JSON không làm biến mất hostname khỏi mã biên dịch hoặc mạng. Không chỉnh sửa cơ chế ký/kiểm tra key để che tên miền.
+
+## Bản ZaloFlow Local riêng theo yêu cầu chủ phần mềm
+
+Theo yêu cầu ngày 03/11/2026, bản **Local** dùng entry point `desktop.local_main` và `LocalDesktopRuntime`, không tạo license client, không có trang kích hoạt hoặc luồng kiểm tra key. Đây là bộ cài riêng; bản chuẩn vẫn yêu cầu key như trước và không có tùy chọn dòng lệnh/môi trường để chuyển sang Local. Spec bản chuẩn cũng loại các mô-đun Local.
+
+Local dùng `%LOCALAPPDATA%\ZaloFlowLocal`, chương trình `%LOCALAPPDATA%\Programs\ZaloFlowLocal`, shortcut **ZaloFlow Local** và AppId riêng. Không tự đọc/chuyển dữ liệu, mật khẩu hoặc phiên Zalo của bản chuẩn. Tự đăng ký khi mở lần đầu; tài khoản đầu tiên trong hồ sơ mới là quản trị, các tài khoản tiếp theo là người dùng thường được duyệt ngay. Việc chọn quản trị đầu tiên được khóa ghi SQLite để không tạo hai quản trị khi đăng ký đồng thời; hồ sơ đã có lịch sử user không mở lại bước này. Quản trị tạo được nhiều tài khoản thường; phân quyền, CSRF, chặn tài khoản và dữ liệu riêng vẫn áp dụng.
+
+```powershell
+python -m desktop.local_main
+powershell -ExecutionPolicy Bypass -File desktop/build-local-windows.ps1
+powershell -ExecutionPolicy Bypass -File desktop/build-installer.ps1 -Local -AppVersion 1.0.1
+```
+
+Phát file `desktop/dist/local-installer/ZaloFlow-Local-Setup-x64.exe`. Spec Local loại toàn bộ `license_system`, các mô-đun license client, nhận diện máy chủ và tài khoản web cũ. Kiểm tra bằng `python -m desktop.privacy_audit --strict --app-dir desktop/dist/ZaloFlowLocal`: **không cho phép ngoại lệ URL máy chủ**, từ chối mô-đun/cấu hình bản quyền và tệp bí mật. CI chạy lại trên chương trình cài ra bằng `desktop/test-installer.ps1 -Local`, đồng thời kiểm tra hồ sơ bản chuẩn không bị sửa. Gửi tin/đăng nhập Zalo vẫn cần Internet; bản Local không biến Zalo thành dịch vụ ngoại tuyến.
